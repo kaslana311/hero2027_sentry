@@ -1,6 +1,5 @@
 #include <utils/optimization/banded_system.h>
 
-
 using namespace geometry_utils;
 
 // BandedSystem==================================================
@@ -55,7 +54,7 @@ void BandedSystem::factorizeLU() {
     return;
 }
 
-template<typename EIGENMAT>
+template <typename EIGENMAT>
 void BandedSystem::solve(EIGENMAT &b) const {
     int iM;
     for (int j = 0; j <= N - 1; j++) {
@@ -78,7 +77,7 @@ void BandedSystem::solve(EIGENMAT &b) const {
     return;
 }
 
-template<typename EIGENMAT>
+template <typename EIGENMAT>
 void BandedSystem::solveAdj(EIGENMAT &b) const {
     int iM;
     for (int j = 0; j <= N - 1; j++) {
@@ -101,11 +100,11 @@ void BandedSystem::solveAdj(EIGENMAT &b) const {
     return;
 }
 
-
 template void BandedSystem::solve<Eigen::MatrixX3d>(Eigen::MatrixX3d &b) const;
 
 template void BandedSystem::solve<Eigen::MatrixXd>(Eigen::MatrixXd &b) const;
 
 template void BandedSystem::solveAdj<Eigen::MatrixXd>(Eigen::MatrixXd &b) const;
 
-template void BandedSystem::solveAdj<Eigen::MatrixX3d>(Eigen::MatrixX3d &b) const;
+template void BandedSystem::solveAdj<Eigen::MatrixX3d>(
+    Eigen::MatrixX3d &b) const;

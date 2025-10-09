@@ -1,25 +1,25 @@
 /**
-* This file is part of SUPER
-*
-* Copyright 2025 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
-* Developed by Yunfan REN <renyf at connect dot hku dot hk>
-* for more information see <https://github.com/hku-mars/SUPER>.
-* If you use this code, please cite the respective publications as
-* listed on the above website.
-*
-* SUPER is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Lesser General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* SUPER is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public License
-* along with SUPER. If not, see <http://www.gnu.org/licenses/>.
-*/
+ * This file is part of SUPER
+ *
+ * Copyright 2025 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
+ * Developed by Yunfan REN <renyf at connect dot hku dot hk>
+ * for more information see <https://github.com/hku-mars/SUPER>.
+ * If you use this code, please cite the respective publications as
+ * listed on the above website.
+ *
+ * SUPER is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * SUPER is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with SUPER. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include <data_structure/base/trajectory.h>
 
@@ -46,13 +46,9 @@ vec_Vec3f Trajectory::getWaypoints() const {
     return pts;
 }
 
-bool Trajectory::empty() const  {
-    return pieces.empty();
-}
+bool Trajectory::empty() const { return pieces.empty(); }
 
-int Trajectory::getPieceNum() const {
-    return pieces.size();
-}
+int Trajectory::getPieceNum() const { return pieces.size(); }
 
 Eigen::VectorXd Trajectory::getDurations() const {
     int N = getPieceNum();
@@ -87,8 +83,7 @@ void Trajectory::emplace_back(const Piece &piece) {
     return;
 }
 
-void Trajectory::emplace_back(const double &dur,
-                              const Eigen::MatrixXd &cMat) {
+void Trajectory::emplace_back(const double &dur, const Eigen::MatrixXd &cMat) {
     pieces.emplace_back(dur, cMat);
     return;
 }
@@ -102,10 +97,7 @@ int Trajectory::locatePieceIdx(double &t) const {
     int N = getPieceNum();
     int idx;
     double dur;
-    for (idx = 0;
-         idx < N &&
-         t > (dur = pieces[idx].getDuration());
-         idx++) {
+    for (idx = 0; idx < N && t > (dur = pieces[idx].getDuration()); idx++) {
         t -= dur;
     }
     if (idx == N) {
@@ -124,7 +116,6 @@ double Trajectory::getWaypointTT(const int &watpoint_id) const {
 }
 
 Eigen::Vector3d Trajectory::getPos(double t) const {
-
     int pieceIdx = locatePieceIdx(t);
     return pieces[pieceIdx].getPos(t);
 }
@@ -144,7 +135,6 @@ Eigen::Vector3d Trajectory::getJer(double t) const {
     return pieces[pieceIdx].getJer(t);
 }
 
-
 Vec3f Trajectory::getSnap(double t) const {
     int pieceIdx = locatePieceIdx(t);
     return pieces[pieceIdx].getSnap(t);
@@ -155,8 +145,8 @@ Mat3Df Trajectory::getState(double t) const {
     return pieces[pieceIdx].getState(t);
 }
 
-bool Trajectory::getState(double t, StatePVAJ& out_state) const {
-    const double & dur = getTotalDuration();
+bool Trajectory::getState(double t, StatePVAJ &out_state) const {
+    const double &dur = getTotalDuration();
     if (t < 0) {
         return false;
     }
@@ -168,7 +158,6 @@ bool Trajectory::getState(double t, StatePVAJ& out_state) const {
     return true;
 }
 
-
 Eigen::Vector3d Trajectory::getJuncPos(int juncIdx) const {
     if (juncIdx != getPieceNum()) {
         return pieces[juncIdx].getCoeffMat().col(pieces[juncIdx].getDegree());
@@ -179,7 +168,8 @@ Eigen::Vector3d Trajectory::getJuncPos(int juncIdx) const {
 
 Eigen::Vector3d Trajectory::getJuncVel(int juncIdx) const {
     if (juncIdx != getPieceNum()) {
-        return pieces[juncIdx].getCoeffMat().col(pieces[juncIdx].getDegree() - 1);
+        return pieces[juncIdx].getCoeffMat().col(pieces[juncIdx].getDegree() -
+                                                 1);
     } else {
         return pieces[juncIdx - 1].getVel(pieces[juncIdx - 1].getDuration());
     }
@@ -187,13 +177,17 @@ Eigen::Vector3d Trajectory::getJuncVel(int juncIdx) const {
 
 Eigen::Vector3d Trajectory::getJuncAcc(int juncIdx) const {
     if (juncIdx != getPieceNum()) {
-        return pieces[juncIdx].getCoeffMat().col(pieces[juncIdx].getDegree() - 2) * 2.0;
+        return pieces[juncIdx].getCoeffMat().col(pieces[juncIdx].getDegree() -
+                                                 2) *
+               2.0;
     } else {
         return pieces[juncIdx - 1].getAcc(pieces[juncIdx - 1].getDuration());
     }
 }
 
-bool Trajectory::getPartialTrajectoryByID(const int &start_id, const int &end_id, Trajectory &out_traj) const {
+bool Trajectory::getPartialTrajectoryByID(const int &start_id,
+                                          const int &end_id,
+                                          Trajectory &out_traj) const {
     out_traj.clear();
     int end_id_ = end_id;
     if (end_id_ == -1) {
@@ -210,7 +204,8 @@ bool Trajectory::getPartialTrajectoryByID(const int &start_id, const int &end_id
     return true;
 }
 
-bool Trajectory::getPartialTrajectoryByTime(const double &start_TT, const double &end_TT,
+bool Trajectory::getPartialTrajectoryByTime(const double &start_TT,
+                                            const double &end_TT,
                                             Trajectory &out_traj) const {
     /*
      * syms c0 c1 c2 c3 c4 c5 c6 c7 real;
@@ -238,28 +233,28 @@ bool Trajectory::getPartialTrajectoryByTime(const double &start_TT, const double
      * */
     double total_dur = getTotalDuration();
     if (start_TT < 0 || start_TT >= total_dur) {
-        std::cout << YELLOW << "Partial traj end_t error. [Start_TT]: " << start_TT
+        std::cout << YELLOW
+                  << "Partial traj end_t error. [Start_TT]: " << start_TT
                   << " [Total Dur]: " << total_dur << RESET << std::endl;
     }
     if (end_TT <= 0 || end_TT > total_dur) {
         std::cout << YELLOW << "Partial traj end_t error. [end_TT]: " << end_TT
-                  << " [Total Dur]: " << total_dur <<
-                  RESET << std::endl;
+                  << " [Total Dur]: " << total_dur << RESET << std::endl;
         return false;
     }
     if (end_TT <= start_TT) {
-        std::cout << YELLOW << "Time duration wrong: start_t: " << start_TT <<
-                  "; end_t: " << end_TT << RESET << std::endl;
+        std::cout << YELLOW << "Time duration wrong: start_t: " << start_TT
+                  << "; end_t: " << end_TT << RESET << std::endl;
         return false;
     }
 
     out_traj.clear();
     if (start_TT == 0) {
         // 只需要修改终点时间即可
-//            print("Only change end time.\n");
+        //            print("Only change end time.\n");
         double t0 = end_TT;
         int pieceIdx = locatePieceIdx(t0);
-//            print("pieceIdx = {}, t0 = {}.\n",pieceIdx,t0);
+        //            print("pieceIdx = {}, t0 = {}.\n",pieceIdx,t0);
         if (pieceIdx == 0) {
             Piece new_pie = pieces[pieceIdx];
             new_pie.setDuration(t0);
@@ -289,15 +284,13 @@ bool Trajectory::getPartialTrajectoryByTime(const double &start_TT, const double
         // Cut current traj;
         Eigen::MatrixXd coef_mat = pieces[pieceIdx].getCoeffMat();
         Eigen::Matrix<double, 6, 6> cvt_M;
-        cvt_M << 1, 0, 0, 0, 0, 0,
-                5 * t0, 1, 0, 0, 0, 0,
-                10 * t02, 4 * t0, 1, 0, 0, 0,
-                10 * t03, 6 * t02, 3 * t0, 1, 0, 0,
-                5 * t04, 4 * t03, 3 * t02, 2 * t0, 1, 0,
-                t05, 1 * t04, 1 * t03, t02, t0, 1;
+        cvt_M << 1, 0, 0, 0, 0, 0, 5 * t0, 1, 0, 0, 0, 0, 10 * t02, 4 * t0, 1,
+            0, 0, 0, 10 * t03, 6 * t02, 3 * t0, 1, 0, 0, 5 * t04, 4 * t03,
+            3 * t02, 2 * t0, 1, 0, t05, 1 * t04, 1 * t03, t02, t0, 1;
 
         coef_mat = coef_mat * cvt_M.transpose();
-        double p1_t = std::min(pieces[pieceIdx].getDuration() - t0, end_TT - start_TT);
+        double p1_t =
+            std::min(pieces[pieceIdx].getDuration() - t0, end_TT - start_TT);
         Piece new_pie(p1_t, coef_mat);
         out_traj.pieces.push_back(new_pie);
         if (pieceIdx == pieceEndIdx) {
@@ -325,17 +318,16 @@ bool Trajectory::getPartialTrajectoryByTime(const double &start_TT, const double
         // Cut current traj;
         Eigen::MatrixXd coef_mat = pieces[pieceIdx].getCoeffMat();
         Eigen::Matrix<double, 8, 8> cvt_M;
-        cvt_M << 1, 0, 0, 0, 0, 0, 0, 0,
-                7 * t0, 1, 0, 0, 0, 0, 0, 0,
-                21 * t02, 6 * t0, 1, 0, 0, 0, 0, 0,
-                35 * t03, 15 * t02, 5 * t0, 1, 0, 0, 0, 0,
-                35 * t04, 20 * t03, 10 * t02, 4 * t0, 1, 0, 0, 0,
-                21 * t05, 15 * t04, 10 * t03, 6 * t02, 3 * t0, 1, 0, 0,
-                7 * t06, 6 * t05, 5 * t04, 4 * t03, 3 * t02, 2 * t0, 1, 0,
-                t07, t06, 1 * t05, t04, t03, t02, t0, 1;
+        cvt_M << 1, 0, 0, 0, 0, 0, 0, 0, 7 * t0, 1, 0, 0, 0, 0, 0, 0, 21 * t02,
+            6 * t0, 1, 0, 0, 0, 0, 0, 35 * t03, 15 * t02, 5 * t0, 1, 0, 0, 0, 0,
+            35 * t04, 20 * t03, 10 * t02, 4 * t0, 1, 0, 0, 0, 21 * t05,
+            15 * t04, 10 * t03, 6 * t02, 3 * t0, 1, 0, 0, 7 * t06, 6 * t05,
+            5 * t04, 4 * t03, 3 * t02, 2 * t0, 1, 0, t07, t06, 1 * t05, t04,
+            t03, t02, t0, 1;
 
         coef_mat = coef_mat * cvt_M.transpose();
-        double p1_t = std::min(pieces[pieceIdx].getDuration() - t0, end_TT - start_TT);
+        double p1_t =
+            std::min(pieces[pieceIdx].getDuration() - t0, end_TT - start_TT);
         Piece new_pie(p1_t, coef_mat);
         out_traj.pieces.push_back(new_pie);
         if (pieceIdx == pieceEndIdx) {
@@ -353,7 +345,9 @@ bool Trajectory::getPartialTrajectoryByTime(const double &start_TT, const double
         return true;
 
     } else {
-        std::cout << "[getPartialTrajectory] ERROR, the piece degree is neither 5 n or 7" << std::endl;
+        std::cout << "[getPartialTrajectory] ERROR, the piece degree is "
+                     "neither 5 n or 7"
+                  << std::endl;
         Trajectory out_empty;
         return false;
     }
@@ -400,9 +394,12 @@ bool Trajectory::checkMaxAccRate(const double &maxAccRate) const {
 }
 
 void Trajectory::printProfile() const {
-    std::cout << GREEN << "[Trajectory::printProfile] The trajectory has " << getPieceNum() << " pieces" << RESET
+    std::cout << GREEN << "[Trajectory::printProfile] The trajectory has "
+              << getPieceNum() << " pieces" << RESET << std::endl;
+    std::cout << GREEN << "\tMaximum Velocity Rate: " << getMaxVelRate()
+              << RESET << std::endl;
+    std::cout << GREEN << "\tMaximum Acceleration Rate: " << getMaxAccRate()
+              << RESET << std::endl;
+    std::cout << GREEN << "\tTotal Duration: " << getTotalDuration() << RESET
               << std::endl;
-    std::cout << GREEN << "\tMaximum Velocity Rate: " << getMaxVelRate() << RESET << std::endl;
-    std::cout << GREEN << "\tMaximum Acceleration Rate: " << getMaxAccRate() << RESET << std::endl;
-    std::cout << GREEN << "\tTotal Duration: " << getTotalDuration() << RESET << std::endl;
 }

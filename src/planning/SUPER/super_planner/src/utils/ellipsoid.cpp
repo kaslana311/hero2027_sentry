@@ -1,39 +1,38 @@
 /**
-* This file is part of SUPER
-*
-* Copyright 2025 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
-* Developed by Yunfan REN <renyf at connect dot hku dot hk>
-* for more information see <https://github.com/hku-mars/SUPER>.
-* If you use this code, please cite the respective publications as
-* listed on the above website.
-*
-* SUPER is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Lesser General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* SUPER is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public License
-* along with SUPER. If not, see <http://www.gnu.org/licenses/>.
-*/
+ * This file is part of SUPER
+ *
+ * Copyright 2025 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
+ * Developed by Yunfan REN <renyf at connect dot hku dot hk>
+ * for more information see <https://github.com/hku-mars/SUPER>.
+ * If you use this code, please cite the respective publications as
+ * listed on the above website.
+ *
+ * SUPER is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * SUPER is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with SUPER. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include <data_structure/base/ellipsoid.h>
 
 using namespace geometry_utils;
 
-bool Ellipsoid::empty() const {
-    return undefined;
-}
+bool Ellipsoid::empty() const { return undefined; }
 
 Ellipsoid::Ellipsoid(const Mat3f &C, const Vec3f &d) : C_(C), d_(d) {
     undefined = false;
     C_inv_ = C_.inverse();
 
-    Eigen::JacobiSVD<Eigen::Matrix3d, Eigen::FullPivHouseholderQRPreconditioner> svd(C_, Eigen::ComputeFullU);
+    Eigen::JacobiSVD<Eigen::Matrix3d, Eigen::FullPivHouseholderQRPreconditioner>
+        svd(C_, Eigen::ComputeFullU);
     Eigen::Matrix3d U = svd.matrixU();
     Eigen::Vector3d S = svd.singularValues();
     if (U.determinant() < 0.0) {
@@ -50,22 +49,20 @@ Ellipsoid::Ellipsoid(const Mat3f &C, const Vec3f &d) : C_(C), d_(d) {
 }
 
 Ellipsoid::Ellipsoid(const Mat3f &R, const Vec3f &r, const Vec3f &d)
-        : R_(R), r_(r), d_(d) {
+    : R_(R), r_(r), d_(d) {
     undefined = false;
     C_ = R_ * r_.asDiagonal() * R_.transpose();
     C_inv_ = C_.inverse();
 }
 
-double Ellipsoid::pointDistaceToEllipsoid(const Vec3f &pt, Vec3f &closest_pt_on_ellip) const {
+double Ellipsoid::pointDistaceToEllipsoid(const Vec3f &pt,
+                                          Vec3f &closest_pt_on_ellip) const {
     /// step one: transform the point to the ellipsoid frame
     Vec3f pt_ellip_frame = R_.transpose() * (pt - d_);
-    double dist = geometry_utils::DistancePointEllipsoid(r_(0), r_(1), r_(2),
-                                                         pt_ellip_frame.x(),
-                                                         pt_ellip_frame.y(),
-                                                         pt_ellip_frame.z(),
-                                                         closest_pt_on_ellip.x(),
-                                                         closest_pt_on_ellip.y(),
-                                                         closest_pt_on_ellip.z());
+    double dist = geometry_utils::DistancePointEllipsoid(
+        r_(0), r_(1), r_(2), pt_ellip_frame.x(), pt_ellip_frame.y(),
+        pt_ellip_frame.z(), closest_pt_on_ellip.x(), closest_pt_on_ellip.y(),
+        closest_pt_on_ellip.z());
     /// step two: transform the closest point back to the world frame
     closest_pt_on_ellip = R_ * closest_pt_on_ellip + d_;
     return dist;
@@ -85,34 +82,27 @@ Vec3f Ellipsoid::nearestPoint(const Eigen::Matrix3Xd &pc) const {
     return pc.col(np_id);
 }
 
-double Ellipsoid::nearestPointDis(const Eigen::Matrix3Xd &pc, int &np_id) const {
+double Ellipsoid::nearestPointDis(const Eigen::Matrix3Xd &pc,
+                                  int &np_id) const {
     Eigen::VectorXd dists = (C_inv_ * (pc.colwise() - d_)).colwise().norm();
     double np_dist = dists.minCoeff(&np_id);
     return np_dist;
 }
 
-Mat3f Ellipsoid::C() const {
-    return C_;
-}
+Mat3f Ellipsoid::C() const { return C_; }
 
-Vec3f Ellipsoid::d() const {
-    return d_;
-}
+Vec3f Ellipsoid::d() const { return d_; }
 
-Mat3f Ellipsoid::R() const {
-    return R_;
-}
+Mat3f Ellipsoid::R() const { return R_; }
 
-Vec3f Ellipsoid::r() const {
-    return r_;
-}
-
+Vec3f Ellipsoid::r() const { return r_; }
 
 Vec3f Ellipsoid::toEllipsoidFrame(const Vec3f &pt_w) const {
     return C_inv_ * (pt_w - d_);
 }
 
-Eigen::Matrix3Xd Ellipsoid::toEllipsoidFrame(const Eigen::Matrix3Xd &pc_w) const {
+Eigen::Matrix3Xd Ellipsoid::toEllipsoidFrame(
+    const Eigen::Matrix3Xd &pc_w) const {
     return C_inv_ * (pc_w.colwise() - d_);
 }
 
@@ -124,7 +114,8 @@ Eigen::Matrix3Xd Ellipsoid::toWorldFrame(const Eigen::Matrix3Xd &pc_e) const {
     return (C_ * pc_e).colwise() + d_;
 }
 
-Eigen::Vector4d Ellipsoid::toEllipsoidFrame(const Eigen::Vector4d &plane_w) const {
+Eigen::Vector4d Ellipsoid::toEllipsoidFrame(
+    const Eigen::Vector4d &plane_w) const {
     Eigen::Vector4d plane_e;
     plane_e.head(3) = plane_w.head(3).transpose() * C_;
     plane_e(3) = plane_w(3) + plane_w.head(3).dot(d_);
@@ -138,14 +129,16 @@ Eigen::Vector4d Ellipsoid::toWorldFrame(const Eigen::Vector4d &plane_e) const {
     return plane_w;
 }
 
-Eigen::MatrixX4d Ellipsoid::toEllipsoidFrame(const Eigen::MatrixX4d &planes_w) const {
+Eigen::MatrixX4d Ellipsoid::toEllipsoidFrame(
+    const Eigen::MatrixX4d &planes_w) const {
     Eigen::MatrixX4d planes_e(planes_w.rows(), planes_w.cols());
     planes_e.leftCols(3) = planes_w.leftCols(3) * C_;
     planes_e.rightCols(1) = planes_w.rightCols(1) + planes_w.leftCols(3) * d_;
     return planes_e;
 }
 
-Eigen::MatrixX4d Ellipsoid::toWorldFrame(const Eigen::MatrixX4d &planes_e) const {
+Eigen::MatrixX4d Ellipsoid::toWorldFrame(
+    const Eigen::MatrixX4d &planes_e) const {
     Eigen::MatrixX4d planes_w(planes_e.rows(), planes_e.cols());
     planes_w.leftCols(3) = planes_e.leftCols(3) * C_inv_;
     planes_w.rightCols(1) = planes_e.rightCols(1) + planes_w.leftCols(3) * d_;
@@ -160,10 +153,11 @@ Eigen::VectorXd Ellipsoid::dist(const Eigen::Matrix3Xd &pc_w) const {
     return (C_inv_ * (pc_w.colwise() - d_)).colwise().norm();
 }
 
-bool Ellipsoid::noPointsInside(vec_Vec3f &pc, const Eigen::Matrix3d &R, const Vec3f &r, const Vec3f &p) const {
+bool Ellipsoid::noPointsInside(vec_Vec3f &pc, const Eigen::Matrix3d &R,
+                               const Vec3f &r, const Vec3f &p) const {
     Eigen::Matrix3d C_inv;
     C_inv = r.cwiseInverse().asDiagonal() * R.transpose();
-    for (auto pt_w: pc) {
+    for (auto pt_w : pc) {
         double d = (C_inv * (pt_w - p)).norm();
         if (d <= 1) {
             return false;
@@ -172,7 +166,8 @@ bool Ellipsoid::noPointsInside(vec_Vec3f &pc, const Eigen::Matrix3d &R, const Ve
     return true;
 }
 
-bool Ellipsoid::pointsInside(const Eigen::Matrix3Xd &pc, Mat3Df &out, int &min_pt_id) const {
+bool Ellipsoid::pointsInside(const Eigen::Matrix3Xd &pc, Mat3Df &out,
+                             int &min_pt_id) const {
     Eigen::VectorXd vec = (C_inv_ * (pc.colwise() - d_)).colwise().norm();
     vec_E<Vec3f> pts;
     pts.reserve(pc.cols());
@@ -190,15 +185,12 @@ bool Ellipsoid::pointsInside(const Eigen::Matrix3Xd &pc, Mat3Df &out, int &min_p
         }
     }
     if (!pts.empty()) {
-        out = Eigen::Map<const Eigen::Matrix<double, 3, -1, Eigen::ColMajor>>(pts[0].data(), 3, pts.size());
+        out = Eigen::Map<const Eigen::Matrix<double, 3, -1, Eigen::ColMajor>>(
+            pts[0].data(), 3, pts.size());
         return true;
     } else {
         return false;
     }
 }
 
-bool Ellipsoid::inside(const Vec3f &pt) const {
-    return dist(pt) <= 1;
-}
-
-
+bool Ellipsoid::inside(const Vec3f &pt) const { return dist(pt) <= 1; }

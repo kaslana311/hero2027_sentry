@@ -1,0 +1,6 @@
+build:
+  symlink-install: true
+  parallel-workers: 3
+  cmake-args:
+    - -DCMAKE_BUILD_TYPE=Release
+    - -DCMAKE_EXPORT_COMPILE_COMMANDS=ON

@@ -5,7 +5,6 @@
 #ifndef CLASS_COLOR_MSG_UTILS
 #define CLASS_COLOR_MSG_UTILS
 
-
 #ifndef USE_ROS1
 #ifndef USE_ROS2
 #error "Please define either USE_ROS1 or USE_ROS2, but not both."
@@ -14,17 +13,17 @@
 
 #ifdef USE_ROS1
 #ifdef USE_ROS2
-#error "Cannot use both USE_ROS1 and USE_ROS2 at the same time. Please define only one."
+#error \
+    "Cannot use both USE_ROS1 and USE_ROS2 at the same time. Please define only one."
 #endif
 #endif
-
 
 #ifdef USE_ROS1
 
 #include "std_msgs/ColorRGBA.h"
 
 class Color : public std_msgs::ColorRGBA {
-public:
+   public:
     Color() : std_msgs::ColorRGBA() {}
 
     Color(int hex_color) {
@@ -43,7 +42,8 @@ public:
         a = alpha;
     }
 
-    Color(double red, double green, double blue) : Color(red, green, blue, 1.0) {
+    Color(double red, double green, double blue)
+        : Color(red, green, blue, 1.0) {
         r = red > 1.0 ? red / 255.0 : red;
         g = green > 1.0 ? green / 255.0 : green;
         b = blue > 1.0 ? blue / 255.0 : blue;
@@ -88,7 +88,7 @@ public:
 #include <std_msgs/msg/color_rgba.hpp>
 
 class Color : public std_msgs::msg::ColorRGBA {
-public:
+   public:
     Color() : std_msgs::msg::ColorRGBA() {}
 
     Color(int hex_color) {
@@ -107,7 +107,8 @@ public:
         a = alpha;
     }
 
-    Color(double red, double green, double blue) : Color(red, green, blue, 1.0) {
+    Color(double red, double green, double blue)
+        : Color(red, green, blue, 1.0) {
         r = red > 1.0 ? red / 255.0 : red;
         g = green > 1.0 ? green / 255.0 : green;
         b = blue > 1.0 ? blue / 255.0 : blue;

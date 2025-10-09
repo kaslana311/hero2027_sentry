@@ -9,9 +9,9 @@
 #include "glm.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_MESSAGE_EXT_INCLUDED_DISPLAYED)
-#	define GLM_MESSAGE_EXT_INCLUDED_DISPLAYED
-#	pragma message("GLM: All extensions included (not recommended)")
-#endif//GLM_MESSAGES
+#define GLM_MESSAGE_EXT_INCLUDED_DISPLAYED
+#pragma message("GLM: All extensions included (not recommended)")
+#endif  // GLM_MESSAGES
 
 #include "./ext/matrix_double2x2.hpp"
 #include "./ext/matrix_double2x2_precision.hpp"
@@ -31,7 +31,6 @@
 #include "./ext/matrix_double4x3_precision.hpp"
 #include "./ext/matrix_double4x4.hpp"
 #include "./ext/matrix_double4x4_precision.hpp"
-
 #include "./ext/matrix_float2x2.hpp"
 #include "./ext/matrix_float2x2_precision.hpp"
 #include "./ext/matrix_float2x3.hpp"
@@ -50,20 +49,16 @@
 #include "./ext/matrix_float4x3_precision.hpp"
 #include "./ext/matrix_float4x4.hpp"
 #include "./ext/matrix_float4x4_precision.hpp"
-
 #include "./ext/matrix_relational.hpp"
-
 #include "./ext/quaternion_double.hpp"
 #include "./ext/quaternion_double_precision.hpp"
 #include "./ext/quaternion_float.hpp"
 #include "./ext/quaternion_float_precision.hpp"
 #include "./ext/quaternion_geometric.hpp"
 #include "./ext/quaternion_relational.hpp"
-
 #include "./ext/scalar_constants.hpp"
 #include "./ext/scalar_int_sized.hpp"
 #include "./ext/scalar_relational.hpp"
-
 #include "./ext/vector_bool1.hpp"
 #include "./ext/vector_bool1_precision.hpp"
 #include "./ext/vector_bool2.hpp"
@@ -72,7 +67,6 @@
 #include "./ext/vector_bool3_precision.hpp"
 #include "./ext/vector_bool4.hpp"
 #include "./ext/vector_bool4_precision.hpp"
-
 #include "./ext/vector_double1.hpp"
 #include "./ext/vector_double1_precision.hpp"
 #include "./ext/vector_double2.hpp"
@@ -81,7 +75,6 @@
 #include "./ext/vector_double3_precision.hpp"
 #include "./ext/vector_double4.hpp"
 #include "./ext/vector_double4_precision.hpp"
-
 #include "./ext/vector_float1.hpp"
 #include "./ext/vector_float1_precision.hpp"
 #include "./ext/vector_float2.hpp"
@@ -90,7 +83,6 @@
 #include "./ext/vector_float3_precision.hpp"
 #include "./ext/vector_float4.hpp"
 #include "./ext/vector_float4_precision.hpp"
-
 #include "./ext/vector_int1.hpp"
 #include "./ext/vector_int1_precision.hpp"
 #include "./ext/vector_int2.hpp"
@@ -99,9 +91,7 @@
 #include "./ext/vector_int3_precision.hpp"
 #include "./ext/vector_int4.hpp"
 #include "./ext/vector_int4_precision.hpp"
-
 #include "./ext/vector_relational.hpp"
-
 #include "./ext/vector_uint1.hpp"
 #include "./ext/vector_uint1_precision.hpp"
 #include "./ext/vector_uint2.hpp"
@@ -110,7 +100,6 @@
 #include "./ext/vector_uint3_precision.hpp"
 #include "./ext/vector_uint4.hpp"
 #include "./ext/vector_uint4_precision.hpp"
-
 #include "./gtc/bitfield.hpp"
 #include "./gtc/color_space.hpp"
 #include "./gtc/constants.hpp"
@@ -131,7 +120,7 @@
 #include "./gtc/ulp.hpp"
 #include "./gtc/vec1.hpp"
 #if GLM_CONFIG_ALIGNED_GENTYPES == GLM_ENABLE
-#	include "./gtc/type_aligned.hpp"
+#include "./gtc/type_aligned.hpp"
 #endif
 
 #ifdef GLM_ENABLE_EXPERIMENTAL
@@ -177,7 +166,7 @@
 #include "./gtx/spline.hpp"
 #include "./gtx/std_based_type.hpp"
 #if !(GLM_COMPILER & GLM_COMPILER_CUDA)
-#	include "./gtx/string_cast.hpp"
+#include "./gtx/string_cast.hpp"
 #endif
 #include "./gtx/transform.hpp"
 #include "./gtx/transform2.hpp"
@@ -187,10 +176,10 @@
 #include "./gtx/wrap.hpp"
 
 #if GLM_HAS_TEMPLATE_ALIASES
-#	include "./gtx/scalar_multiplication.hpp"
+#include "./gtx/scalar_multiplication.hpp"
 #endif
 
 #if GLM_HAS_RANGE_FOR
-#	include "./gtx/range.hpp"
+#include "./gtx/range.hpp"
 #endif
-#endif//GLM_ENABLE_EXPERIMENTAL
+#endif  // GLM_ENABLE_EXPERIMENTAL

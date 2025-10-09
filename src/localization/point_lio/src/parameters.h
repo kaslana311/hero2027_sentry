@@ -31,7 +31,8 @@
 #ifdef IVOX_NODE_TYPE_PHC
 using IVoxType = faster_lio::IVox<3, faster_lio::IVoxNodeType::PHC, PointType>;
 #else
-using IVoxType = faster_lio::IVox<3, faster_lio::IVoxNodeType::DEFAULT, PointType>;
+using IVoxType =
+    faster_lio::IVox<3, faster_lio::IVoxNodeType::DEFAULT, PointType>;
 #endif
 
 extern bool is_first_frame;
@@ -71,7 +72,7 @@ extern std::vector<double> extrinR;
 extern double time_diff_lidar_to_imu;
 extern double lidar_time_inte, first_imu_time;
 extern int cut_frame_num, orig_odom_freq;
-extern double online_refine_time;  //unit: s
+extern double online_refine_time;  // unit: s
 extern bool cut_frame_init;
 extern double time_update_last, time_current, time_predict_last_const, t_last;
 
@@ -82,8 +83,8 @@ extern std::vector<double> init_pose;
 extern MeasureGroup Measures;
 
 extern ofstream fout_out, fout_imu_pbp;
-void readParameters(std::shared_ptr<rclcpp::Node> & n);
+void readParameters(std::shared_ptr<rclcpp::Node>& n);
 void open_file();
-Eigen::Matrix<double, 3, 1> SO3ToEuler(const SO3 & orient);
-void reset_cov(Eigen::Matrix<double, 24, 24> & P_init);
-void reset_cov_output(Eigen::Matrix<double, 30, 30> & P_init_output);
+Eigen::Matrix<double, 3, 1> SO3ToEuler(const SO3& orient);
+void reset_cov(Eigen::Matrix<double, 24, 24>& P_init);
+void reset_cov_output(Eigen::Matrix<double, 30, 30>& P_init_output);

@@ -9,10 +9,12 @@
 
 namespace lexyd
 {
-#define LEXY_PUNCT(Name, String)                                                                   \
-    struct _##Name : LEXY_NTTP_STRING(_lit, String)                                                \
-    {};                                                                                            \
-    inline constexpr auto(Name) = _##Name {}
+#define LEXY_PUNCT(Name, String)                                                         \
+  struct _##Name : LEXY_NTTP_STRING(_lit, String)                                        \
+  {                                                                                      \
+  };                                                                                     \
+  inline constexpr auto(Name) = _##Name                                                  \
+  {}
 
 LEXY_PUNCT(period, ".");
 LEXY_PUNCT(comma, ",");
@@ -40,7 +42,6 @@ LEXY_PUNCT(percent_sign, "%");
 LEXY_PUNCT(equal_sign, "=");
 
 #undef LEXY_PUNCT
-} // namespace lexyd
+}  // namespace lexyd
 
-#endif // LEXY_DSL_PUNCTUATOR_HPP_INCLUDED
-
+#endif  // LEXY_DSL_PUNCTUATOR_HPP_INCLUDED

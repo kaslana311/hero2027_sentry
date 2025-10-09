@@ -48,38 +48,38 @@
 // }
 
 int main() {
-  // 构建姿态包
-  auto pose_pkt =
-      combat_protocol::ProtocolBuilder::build_pose(15.5f,   // pitch
-                                                   30.2f,   // yaw
-                                                   5.1f,    // roll
-                                                   0xABCD,  // 电控时间戳
-                                                   true,    // 已发弹
-                                                   false    // 右键未按下
-      );
+    // 构建姿态包
+    auto pose_pkt =
+        combat_protocol::ProtocolBuilder::build_pose(15.5f,   // pitch
+                                                     30.2f,   // yaw
+                                                     5.1f,    // roll
+                                                     0xABCD,  // 电控时间戳
+                                                     true,    // 已发弹
+                                                     false    // 右键未按下
+        );
 
-  // auto timing_pkt = combat_protocol::ProtocolBuilder::build_timing();
-  auto timing_pkt =
-      combat_protocol::ProtocolBuilder::build_timing(1, 1, 200, 1, 1, 1, 000);
+    // auto timing_pkt = combat_protocol::ProtocolBuilder::build_timing();
+    auto timing_pkt =
+        combat_protocol::ProtocolBuilder::build_timing(1, 1, 200, 1, 1, 1, 000);
 
-  // 解析数据包
-  combat_protocol::ProtocolParser parser;
-  if (parser.parse(timing_pkt)) {
-    if (parser.packet_type() == combat_protocol::PacketType::POSE) {
-      std::cout << "这是位姿包" << std::endl;
+    // 解析数据包
+    combat_protocol::ProtocolParser parser;
+    if (parser.parse(timing_pkt)) {
+        if (parser.packet_type() == combat_protocol::PacketType::POSE) {
+            std::cout << "这是位姿包" << std::endl;
 
-      auto data = parser.pose();
-      std::cout << "滚转角: " << data.roll << "°\n"
-                << "电控时间: " << data.ec_timestamp << "ms" << std::endl;
+            auto data = parser.pose();
+            std::cout << "滚转角: " << data.roll << "°\n"
+                      << "电控时间: " << data.ec_timestamp << "ms" << std::endl;
+        } else {
+            std::cout << "这是对时包" << std::endl;
+            auto data = parser.timing();
+
+            std::cout << data.bullet_speed << std::endl;
+        }
     } else {
-      std::cout << "这是对时包" << std::endl;
-      auto data = parser.timing();
-
-      std::cout << data.bullet_speed << std::endl;
+        std::cout << "解析失败" << std::endl;
     }
-  } else {
-    std::cout << "解析失败" << std::endl;
-  }
 }
 
 // int main() {

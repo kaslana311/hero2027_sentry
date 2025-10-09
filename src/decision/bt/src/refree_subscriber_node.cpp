@@ -1,24 +1,26 @@
 #include "refree_subscriber_node.hpp"
-#include "cruiser_node.hpp"
-#include "behavior_node.hpp"
-#include "feasibility_calculate_node.hpp"
-#include "thread_node.hpp"
+
 #include <atomic>
-#include <thread>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <random>
 #include <std_msgs/msg/bool.hpp>
+#include <thread>
+
+#include "behavior_node.hpp"
+#include "cruiser_node.hpp"
+#include "feasibility_calculate_node.hpp"
+#include "thread_node.hpp"
 
 using namespace std::literals;
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<rclcpp::Node>("bt_referee_subscriber");
 
     // 声明参数
-    node->declare_parameter<std::string>("xml_config_path", "src/decision/bt/config/xml/RMUC_test3.xml");
+    node->declare_parameter<std::string>(
+        "xml_config_path", "src/decision/bt/config/xml/RMUC_test3.xml");
     node->declare_parameter<bool>("is_red_team_", true);
     node->declare_parameter<int>("cruise_state", 0);
     node->declare_parameter<int>("global_total_points", 3);
@@ -27,7 +29,8 @@ int main(int argc, char** argv)
     std::string xml_path = node->get_parameter("xml_config_path").as_string();
     bool is_red_team = node->get_parameter("is_red_team_").as_bool();
     int cruise_state = node->get_parameter("cruise_state").as_int();
-    int global_total_points = node->get_parameter("global_total_points").as_int();
+    int global_total_points =
+        node->get_parameter("global_total_points").as_int();
 
     Blackboard::Ptr blackboard = Blackboard::create();
 
@@ -67,12 +70,12 @@ int main(int argc, char** argv)
     blackboard->set<double>("trigger_point_y", 0.0);
     blackboard->set<double>("x_offset", 0.0);
     blackboard->set<double>("y_offset", 0.0);
-    
 
     blackboard->set("can_attack_sentry", true);
 
     // 独立线程创建并启动黑板更新器
-    auto blackboard_updater = std::make_shared<BlackboardUpdater>(blackboard, node,is_red_team);
+    auto blackboard_updater =
+        std::make_shared<BlackboardUpdater>(blackboard, node, is_red_team);
     blackboard_updater->start();
 
     // 创建并启动血量变化率监测器
@@ -80,12 +83,13 @@ int main(int argc, char** argv)
     hp_watcher->start();
 
     // 创建并启动独立自瞄状态广播节点
-    auto gimbal_serial_node = std::make_shared<GimbalSerialNode>(node, blackboard);
+    auto gimbal_serial_node =
+        std::make_shared<GimbalSerialNode>(node, blackboard);
     gimbal_serial_node->start();  // 启动线程
 
     // 启动敌方哨兵血量监控进程
-    // auto sentry_watcher = std::make_shared<sentry_attack_watcher>(blackboard, node);
-    // sentry_watcher->start();
+    // auto sentry_watcher = std::make_shared<sentry_attack_watcher>(blackboard,
+    // node); sentry_watcher->start();
 
     BehaviorTreeFactory factory;
     factory.registerNodeType<RefereeSubscriberNode>("RefereeSubscriber");
@@ -104,16 +108,18 @@ int main(int argc, char** argv)
     factory.registerNodeType<AttackNavNode>("AttackNav");
     factory.registerNodeType<AutoAimManagerNode>("AutoAimManager");
     factory.registerNodeType<RED_OffsetCalculatorNode>("RED_OffsetCalculator");
-    factory.registerNodeType<BLUE_OffsetCalculatorNode>("BLUE_OffsetCalculator");
+    factory.registerNodeType<BLUE_OffsetCalculatorNode>(
+        "BLUE_OffsetCalculator");
     factory.registerNodeType<ClearCalculatorNode>("ClearCalculator");
-    factory.registerNodeType<PointInQuadrilateralCondition>("PointInQuadrilateral");
+    factory.registerNodeType<PointInQuadrilateralCondition>(
+        "PointInQuadrilateral");
 
-    RCLCPP_INFO(rclcpp::get_logger("refree_sub"),"行为树节点登记成功");
+    RCLCPP_INFO(rclcpp::get_logger("refree_sub"), "行为树节点登记成功");
     auto tree = factory.createTreeFromFile(xml_path, blackboard);
-    
+
     // 主线程专注行为树执行
     rclcpp::Rate tree_rate(10);
-    while(rclcpp::ok()) {
+    while (rclcpp::ok()) {
         // 持续推进行为树
         const auto status = tree.tickWhileRunning();
         tree_rate.sleep();
@@ -121,7 +127,7 @@ int main(int argc, char** argv)
 
     // 清理资源
     blackboard_updater->stop();
-    hp_watcher->stop(); // 停止血量监测器
+    hp_watcher->stop();  // 停止血量监测器
     // gimbal_serial_node->stop();  // 停止线程
     rclcpp::shutdown();
     return 0;

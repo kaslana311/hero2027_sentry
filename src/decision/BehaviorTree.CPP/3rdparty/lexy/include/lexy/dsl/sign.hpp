@@ -15,24 +15,28 @@ namespace lexy
 template <int I>
 struct _sign
 {
-    constexpr operator int() const
-    {
-        return I;
-    }
+  constexpr operator int() const
+  {
+    return I;
+  }
 };
 
 struct plus_sign : _sign<+1>
-{};
+{
+};
 struct minus_sign : _sign<-1>
-{};
-} // namespace lexy
+{
+};
+}  // namespace lexy
 
 namespace lexyd
 {
 struct _plus : decltype(op<lexy::plus_sign>(LEXY_LIT("+")))
-{};
+{
+};
 struct _minus : decltype(op<lexy::minus_sign>(LEXY_LIT("-")))
-{};
+{
+};
 
 /// Matches a plus sign or nothing, producing +1.
 constexpr auto plus_sign = if_(_plus{});
@@ -41,7 +45,6 @@ constexpr auto minus_sign = if_(_minus{});
 
 /// Matches a plus or minus sign or nothing, producing +1 or -1.
 constexpr auto sign = if_(_plus{} | _minus{});
-} // namespace lexyd
+}  // namespace lexyd
 
-#endif // LEXY_DSL_SIGN_HPP_INCLUDED
-
+#endif  // LEXY_DSL_SIGN_HPP_INCLUDED

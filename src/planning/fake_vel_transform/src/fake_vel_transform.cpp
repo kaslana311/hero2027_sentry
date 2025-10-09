@@ -21,116 +21,118 @@
 namespace fake_vel_transform {
 
 constexpr double EPSILON = 1e-5;
-constexpr double CONTROLLER_TIMEOUT = 0.1 ;
+constexpr double CONTROLLER_TIMEOUT = 0.1;
 
 FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions& options)
     : Node("fake_vel_transform", options) {
-  RCLCPP_INFO(get_logger(), "Start FakeVelTransform!");
+    RCLCPP_INFO(get_logger(), "Start FakeVelTransform!");
 
-  this->declare_parameter<std::string>("robot_base_frame", "base_link");
-  this->declare_parameter<std::string>("fake_robot_base_frame",
-                                       "fake_base_link");
-  this->declare_parameter<std::string>("odom_topic", "base_link_in_map_odom");
-  this->declare_parameter<std::string>("local_plan_topic", "local_plan");
-  this->declare_parameter<std::string>("input_cmd_vel_topic", "cmd_vel_nav2_result");
-  this->declare_parameter<std::string>("output_cmd_vel_topic", "final_cmd_vel");
+    this->declare_parameter<std::string>("robot_base_frame", "base_link");
+    this->declare_parameter<std::string>("fake_robot_base_frame",
+                                         "fake_base_link");
+    this->declare_parameter<std::string>("odom_topic", "base_link_in_map_odom");
+    this->declare_parameter<std::string>("local_plan_topic", "local_plan");
+    this->declare_parameter<std::string>("input_cmd_vel_topic",
+                                         "cmd_vel_nav2_result");
+    this->declare_parameter<std::string>("output_cmd_vel_topic",
+                                         "final_cmd_vel");
 
-  this->get_parameter("robot_base_frame", base_link_);
-  this->get_parameter("fake_robot_base_frame", fake_base_link_);
-  this->get_parameter("odom_topic", odom_topic_);
-  this->get_parameter("local_plan_topic", local_plan_topic_);
-  this->get_parameter("input_cmd_vel_topic", input_cmd_vel_topic_);
-  this->get_parameter("output_cmd_vel_topic", output_cmd_vel_topic_);
+    this->get_parameter("robot_base_frame", base_link_);
+    this->get_parameter("fake_robot_base_frame", fake_base_link_);
+    this->get_parameter("odom_topic", odom_topic_);
+    this->get_parameter("local_plan_topic", local_plan_topic_);
+    this->get_parameter("input_cmd_vel_topic", input_cmd_vel_topic_);
+    this->get_parameter("output_cmd_vel_topic", output_cmd_vel_topic_);
 
-  // tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    // tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
-  cmd_vel_chassis_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(
-      output_cmd_vel_topic_, 1);
+    cmd_vel_chassis_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(
+        output_cmd_vel_topic_, 1);
 
-  cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
-      input_cmd_vel_topic_, 1,
-      std::bind(&FakeVelTransform::cmdVelCallback, this,
-                std::placeholders::_1));
+    cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
+        input_cmd_vel_topic_, 1,
+        std::bind(&FakeVelTransform::cmdVelCallback, this,
+                  std::placeholders::_1));
 
-  odom_sub_filter_.subscribe(this, odom_topic_);
-  local_plan_sub_filter_.subscribe(this, local_plan_topic_);
-  odom_sub_filter_.registerCallback(std::bind(
-      &FakeVelTransform::odometryCallback, this, std::placeholders::_1));
-  local_plan_sub_filter_.registerCallback(std::bind(
-      &FakeVelTransform::localPlanCallback, this, std::placeholders::_1));
+    odom_sub_filter_.subscribe(this, odom_topic_);
+    local_plan_sub_filter_.subscribe(this, local_plan_topic_);
+    odom_sub_filter_.registerCallback(std::bind(
+        &FakeVelTransform::odometryCallback, this, std::placeholders::_1));
+    local_plan_sub_filter_.registerCallback(std::bind(
+        &FakeVelTransform::localPlanCallback, this, std::placeholders::_1));
 
-  // In Navigation2 Humble release, the velocity is published by the controller
-  // without timestamped. We consider the velocity is published at the same time
-  // as local_plan. Therefore, we use ApproximateTime policy to synchronize
-  // `cmd_vel` and `odometry`.
-  sync_ = std::make_unique<message_filters::Synchronizer<SyncPolicy>>(
-      SyncPolicy(10), odom_sub_filter_, local_plan_sub_filter_);
-  sync_->registerCallback(std::bind(&FakeVelTransform::syncCallback, this,
-                                    std::placeholders::_1,
-                                    std::placeholders::_2));
+    // In Navigation2 Humble release, the velocity is published by the
+    // controller without timestamped. We consider the velocity is published at
+    // the same time as local_plan. Therefore, we use ApproximateTime policy to
+    // synchronize `cmd_vel` and `odometry`.
+    sync_ = std::make_unique<message_filters::Synchronizer<SyncPolicy>>(
+        SyncPolicy(10), odom_sub_filter_, local_plan_sub_filter_);
+    sync_->registerCallback(std::bind(&FakeVelTransform::syncCallback, this,
+                                      std::placeholders::_1,
+                                      std::placeholders::_2));
 }
 
 void FakeVelTransform::odometryCallback(
     const nav_msgs::msg::Odometry::ConstSharedPtr& msg) {
-  // NOTE: Haven't synced with local_plan
-  if ((rclcpp::Clock().now() - last_controller_activate_time_).seconds() >
-      CONTROLLER_TIMEOUT) {
-    current_robot_base_angle_ = tf2::getYaw(msg->pose.pose.orientation);
-  }
+    // NOTE: Haven't synced with local_plan
+    if ((rclcpp::Clock().now() - last_controller_activate_time_).seconds() >
+        CONTROLLER_TIMEOUT) {
+        current_robot_base_angle_ = tf2::getYaw(msg->pose.pose.orientation);
+    }
 }
 
 void FakeVelTransform::cmdVelCallback(
     const geometry_msgs::msg::Twist::SharedPtr msg) {
-  std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
-  const bool is_zero_vel = std::abs(msg->linear.x) < EPSILON &&
-                           std::abs(msg->linear.y) < EPSILON &&
-                           std::abs(msg->angular.z) < EPSILON;
-  if (is_zero_vel ||
-      (rclcpp::Clock().now() - last_controller_activate_time_).seconds() >
-          CONTROLLER_TIMEOUT) {
-    // If received velocity cannot be synchronized, publish it directly
-    auto aft_tf_vel = transformVelocity(msg, current_robot_base_angle_);
-    cmd_vel_chassis_pub_->publish(aft_tf_vel);
-  } else {
-    latest_cmd_vel_ = msg;
-  }
+    std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+    const bool is_zero_vel = std::abs(msg->linear.x) < EPSILON &&
+                             std::abs(msg->linear.y) < EPSILON &&
+                             std::abs(msg->angular.z) < EPSILON;
+    if (is_zero_vel ||
+        (rclcpp::Clock().now() - last_controller_activate_time_).seconds() >
+            CONTROLLER_TIMEOUT) {
+        // If received velocity cannot be synchronized, publish it directly
+        auto aft_tf_vel = transformVelocity(msg, current_robot_base_angle_);
+        cmd_vel_chassis_pub_->publish(aft_tf_vel);
+    } else {
+        latest_cmd_vel_ = msg;
+    }
 }
 
 void FakeVelTransform::localPlanCallback(
     const nav_msgs::msg::Path::ConstSharedPtr& /*msg*/) {
-  // Consider nav2_controller_server is activated when receiving local_plan
-  last_controller_activate_time_ = rclcpp::Clock().now();
+    // Consider nav2_controller_server is activated when receiving local_plan
+    last_controller_activate_time_ = rclcpp::Clock().now();
 }
 
 void FakeVelTransform::syncCallback(
     const nav_msgs::msg::Odometry::ConstSharedPtr& odom_msg,
     const nav_msgs::msg::Path::ConstSharedPtr& /*local_plan_msg*/) {
-  std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
-  geometry_msgs::msg::Twist::SharedPtr current_cmd_vel;
-  {
-    if (!latest_cmd_vel_) {
-      return;
+    std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+    geometry_msgs::msg::Twist::SharedPtr current_cmd_vel;
+    {
+        if (!latest_cmd_vel_) {
+            return;
+        }
+        current_cmd_vel = latest_cmd_vel_;
     }
-    current_cmd_vel = latest_cmd_vel_;
-  }
 
-  current_robot_base_angle_ = tf2::getYaw(odom_msg->pose.pose.orientation);
-  float yaw_diff = current_robot_base_angle_;
-  geometry_msgs::msg::Twist aft_tf_vel =
-      transformVelocity(current_cmd_vel, yaw_diff);
+    current_robot_base_angle_ = tf2::getYaw(odom_msg->pose.pose.orientation);
+    float yaw_diff = current_robot_base_angle_;
+    geometry_msgs::msg::Twist aft_tf_vel =
+        transformVelocity(current_cmd_vel, yaw_diff);
 
-  cmd_vel_chassis_pub_->publish(aft_tf_vel);
+    cmd_vel_chassis_pub_->publish(aft_tf_vel);
 }
 
 geometry_msgs::msg::Twist FakeVelTransform::transformVelocity(
     const geometry_msgs::msg::Twist::SharedPtr& twist, float yaw_diff) {
-  geometry_msgs::msg::Twist aft_tf_vel;
-  // aft_tf_vel.angular.z = twist->angular.z +
-  aft_tf_vel.linear.x =
-      twist->linear.x * cos(yaw_diff) + twist->linear.y * sin(yaw_diff);
-  aft_tf_vel.linear.y =
-      -twist->linear.x * sin(yaw_diff) + twist->linear.y * cos(yaw_diff);
-  return aft_tf_vel;
+    geometry_msgs::msg::Twist aft_tf_vel;
+    // aft_tf_vel.angular.z = twist->angular.z +
+    aft_tf_vel.linear.x =
+        twist->linear.x * cos(yaw_diff) + twist->linear.y * sin(yaw_diff);
+    aft_tf_vel.linear.y =
+        -twist->linear.x * sin(yaw_diff) + twist->linear.y * cos(yaw_diff);
+    return aft_tf_vel;
 }
 
 }  // namespace fake_vel_transform

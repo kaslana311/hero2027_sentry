@@ -68,10 +68,10 @@ class [[deprecated("RetryUntilSuccesful was a typo and deprecated, use "
                    "instead.")]] RetryNodeTypo : public RetryNode
 {
 public:
-  RetryNodeTypo(const std::string& name, int NTries) : RetryNode(name, NTries){};
+  RetryNodeTypo(const std::string& name, int NTries) : RetryNode(name, NTries) {};
 
   RetryNodeTypo(const std::string& name, const NodeConfig& config)
-    : RetryNode(name, config){};
+    : RetryNode(name, config) {};
 
   virtual ~RetryNodeTypo() override = default;
 };

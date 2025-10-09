@@ -6,7 +6,8 @@ const char *math_utils::lbfgs::lbfgs_strerror(const int err) {
             return "Success: reached convergence (g_epsilon).";
 
         case LBFGS_STOP:
-            return "Success: met stopping criteria (past f decrease less than delta).";
+            return "Success: met stopping criteria (past f decrease less than "
+                   "delta).";
 
         case LBFGS_CANCELED:
             return "The iteration has been canceled by the monitor callback.";
@@ -36,40 +37,50 @@ const char *math_utils::lbfgs::lbfgs_strerror(const int err) {
             return "Invalid parameter lbfgs_parameter_t::max_step specified.";
 
         case LBFGSERR_INVALID_FDECCOEFF:
-            return "Invalid parameter lbfgs_parameter_t::f_dec_coeff specified.";
+            return "Invalid parameter lbfgs_parameter_t::f_dec_coeff "
+                   "specified.";
 
         case LBFGSERR_INVALID_SCURVCOEFF:
-            return "Invalid parameter lbfgs_parameter_t::s_curv_coeff specified.";
+            return "Invalid parameter lbfgs_parameter_t::s_curv_coeff "
+                   "specified.";
 
         case LBFGSERR_INVALID_MACHINEPREC:
-            return "Invalid parameter lbfgs_parameter_t::machine_prec specified.";
+            return "Invalid parameter lbfgs_parameter_t::machine_prec "
+                   "specified.";
 
         case LBFGSERR_INVALID_MAXLINESEARCH:
-            return "Invalid parameter lbfgs_parameter_t::max_linesearch specified.";
+            return "Invalid parameter lbfgs_parameter_t::max_linesearch "
+                   "specified.";
 
         case LBFGSERR_INVALID_FUNCVAL:
             return "The function value became NaN or Inf.";
 
         case LBFGSERR_MINIMUMSTEP:
-            return "The line-search step became smaller than lbfgs_parameter_t::min_step.";
+            return "The line-search step became smaller than "
+                   "lbfgs_parameter_t::min_step.";
 
         case LBFGSERR_MAXIMUMSTEP:
-            return "The line-search step became larger than lbfgs_parameter_t::max_step.";
+            return "The line-search step became larger than "
+                   "lbfgs_parameter_t::max_step.";
 
         case LBFGSERR_MAXIMUMLINESEARCH:
-            return "Line search reaches the maximum try number, assumptions not satisfied or precision not achievable.";
+            return "Line search reaches the maximum try number, assumptions "
+                   "not satisfied or precision not achievable.";
 
         case LBFGSERR_MAXIMUMITERATION:
-            return "The algorithm routine reaches the maximum number of iterations.";
+            return "The algorithm routine reaches the maximum number of "
+                   "iterations.";
 
         case LBFGSERR_WIDTHTOOSMALL:
-            return "Relative search interval width is at least lbfgs_parameter_t::machine_prec.";
+            return "Relative search interval width is at least "
+                   "lbfgs_parameter_t::machine_prec.";
 
         case LBFGSERR_INVALIDPARAMETERS:
             return "A logic error (negative line-search step) occurred.";
 
         case LBFGSERR_INCREASEGRADIENT:
-            return "The current search direction increases the cost function value.";
+            return "The current search direction increases the cost function "
+                   "value.";
 
         default:
             return "(unknown)";
@@ -111,12 +122,10 @@ int math_utils::lbfgs::lbfgs_optimize(Eigen::VectorXd &x, double &f,
     if (param.max_step < param.min_step) {
         return LBFGSERR_INVALID_MAXSTEP;
     }
-    if (!(param.f_dec_coeff > 0.0 &&
-          param.f_dec_coeff < 1.0)) {
+    if (!(param.f_dec_coeff > 0.0 && param.f_dec_coeff < 1.0)) {
         return LBFGSERR_INVALID_FDECCOEFF;
     }
-    if (!(param.s_curv_coeff < 1.0 &&
-          param.s_curv_coeff > param.f_dec_coeff)) {
+    if (!(param.s_curv_coeff < 1.0 && param.s_curv_coeff > param.f_dec_coeff)) {
         return LBFGSERR_INVALID_SCURVCOEFF;
     }
     if (!(param.machine_prec > 0.0)) {
@@ -187,12 +196,14 @@ int math_utils::lbfgs::lbfgs_optimize(Eigen::VectorXd &x, double &f,
             step_max = param.max_step;
             if (cd.proc_stepbound) {
                 step_max = cd.proc_stepbound(cd.instance, xp, d);
-                step_max = step_max < param.max_step ? step_max : param.max_step;
+                step_max =
+                    step_max < param.max_step ? step_max : param.max_step;
             }
             step = step < step_max ? step : 0.5 * step_max;
 
             /* Search for an optimal step. */
-            ls = line_search_lewisoverton(x, fx, g, step, d, xp, gp, step_min, step_max, cd, param);
+            ls = line_search_lewisoverton(x, fx, g, step, d, xp, gp, step_min,
+                                          step_max, cd, param);
 
             if (ls < 0) {
                 /* Revert to the previous point. */
@@ -232,7 +243,8 @@ int math_utils::lbfgs::lbfgs_optimize(Eigen::VectorXd &x, double &f,
                 /* We don't test the stopping criterion while k < past. */
                 if (param.past <= k) {
                     /* The stopping criterion. */
-                    rate = std::fabs(pf(k % param.past) - fx) / std::max(1.0, std::fabs(fx));
+                    rate = std::fabs(pf(k % param.past) - fx) /
+                           std::max(1.0, std::fabs(fx));
 
                     if (rate < param.delta) {
                         ret = LBFGS_STOP;
@@ -265,7 +277,8 @@ int math_utils::lbfgs::lbfgs_optimize(Eigen::VectorXd &x, double &f,
             Compute scalars ys and yy:
             ys = y^t \cdot s = 1 / \rho.
             yy = y^t \cdot y.
-            Notice that yy is used for scaling the hessian matrix H_0 (Cholesky factor).
+            Notice that yy is used for scaling the hessian matrix H_0 (Cholesky
+            factor).
             */
             ys = lm_y.col(end).dot(lm_s.col(end));
             yy = lm_y.col(end).squaredNorm();
@@ -286,7 +299,8 @@ int math_utils::lbfgs::lbfgs_optimize(Eigen::VectorXd &x, double &f,
             the BFGS method for nonconvex unconstrained optimization problems.
             SIAM Journal on Optimization, Vol 11, No 4, pp. 1054-1064, 2011.
             */
-            cau = lm_s.col(end).squaredNorm() * gp.norm() * param.cautious_factor;
+            cau =
+                lm_s.col(end).squaredNorm() * gp.norm() * param.cautious_factor;
 
             if (ys > cau) {
                 /*
@@ -315,7 +329,8 @@ int math_utils::lbfgs::lbfgs_optimize(Eigen::VectorXd &x, double &f,
                 for (i = 0; i < bound; ++i) {
                     /* \beta_{j} = \rho_{j} y^t_{j} \cdot \gamm_{i}. */
                     beta = lm_y.col(j).dot(d) / lm_ys(j);
-                    /* \gamm_{i+1} = \gamm_{i} + (\alpha_{j} - \beta_{j}) s_{j}. */
+                    /* \gamm_{i+1} = \gamm_{i} + (\alpha_{j} - \beta_{j}) s_{j}.
+                     */
                     d += (lm_alpha(j) - beta) * lm_s.col(j);
                     j = (j + 1) % m; /* if (++j == m) j = 0; */
                 }
@@ -332,10 +347,11 @@ int math_utils::lbfgs::lbfgs_optimize(Eigen::VectorXd &x, double &f,
     return ret;
 }
 
-int math_utils::lbfgs::line_search_lewisoverton(Eigen::VectorXd &x, double &f, Eigen::VectorXd &g, double &stp,
-                                                const Eigen::VectorXd &s, const Eigen::VectorXd &xp,
-                                                const Eigen::VectorXd &gp, const double stpmin, const double stpmax,
-                                                const callback_data_t &cd, const lbfgs_parameter_t &param) {
+int math_utils::lbfgs::line_search_lewisoverton(
+    Eigen::VectorXd &x, double &f, Eigen::VectorXd &g, double &stp,
+    const Eigen::VectorXd &s, const Eigen::VectorXd &xp,
+    const Eigen::VectorXd &gp, const double stpmin, const double stpmax,
+    const callback_data_t &cd, const lbfgs_parameter_t &param) {
     int count = 0;
     bool brackt = false, touched = false;
     double finit, dginit, dgtest, dstest;

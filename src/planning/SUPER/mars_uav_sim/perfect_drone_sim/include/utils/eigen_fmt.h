@@ -4,39 +4,40 @@
     Copyright (c) 2024 Yunfan REN (renyf@connect.hku.hk)
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
+    of this software and associated documentation files (the "Software"), to
+   deal in the Software without restriction, including without limitation the
+   rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+   sell copies of the Software, and to permit persons to whom the Software is
     furnished to do so, subject to the following conditions:
 
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
+    The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
 
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
     AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+   IN THE SOFTWARE.
 */
 
 #pragma once
 
 #include <fmt/format.h>
-#include <Eigen/Dense>
-#include <regex>
-#include <iostream>
-#include <cstring>
 
-template<typename MatrixType>
+#include <Eigen/Dense>
+#include <cstring>
+#include <iostream>
+#include <regex>
+
+template <typename MatrixType>
 class MatrixFormatter : fmt::formatter<std::string> {
-private:
-    int precision = 6; // Default precision if not specified
-public:
+   private:
+    int precision = 6;  // Default precision if not specified
+   public:
     // Parse the format string to extract the precision
-    template<typename ParseContext>
+    template <typename ParseContext>
     auto parse(ParseContext &ctx) {
         auto it = ctx.begin();
         auto end = ctx.end();
@@ -53,7 +54,7 @@ public:
     }
 
     // Format the matrix with the specified precision
-    template<typename FormatContext>
+    template <typename FormatContext>
     auto format(const MatrixType &matrix, FormatContext &ctx) {
         for (int i = 0; i < matrix.rows(); i++) {
             for (int j = 0; j < matrix.cols(); j++) {
@@ -69,24 +70,27 @@ public:
 };
 
 /// Specialize the formatter for Eigen::Matrix
-template<typename Scalar, int Rows, int Cols, int Options, int MaxRows, int MaxCols>
-struct fmt::formatter<Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> :
-        MatrixFormatter<Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> {
-};
+template <typename Scalar, int Rows, int Cols, int Options, int MaxRows,
+          int MaxCols>
+struct fmt::formatter<
+    Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>>
+    : MatrixFormatter<
+          Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> {};
 
 /// Specialize the formatter for Eigen::Transpose
-template<typename MatrixType>
-struct fmt::formatter<Eigen::Transpose<MatrixType>> : MatrixFormatter<Eigen::Transpose<MatrixType>> {
-};
+template <typename MatrixType>
+struct fmt::formatter<Eigen::Transpose<MatrixType>>
+    : MatrixFormatter<Eigen::Transpose<MatrixType>> {};
 
 /// Specialize the formatter for Eigen::Block
-template<typename Scalar, int Rows, int Cols, int BlockRows, int BlockCols, bool InnerPanel>
-struct fmt::formatter<Eigen::Block<Eigen::Matrix<Scalar, Rows, Cols>, BlockRows, BlockCols, InnerPanel>> :
-        MatrixFormatter<Eigen::Block<Eigen::Matrix<Scalar, Rows, Cols>, BlockRows, BlockCols, InnerPanel>> {
-};
+template <typename Scalar, int Rows, int Cols, int BlockRows, int BlockCols,
+          bool InnerPanel>
+struct fmt::formatter<Eigen::Block<Eigen::Matrix<Scalar, Rows, Cols>, BlockRows,
+                                   BlockCols, InnerPanel>>
+    : MatrixFormatter<Eigen::Block<Eigen::Matrix<Scalar, Rows, Cols>, BlockRows,
+                                   BlockCols, InnerPanel>> {};
 
 /// Specialize the formatter for Eigen::Diagno
-template<typename Scalar, int Rows, int Cols>
-struct fmt::formatter<Eigen::Diagonal<Eigen::Matrix<Scalar, Rows, Cols>>> :
-        MatrixFormatter<Eigen::Diagonal<Eigen::Matrix<Scalar, Rows, Cols>>> {
-};
+template <typename Scalar, int Rows, int Cols>
+struct fmt::formatter<Eigen::Diagonal<Eigen::Matrix<Scalar, Rows, Cols>>>
+    : MatrixFormatter<Eigen::Diagonal<Eigen::Matrix<Scalar, Rows, Cols>>> {};

@@ -11,14 +11,13 @@ namespace lexyd
 {
 struct _ret : rule_base
 {
-    // We unconditionally jump to the final parser.
-    template <typename NextParser>
-    using p = lexy::_detail::final_parser;
+  // We unconditionally jump to the final parser.
+  template <typename NextParser>
+  using p = lexy::_detail::final_parser;
 };
 
 /// Finishes parsing a production without considering subsequent rules.
 constexpr auto return_ = _ret{};
-} // namespace lexyd
+}  // namespace lexyd
 
-#endif // LEXY_DSL_RETURN_HPP_INCLUDED
-
+#endif  // LEXY_DSL_RETURN_HPP_INCLUDED

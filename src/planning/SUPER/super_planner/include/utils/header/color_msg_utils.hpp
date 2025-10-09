@@ -1,29 +1,28 @@
 /**
-* This file is part of SUPER
-*
-* Copyright 2025 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
-* Developed by Yunfan REN <renyf at connect dot hku dot hk>
-* for more information see <https://github.com/hku-mars/SUPER>.
-* If you use this code, please cite the respective publications as
-* listed on the above website.
-*
-* SUPER is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Lesser General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* SUPER is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public License
-* along with SUPER. If not, see <http://www.gnu.org/licenses/>.
-*/
+ * This file is part of SUPER
+ *
+ * Copyright 2025 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
+ * Developed by Yunfan REN <renyf at connect dot hku dot hk>
+ * for more information see <https://github.com/hku-mars/SUPER>.
+ * If you use this code, please cite the respective publications as
+ * listed on the above website.
+ *
+ * SUPER is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * SUPER is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with SUPER. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #ifndef CLASS_COLOR_MSG_UTILS
 #define CLASS_COLOR_MSG_UTILS
-
 
 #ifndef USE_ROS1
 #ifndef USE_ROS2
@@ -33,17 +32,17 @@
 
 #ifdef USE_ROS1
 #ifdef USE_ROS2
-#error "Cannot use both USE_ROS1 and USE_ROS2 at the same time. Please define only one."
+#error \
+    "Cannot use both USE_ROS1 and USE_ROS2 at the same time. Please define only one."
 #endif
 #endif
-
 
 #ifdef USE_ROS1
 
 #include "std_msgs/ColorRGBA.h"
 
 class Color : public std_msgs::ColorRGBA {
-public:
+   public:
     Color() : std_msgs::ColorRGBA() {}
 
     Color(int hex_color) {
@@ -62,7 +61,8 @@ public:
         a = alpha;
     }
 
-    Color(double red, double green, double blue) : Color(red, green, blue, 1.0) {
+    Color(double red, double green, double blue)
+        : Color(red, green, blue, 1.0) {
         r = red > 1.0 ? red / 255.0 : red;
         g = green > 1.0 ? green / 255.0 : green;
         b = blue > 1.0 ? blue / 255.0 : blue;
@@ -107,7 +107,7 @@ public:
 #include <std_msgs/msg/color_rgba.hpp>
 
 class Color : public std_msgs::msg::ColorRGBA {
-public:
+   public:
     Color() : std_msgs::msg::ColorRGBA() {}
 
     Color(int hex_color) {
@@ -126,7 +126,8 @@ public:
         a = alpha;
     }
 
-    Color(double red, double green, double blue) : Color(red, green, blue, 1.0) {
+    Color(double red, double green, double blue)
+        : Color(red, green, blue, 1.0) {
         r = red > 1.0 ? red / 255.0 : red;
         g = green > 1.0 ? green / 255.0 : green;
         b = blue > 1.0 ? blue / 255.0 : blue;

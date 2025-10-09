@@ -163,7 +163,7 @@ typedef unsigned __int64 uintptr_t;
 #else          // _WIN64 ][
 typedef _W64 signed int intptr_t;
 typedef _W64 unsigned int uintptr_t;
-#endif  // _WIN64 ]
+#endif         // _WIN64 ]
 
 // 7.18.1.5 Greatest-width integer types
 typedef int64_t intmax_t;
@@ -251,8 +251,8 @@ typedef uint64_t uintmax_t;
 #define SIZE_MAX _UI64_MAX
 #else  // _WIN64 ][
 #define SIZE_MAX _UI32_MAX
-#endif  // _WIN64 ]
-#endif  // SIZE_MAX ]
+#endif             // _WIN64 ]
+#endif             // SIZE_MAX ]
 
 // WCHAR_MIN and WCHAR_MAX are also defined in <wchar.h>
 #ifndef WCHAR_MIN  // [

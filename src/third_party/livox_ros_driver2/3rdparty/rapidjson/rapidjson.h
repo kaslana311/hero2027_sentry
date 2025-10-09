@@ -81,9 +81,9 @@
 #define RAPIDJSON_MAJOR_VERSION 1
 #define RAPIDJSON_MINOR_VERSION 1
 #define RAPIDJSON_PATCH_VERSION 0
-#define RAPIDJSON_VERSION_STRING \
-  RAPIDJSON_STRINGIFY(           \
-      RAPIDJSON_MAJOR_VERSION.RAPIDJSON_MINOR_VERSION.RAPIDJSON_PATCH_VERSION)
+#define RAPIDJSON_VERSION_STRING                                        \
+    RAPIDJSON_STRINGIFY(RAPIDJSON_MAJOR_VERSION.RAPIDJSON_MINOR_VERSION \
+                            .RAPIDJSON_PATCH_VERSION)
 
 ///////////////////////////////////////////////////////////////////////////////
 // RAPIDJSON_NAMESPACE_(BEGIN|END)
@@ -290,7 +290,7 @@
 */
 #ifndef RAPIDJSON_ALIGN
 #define RAPIDJSON_ALIGN(x) \
-  (((x) + static_cast<size_t>(7u)) & ~static_cast<size_t>(7u))
+    (((x) + static_cast<size_t>(7u)) & ~static_cast<size_t>(7u))
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -304,7 +304,7 @@
 */
 #ifndef RAPIDJSON_UINT64_C2
 #define RAPIDJSON_UINT64_C2(high32, low32) \
-  ((static_cast<uint64_t>(high32) << 32) | static_cast<uint64_t>(low32))
+    ((static_cast<uint64_t>(high32) << 32) | static_cast<uint64_t>(low32))
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -332,15 +332,16 @@
 #if RAPIDJSON_64BIT != 1
 #error RAPIDJSON_48BITPOINTER_OPTIMIZATION can only be set to 1 when RAPIDJSON_64BIT=1
 #endif
-#define RAPIDJSON_SETPOINTER(type, p, x)                                       \
-  (p = reinterpret_cast<type *>(                                               \
-       (reinterpret_cast<uintptr_t>(p) &                                       \
-        static_cast<uintptr_t>(RAPIDJSON_UINT64_C2(0xFFFF0000, 0x00000000))) | \
-       reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(x))))
-#define RAPIDJSON_GETPOINTER(type, p)  \
-  (reinterpret_cast<type *>(           \
-      reinterpret_cast<uintptr_t>(p) & \
-      static_cast<uintptr_t>(RAPIDJSON_UINT64_C2(0x0000FFFF, 0xFFFFFFFF))))
+#define RAPIDJSON_SETPOINTER(type, p, x)                      \
+    (p = reinterpret_cast<type *>(                            \
+         (reinterpret_cast<uintptr_t>(p) &                    \
+          static_cast<uintptr_t>(                             \
+              RAPIDJSON_UINT64_C2(0xFFFF0000, 0x00000000))) | \
+         reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(x))))
+#define RAPIDJSON_GETPOINTER(type, p)    \
+    (reinterpret_cast<type *>(           \
+        reinterpret_cast<uintptr_t>(p) & \
+        static_cast<uintptr_t>(RAPIDJSON_UINT64_C2(0x0000FFFF, 0xFFFFFFFF))))
 #else
 #define RAPIDJSON_SETPOINTER(type, p, x) (p = (x))
 #define RAPIDJSON_GETPOINTER(type, p) (p)
@@ -453,7 +454,7 @@ template <bool x>
 struct STATIC_ASSERTION_FAILURE;
 template <>
 struct STATIC_ASSERTION_FAILURE<true> {
-  enum { value = 1 };
+    enum { value = 1 };
 };
 template <size_t x>
 struct StaticAssertTest {};
@@ -473,11 +474,11 @@ RAPIDJSON_NAMESPACE_END
     \param x compile-time condition
     \hideinitializer
  */
-#define RAPIDJSON_STATIC_ASSERT(x)                               \
-  typedef ::RAPIDJSON_NAMESPACE::StaticAssertTest<sizeof(        \
-      ::RAPIDJSON_NAMESPACE::STATIC_ASSERTION_FAILURE<bool(x)>)> \
-      RAPIDJSON_JOIN(StaticAssertTypedef, __LINE__)              \
-          RAPIDJSON_STATIC_ASSERT_UNUSED_ATTRIBUTE
+#define RAPIDJSON_STATIC_ASSERT(x)                                 \
+    typedef ::RAPIDJSON_NAMESPACE::StaticAssertTest<sizeof(        \
+        ::RAPIDJSON_NAMESPACE::STATIC_ASSERTION_FAILURE<bool(x)>)> \
+    RAPIDJSON_JOIN(StaticAssertTypedef, __LINE__)                  \
+        RAPIDJSON_STATIC_ASSERT_UNUSED_ATTRIBUTE
 #endif  // RAPIDJSON_STATIC_ASSERT
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -516,11 +517,11 @@ RAPIDJSON_NAMESPACE_END
 
 #define RAPIDJSON_MULTILINEMACRO_BEGIN do {
 #define RAPIDJSON_MULTILINEMACRO_END \
-  }                                  \
-  while ((void)0, 0)
+    }                                \
+    while ((void)0, 0)
 
 // adopted from Boost
-#define RAPIDJSON_VERSION_CODE(x, y, z) (((x)*100000) + ((y)*100) + (z))
+#define RAPIDJSON_VERSION_CODE(x, y, z) (((x) * 100000) + ((y) * 100) + (z))
 
 #if defined(__has_builtin)
 #define RAPIDJSON_HAS_BUILTIN(x) __has_builtin(x)
@@ -533,7 +534,7 @@ RAPIDJSON_NAMESPACE_END
 
 #if defined(__GNUC__)
 #define RAPIDJSON_GNUC \
-  RAPIDJSON_VERSION_CODE(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__)
+    RAPIDJSON_VERSION_CODE(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__)
 #endif
 
 #if defined(__clang__) || (defined(RAPIDJSON_GNUC) && \
@@ -542,7 +543,7 @@ RAPIDJSON_NAMESPACE_END
 #define RAPIDJSON_PRAGMA(x) _Pragma(RAPIDJSON_STRINGIFY(x))
 #define RAPIDJSON_DIAG_PRAGMA(x) RAPIDJSON_PRAGMA(GCC diagnostic x)
 #define RAPIDJSON_DIAG_OFF(x) \
-  RAPIDJSON_DIAG_PRAGMA(ignored RAPIDJSON_STRINGIFY(RAPIDJSON_JOIN(-W, x)))
+    RAPIDJSON_DIAG_PRAGMA(ignored RAPIDJSON_STRINGIFY(RAPIDJSON_JOIN(-W, x)))
 
 // push/pop support in Clang and GCC>=4.6
 #if defined(__clang__) || (defined(RAPIDJSON_GNUC) && \
@@ -705,13 +706,13 @@ RAPIDJSON_NAMESPACE_BEGIN
 
 //! Type of JSON value
 enum Type {
-  kNullType = 0,    //!< null
-  kFalseType = 1,   //!< false
-  kTrueType = 2,    //!< true
-  kObjectType = 3,  //!< object
-  kArrayType = 4,   //!< array
-  kStringType = 5,  //!< string
-  kNumberType = 6   //!< number
+    kNullType = 0,    //!< null
+    kFalseType = 1,   //!< false
+    kTrueType = 2,    //!< true
+    kObjectType = 3,  //!< object
+    kArrayType = 4,   //!< array
+    kStringType = 5,  //!< string
+    kNumberType = 6   //!< number
 };
 
 RAPIDJSON_NAMESPACE_END

@@ -61,8 +61,7 @@
 #include <lexy/dsl/whitespace.hpp>
 
 #if LEXY_EXPERIMENTAL
-#    include <lexy/dsl/parse_tree_node.hpp>
+#include <lexy/dsl/parse_tree_node.hpp>
 #endif
 
-#endif // LEXY_DSL_HPP_INCLUDED
-
+#endif  // LEXY_DSL_HPP_INCLUDED

@@ -1,27 +1,25 @@
 /**
-* This file is part of SUPER
-*
-* Copyright 2025 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
-* Developed by Yunfan REN <renyf at connect dot hku dot hk>
-* for more information see <https://github.com/hku-mars/SUPER>.
-* If you use this code, please cite the respective publications as
-* listed on the above website.
-*
-* SUPER is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Lesser General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* SUPER is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public License
-* along with SUPER. If not, see <http://www.gnu.org/licenses/>.
-*/
-
-
+ * This file is part of SUPER
+ *
+ * Copyright 2025 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
+ * Developed by Yunfan REN <renyf at connect dot hku dot hk>
+ * for more information see <https://github.com/hku-mars/SUPER>.
+ * If you use this code, please cite the respective publications as
+ * listed on the above website.
+ *
+ * SUPER is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * SUPER is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with SUPER. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include <ros_interface/ros2/fsm_ros2.hpp>
 
@@ -34,9 +32,8 @@
 #include "utils/header/backward.hpp"
 
 namespace backward {
-    backward::SignalHandling sh;
+backward::SignalHandling sh;
 }
-
 
 using namespace fsm;
 using namespace std;
@@ -62,7 +59,8 @@ int main(int argc, char** argv) {
         if (node->get_parameter("use_sim_time", use_sim_time)) {
             if (!use_sim_time) {
                 // 如果 use_sim_time 为 false，打印信息并退出循环
-                std::cout << " -- [Bench] Use sim time is false, begin replay." << std::endl;
+                std::cout << " -- [Bench] Use sim time is false, begin replay."
+                          << std::endl;
                 break;
             } else {
                 // 如果 use_sim_time 为 true，设置为 false
@@ -79,13 +77,14 @@ int main(int argc, char** argv) {
 
     // 初始化FSM
 
-#define CONFIG_FILE_DIR(name) (std::string(std::string(ROOT_DIR) + "config/"+(name)))
+#define CONFIG_FILE_DIR(name) \
+    (std::string(std::string(ROOT_DIR) + "config/" + (name)))
     auto fsm_ptr = std::make_shared<FsmRos2>();
     std::string cfg_path = "click.yaml";
     node->declare_parameter("config_name", cfg_path);
     node->get_parameter("config_name", cfg_path);
     cfg_path = CONFIG_FILE_DIR(cfg_path);
-    fsm_ptr->init(node,cfg_path);
+    fsm_ptr->init(node, cfg_path);
 
     // 打印启动信息（ROS2风格）
     RCLCPP_INFO(node->get_logger(), "\033[32m -- [Fsm-Test] Begin.\033[0m");

@@ -1,49 +1,44 @@
 #pragma once
-#include <string>
 #include <behaviortree_cpp/bt_factory.h>
 #include <behaviortree_cpp/condition_node.h>
-#include "rclcpp/rclcpp.hpp"
-#include "nav2_msgs/action/navigate_to_pose.hpp"
+
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include <rclcpp_action/rclcpp_action.hpp>
+#include <string>
+
+#include "nav2_msgs/action/navigate_to_pose.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include "serial_interfaces/msg/robot.hpp"
 #include "serial_interfaces/msg/tovision.hpp"
-
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 using namespace BT;
 using namespace std::literals;
 
-
 // 检查值节点
-class CheckValueNode : public ConditionNode
-{
-public:
+class CheckValueNode : public ConditionNode {
+   public:
     CheckValueNode(const std::string& name, const NodeConfig& config)
-        : ConditionNode(name, config)
-    {
+        : ConditionNode(name, config) {
         // 从端口获取比较运算符，默认使用等于
         if (!getInput("operator", compare_operator_)) {
             compare_operator_ = "eq";
         }
     }
 
-    static PortsList providedPorts()
-    {
-        return {
-            InputPort<int>("value", "要检查的整数值"),
-            InputPort<int>("expected", "期望的整数值"),
-            InputPort<std::string>("operator", "比较运算符: eq, ne, gt, lt, ge, le")
-        };
+    static PortsList providedPorts() {
+        return {InputPort<int>("value", "要检查的整数值"),
+                InputPort<int>("expected", "期望的整数值"),
+                InputPort<std::string>("operator",
+                                       "比较运算符: eq, ne, gt, lt, ge, le")};
     }
 
-    NodeStatus tick() override
-    {
+    NodeStatus tick() override {
         // 获取输入值
         int value;
         int expected;
-        
+
         if (!getInput("value", value) || !getInput("expected", expected)) {
             std::cout << "检查错误: 缺少输入值" << std::endl;
             return NodeStatus::FAILURE;
@@ -54,12 +49,10 @@ public:
         return result ? NodeStatus::SUCCESS : NodeStatus::FAILURE;
     }
 
-private:
-    bool compareValues(int value, int expected)
-    {   
-        std::cout << "执行比较操作 ["
-                  << value << " " << compare_operator_ << " " << expected << "]"
-                  << std::endl;
+   private:
+    bool compareValues(int value, int expected) {
+        std::cout << "执行比较操作 [" << value << " " << compare_operator_
+                  << " " << expected << "]" << std::endl;
 
         if (compare_operator_ == "eq") return value == expected;
         if (compare_operator_ == "ne") return value != expected;
@@ -67,40 +60,35 @@ private:
         if (compare_operator_ == "lt") return value < expected;
         if (compare_operator_ == "ge") return value >= expected;
         if (compare_operator_ == "le") return value <= expected;
-        
+
         throw RuntimeError("不支持的运算符: " + compare_operator_);
     }
 
     std::string compare_operator_;
 };
 
-class DoubleCheckValueNode : public ConditionNode
-{
-public:
+class DoubleCheckValueNode : public ConditionNode {
+   public:
     DoubleCheckValueNode(const std::string& name, const NodeConfig& config)
-        : ConditionNode(name, config)
-    {
+        : ConditionNode(name, config) {
         // 从端口获取比较运算符，默认使用等于
         if (!getInput("operator", compare_operator_)) {
             compare_operator_ = "eq";
         }
     }
 
-    static PortsList providedPorts()
-    {
-        return {
-            InputPort<double>("value", "要检查的整数值"),
-            InputPort<double>("expected", "期望的整数值"),
-            InputPort<std::string>("operator", "比较运算符: eq, ne, gt, lt, ge, le")
-        };
+    static PortsList providedPorts() {
+        return {InputPort<double>("value", "要检查的整数值"),
+                InputPort<double>("expected", "期望的整数值"),
+                InputPort<std::string>("operator",
+                                       "比较运算符: eq, ne, gt, lt, ge, le")};
     }
 
-    NodeStatus tick() override
-    {
+    NodeStatus tick() override {
         // 获取输入值
         double value;
         double expected;
-        
+
         if (!getInput("value", value) || !getInput("expected", expected)) {
             std::cout << "检查错误: 缺少输入值" << std::endl;
             return NodeStatus::FAILURE;
@@ -111,12 +99,10 @@ public:
         return result ? NodeStatus::SUCCESS : NodeStatus::FAILURE;
     }
 
-private:
-    bool compareValues(double value, double expected)
-    {   
-        std::cout << "执行比较操作 ["
-                  << value << " " << compare_operator_ << " " << expected << "]"
-                  << std::endl;
+   private:
+    bool compareValues(double value, double expected) {
+        std::cout << "执行比较操作 [" << value << " " << compare_operator_
+                  << " " << expected << "]" << std::endl;
 
         if (compare_operator_ == "eq") return value == expected;
         if (compare_operator_ == "ne") return value != expected;
@@ -124,21 +110,18 @@ private:
         if (compare_operator_ == "lt") return value < expected;
         if (compare_operator_ == "ge") return value >= expected;
         if (compare_operator_ == "le") return value <= expected;
-        
+
         throw RuntimeError("不支持的运算符: " + compare_operator_);
     }
 
     std::string compare_operator_;
 };
 
-
 // 打印日志节点
-class LogMessageNode : public SyncActionNode
-{
-public:
+class LogMessageNode : public SyncActionNode {
+   public:
     LogMessageNode(const std::string& name, const NodeConfig& config)
-        : SyncActionNode(name, config)
-    {
+        : SyncActionNode(name, config) {
         // 从blackboard获取ROS2节点
         auto result = config.blackboard->get<rclcpp::Node::SharedPtr>("node");
         if (result) {
@@ -146,28 +129,26 @@ public:
         }
     }
 
-    static PortsList providedPorts()
-    {
-        return {
-            InputPort<std::string>("message", "要记录的日志消息"),
-            InputPort<std::string>("level", "日志级别 (info/warn/error)", "info")
-        };
+    static PortsList providedPorts() {
+        return {InputPort<std::string>("message", "要记录的日志消息"),
+                InputPort<std::string>("level", "日志级别 (info/warn/error)",
+                                       "info")};
     }
 
-    NodeStatus tick() override
-    {
+    NodeStatus tick() override {
         std::string message;
         std::string level = "info";
-        
+
         // 获取输入参数
         if (!getInput("message", message)) {
             if (node_) {
-                RCLCPP_ERROR(node_->get_logger(), "LogMessageNode 缺少message参数");
+                RCLCPP_ERROR(node_->get_logger(),
+                             "LogMessageNode 缺少message参数");
             }
             return NodeStatus::FAILURE;
         }
-        getInput("level", level); // 可选参数，默认info
-        
+        getInput("level", level);  // 可选参数，默认info
+
         // 替换消息中的变量（格式：{var_name}）
         message = replaceBlackboardVars(message);
 
@@ -188,19 +169,19 @@ public:
         return NodeStatus::SUCCESS;
     }
 
-private:
-    std::string replaceBlackboardVars(const std::string& input)
-    {
+   private:
+    std::string replaceBlackboardVars(const std::string& input) {
         std::string output = input;
         size_t start_pos = 0;
-        
+
         while ((start_pos = output.find("{", start_pos)) != std::string::npos) {
             size_t end_pos = output.find("}", start_pos);
             if (end_pos == std::string::npos) break;
 
-            std::string var_name = output.substr(start_pos + 1, end_pos - start_pos - 1);
+            std::string var_name =
+                output.substr(start_pos + 1, end_pos - start_pos - 1);
             std::string var_value;
-            
+
             if (auto entry = config().blackboard->getAny(var_name)) {
                 var_value = BT::toStr(*entry);
             } else {
@@ -216,31 +197,22 @@ private:
     rclcpp::Node::SharedPtr node_;
 };
 
-
-
-class CheckCountdownNode : public ConditionNode
-{
-public:
+class CheckCountdownNode : public ConditionNode {
+   public:
     CheckCountdownNode(const std::string& name, const NodeConfig& config)
         : ConditionNode(name, config) {}
 
-    static PortsList providedPorts()
-    {
-        return {
-            InputPort<int>("remaining_time", "剩余时间（秒）"),
-            InputPort<int>("check_start", "检测区间开始时间（秒）"),
-            InputPort<int>("check_end", "检测区间结束时间（秒）")
-        };
+    static PortsList providedPorts() {
+        return {InputPort<int>("remaining_time", "剩余时间（秒）"),
+                InputPort<int>("check_start", "检测区间开始时间（秒）"),
+                InputPort<int>("check_end", "检测区间结束时间（秒）")};
     }
 
-    NodeStatus tick() override
-    {
-      int remaining, start, end;
-        
-        if (!getInput("remaining_time", remaining) || 
-            !getInput("check_start", start) ||
-            !getInput("check_end", end)) 
-        {
+    NodeStatus tick() override {
+        int remaining, start, end;
+
+        if (!getInput("remaining_time", remaining) ||
+            !getInput("check_start", start) || !getInput("check_end", end)) {
             return NodeStatus::FAILURE;
         }
 
@@ -248,248 +220,218 @@ public:
         const int min = std::min(start, end);
         const int max = std::max(start, end);
 
-        return (remaining >= min && remaining <= max) 
-               ? NodeStatus::SUCCESS
-               : NodeStatus::FAILURE;
+        return (remaining >= min && remaining <= max) ? NodeStatus::SUCCESS
+                                                      : NodeStatus::FAILURE;
     }
 };
 
 using NavigateToPose = nav2_msgs::action::NavigateToPose;
 using GoalHandle = rclcpp_action::ClientGoalHandle<NavigateToPose>;
 
+class NavigateToPoseAction : public StatefulActionNode {
+   public:
+    NavigateToPoseAction(const std::string& name, const NodeConfig& config)
+        : StatefulActionNode(name, config) {
+        // 获取ROS节点实例
+        auto node_result =
+            config.blackboard->get<rclcpp::Node::SharedPtr>("node");
+        if (!node_result) {
+            throw RuntimeError("Missing ROS2 node in blackboard");
+        }
+        node_ = node_result;
 
-class NavigateToPoseAction : public StatefulActionNode
-{
-public:
-  NavigateToPoseAction(const std::string& name, const NodeConfig& config)
-    : StatefulActionNode(name, config)
-  {
-    // 获取ROS节点实例
-    auto node_result = config.blackboard->get<rclcpp::Node::SharedPtr>("node");
-    if (!node_result) {
-      throw RuntimeError("Missing ROS2 node in blackboard");
-    }
-    node_ = node_result;
+        // 初始化动作客户端
+        action_client_ = rclcpp_action::create_client<NavigateToPose>(
+            node_, "navigate_to_pose");
 
-    // 初始化动作客户端
-    action_client_ = rclcpp_action::create_client<NavigateToPose>(
-      node_, "navigate_to_pose");
-
-    reached_sub_ = node_->create_subscription<serial_interfaces::msg::Robot>(
-      "/robot", 10,
-      [this](const serial_interfaces::msg::Robot::SharedPtr msg) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        goal_reached_ = msg->is_arrived;
-      });
-  }
-
-  static PortsList providedPorts()
-  {
-    return {
-      // 目标参数
-      InputPort<double>("x", "目标点X坐标"),
-      InputPort<double>("y", "目标点Y坐标"),
-      InputPort<double>("z", "Z坐标(可选,默认0)"),
-      InputPort<double>("yaw", "朝向(弧度，可选,默认0)"),
-      // 控制参数
-      InputPort<double>("timeout", "超时时间（秒）"),
-      InputPort<bool>("keep_sending", "持续发送目标"),
-      InputPort<int>("stage_remaining_time", "比赛剩余时间"),
-
-    };
-  }
-
-  NodeStatus onStart() override
-  {
-    // 当比赛即将结束，停止并取消发点。
-    int stage_remaining_time = 0;
-    getInput("stage_remaining_time",stage_remaining_time);
-    if (stage_remaining_time < 3)
-    {
-      
-      RCLCPP_INFO(node_->get_logger(),"比赛即将结束，取消发送目标点！");
-      cancelNavigation();
-    }
-    // 确保动作服务器可用
-      if (!action_client_->wait_for_action_server(1s)) {
-        RCLCPP_ERROR(node_->get_logger(), "Action server not available");
-        return NodeStatus::FAILURE;
-      }
-
-      // 创建目标消息
-      auto goal = createGoal();
-      if (!goal) {
-        return NodeStatus::FAILURE;
-      }
-
-      future_goal_handle_ = action_client_->async_send_goal(*goal);
-      RCLCPP_INFO(node_->get_logger(), "正在持续发布");
-
-      start_time_ = node_->now();
-      return NodeStatus::SUCCESS;
-    // }
-    // RCLCPP_INFO(node_->get_logger(), "到达终点");
-    // return NodeStatus::SUCCESS;
-
-  }
-
-  NodeStatus onRunning() override
-  {
-    return NodeStatus::SUCCESS;
-  }
-
-  void onHalted() override {
-    cancelNavigation();
-    RCLCPP_WARN(node_->get_logger(), "Navigation interrupted");
-  }
-
-private:
-  std::shared_ptr<NavigateToPose::Goal> createGoal()
-  {
-    try {
-      auto goal = std::make_shared<NavigateToPose::Goal>();
-      
-      double x, y, z, yaw;
-      if (!getInput("x", x) || !getInput("y", y)) {
-        throw std::runtime_error("Missing required x/y parameters");
-      }
-      getInput("z", z);
-      getInput("yaw", yaw);
-      getInput("timeout", timeout_);
-
-      goal->pose.header.stamp = node_->now();
-      goal->pose.header.frame_id = "map";
-      goal->pose.pose.position.x = x;
-      goal->pose.pose.position.y = y;
-      goal->pose.pose.position.z = z;
-      goal->pose.pose.orientation = createQuaternion(yaw);
-
-      return goal;
-    } 
-    catch (const std::exception& e) {
-      RCLCPP_ERROR(node_->get_logger(), "Goal creation failed: %s", e.what());
-      return nullptr;
-    }
-  }
-
-
-  void cancelNavigation()
-  {
-    auto cancel_future = action_client_->async_cancel_all_goals();
-    if (rclcpp::spin_until_future_complete(node_,cancel_future) !=
-        rclcpp::FutureReturnCode::SUCCESS)
-    {
-        RCLCPP_ERROR(node_->get_logger(), "cancel all goals call failed :(");
+        reached_sub_ =
+            node_->create_subscription<serial_interfaces::msg::Robot>(
+                "/robot", 10,
+                [this](const serial_interfaces::msg::Robot::SharedPtr msg) {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    goal_reached_ = msg->is_arrived;
+                });
     }
 
-    RCLCPP_INFO(node_->get_logger(),"All goals have been canceled");
-  }
+    static PortsList providedPorts() {
+        return {
+            // 目标参数
+            InputPort<double>("x", "目标点X坐标"),
+            InputPort<double>("y", "目标点Y坐标"),
+            InputPort<double>("z", "Z坐标(可选,默认0)"),
+            InputPort<double>("yaw", "朝向(弧度，可选,默认0)"),
+            // 控制参数
+            InputPort<double>("timeout", "超时时间（秒）"),
+            InputPort<bool>("keep_sending", "持续发送目标"),
+            InputPort<int>("stage_remaining_time", "比赛剩余时间"),
 
-  geometry_msgs::msg::Quaternion createQuaternion(double yaw) const
-  {
-    tf2::Quaternion q;
-    q.setRPY(0, 0, yaw);
-    return tf2::toMsg(q);
-  }
+        };
+    }
 
-  // ROS成员
-  rclcpp::Node::SharedPtr node_;
-  rclcpp_action::Client<NavigateToPose>::SharedPtr action_client_;
-  // rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr reached_sub_;  
-  rclcpp::Subscription<serial_interfaces::msg::Robot>::SharedPtr reached_sub_;
+    NodeStatus onStart() override {
+        // 当比赛即将结束，停止并取消发点。
+        int stage_remaining_time = 0;
+        getInput("stage_remaining_time", stage_remaining_time);
+        if (stage_remaining_time < 3) {
+            RCLCPP_INFO(node_->get_logger(), "比赛即将结束，取消发送目标点！");
+            cancelNavigation();
+        }
+        // 确保动作服务器可用
+        if (!action_client_->wait_for_action_server(1s)) {
+            RCLCPP_ERROR(node_->get_logger(), "Action server not available");
+            return NodeStatus::FAILURE;
+        }
 
-  bool goal_reached_ = false;
-  
-  // 动作状态
-  std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
-  GoalHandle::SharedPtr goal_handle_;
-  std::shared_ptr<const NavigateToPose::Feedback> last_feedback_;
-  std::optional<GoalHandle::WrappedResult> last_result_;
-  
-  // 控制参数
-  rclcpp::Time start_time_;
-  double timeout_ = 30.0;
-  std::mutex mutex_;
+        // 创建目标消息
+        auto goal = createGoal();
+        if (!goal) {
+            return NodeStatus::FAILURE;
+        }
+
+        future_goal_handle_ = action_client_->async_send_goal(*goal);
+        RCLCPP_INFO(node_->get_logger(), "正在持续发布");
+
+        start_time_ = node_->now();
+        return NodeStatus::SUCCESS;
+        // }
+        // RCLCPP_INFO(node_->get_logger(), "到达终点");
+        // return NodeStatus::SUCCESS;
+    }
+
+    NodeStatus onRunning() override { return NodeStatus::SUCCESS; }
+
+    void onHalted() override {
+        cancelNavigation();
+        RCLCPP_WARN(node_->get_logger(), "Navigation interrupted");
+    }
+
+   private:
+    std::shared_ptr<NavigateToPose::Goal> createGoal() {
+        try {
+            auto goal = std::make_shared<NavigateToPose::Goal>();
+
+            double x, y, z, yaw;
+            if (!getInput("x", x) || !getInput("y", y)) {
+                throw std::runtime_error("Missing required x/y parameters");
+            }
+            getInput("z", z);
+            getInput("yaw", yaw);
+            getInput("timeout", timeout_);
+
+            goal->pose.header.stamp = node_->now();
+            goal->pose.header.frame_id = "map";
+            goal->pose.pose.position.x = x;
+            goal->pose.pose.position.y = y;
+            goal->pose.pose.position.z = z;
+            goal->pose.pose.orientation = createQuaternion(yaw);
+
+            return goal;
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(node_->get_logger(), "Goal creation failed: %s",
+                         e.what());
+            return nullptr;
+        }
+    }
+
+    void cancelNavigation() {
+        auto cancel_future = action_client_->async_cancel_all_goals();
+        if (rclcpp::spin_until_future_complete(node_, cancel_future) !=
+            rclcpp::FutureReturnCode::SUCCESS) {
+            RCLCPP_ERROR(node_->get_logger(),
+                         "cancel all goals call failed :(");
+        }
+
+        RCLCPP_INFO(node_->get_logger(), "All goals have been canceled");
+    }
+
+    geometry_msgs::msg::Quaternion createQuaternion(double yaw) const {
+        tf2::Quaternion q;
+        q.setRPY(0, 0, yaw);
+        return tf2::toMsg(q);
+    }
+
+    // ROS成员
+    rclcpp::Node::SharedPtr node_;
+    rclcpp_action::Client<NavigateToPose>::SharedPtr action_client_;
+    // rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr reached_sub_;
+    rclcpp::Subscription<serial_interfaces::msg::Robot>::SharedPtr reached_sub_;
+
+    bool goal_reached_ = false;
+
+    // 动作状态
+    std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
+    GoalHandle::SharedPtr goal_handle_;
+    std::shared_ptr<const NavigateToPose::Feedback> last_feedback_;
+    std::optional<GoalHandle::WrappedResult> last_result_;
+
+    // 控制参数
+    rclcpp::Time start_time_;
+    double timeout_ = 30.0;
+    std::mutex mutex_;
 };
 
+class ControlAutoAim : public SyncActionNode {
+   public:
+    ControlAutoAim(const std::string& name, const NodeConfig& config)
+        : SyncActionNode(name, config) {
+        // 从blackboard获取ROS2节点
+        auto result = config.blackboard->get<rclcpp::Node::SharedPtr>("node");
+        if (!result) {
+            throw RuntimeError("Missing ROS2 node in blackboard");
+        }
+        node_ = result;
 
-class ControlAutoAim : public SyncActionNode
-{
-  public:
-    ControlAutoAim(const std::string& name, const NodeConfig& config) : SyncActionNode(name, config)
-    {
-      // 从blackboard获取ROS2节点
-      auto result = config.blackboard->get<rclcpp::Node::SharedPtr>("node");
-      if (!result)
-      {
-          throw RuntimeError("Missing ROS2 node in blackboard");
-      }
-      node_ = result;
-      
-      
-      // 初始化订阅者
-      std::string topic_name;
-      if (!getInput("topic", topic_name)) {
-          topic_name = "refree_msg"; // 默认话题名
-      }
-      publisher_ = node_->create_publisher<serial_interfaces::msg::Tovision>("/tovision", 10);
+        // 初始化订阅者
+        std::string topic_name;
+        if (!getInput("topic", topic_name)) {
+            topic_name = "refree_msg";  // 默认话题名
+        }
+        publisher_ = node_->create_publisher<serial_interfaces::msg::Tovision>(
+            "/tovision", 10);
 
-      RCLCPP_INFO(rclcpp::get_logger("refree_node"),"裁判订阅节点启动");
-    }
-    
-
-    static PortsList providedPorts()
-    {
-      return {
-        // 目标参数
-        InputPort<int>("bullet_17mm", "允许17mm发弹量"),
-        InputPort<int>("competition_stage", "比赛状态")
-
-      };
+        RCLCPP_INFO(rclcpp::get_logger("refree_node"), "裁判订阅节点启动");
     }
 
+    static PortsList providedPorts() {
+        return {// 目标参数
+                InputPort<int>("bullet_17mm", "允许17mm发弹量"),
+                InputPort<int>("competition_stage", "比赛状态")
 
-    NodeStatus tick() override
-    {
-      int allow_bullet_17mm = 0;
-      int competition_stage = 0;
-
-      getInput("allow_bullet_17mm", allow_bullet_17mm);
-      getInput("competition_stage", competition_stage);
-
-      std::cout << "allow_bullet_17mm:" << allow_bullet_17mm << std::endl;
-      if(allow_bullet_17mm > 0 && competition_stage == 4)
-      {
-        auto message = serial_interfaces::msg::Tovision();
-        message.control_mode = 5;
-        message.sight_mode = 1;
-        message.hit_priority = {0, 0, 0, 0, 0, 0, 0, 0};
-        message.expect_spin_degree = 0;
-        message.dishit = {0, 0, 0, 0, 0, 0, 0, 0};
-        this->publisher_->publish(message);
-        RCLCPP_INFO(rclcpp::get_logger("ControlAutoAim"),"进入自瞄模式");
-
-
-      }
-      else
-      {
-        auto message = serial_interfaces::msg::Tovision();
-        message.control_mode = 5;
-        message.sight_mode = 1;
-        message.hit_priority = {0, 0, 0, 0, 0, 0, 0, 0};
-        message.expect_spin_degree = 0;
-        message.dishit = {0, 0, 0, 0, 0, 0, 0, 0};
-        this->publisher_->publish(message);
-        RCLCPP_INFO(rclcpp::get_logger("ControlAutoAim"),"不进入自瞄模式");
-
-      }
-
-      return NodeStatus::SUCCESS;
+        };
     }
 
+    NodeStatus tick() override {
+        int allow_bullet_17mm = 0;
+        int competition_stage = 0;
+
+        getInput("allow_bullet_17mm", allow_bullet_17mm);
+        getInput("competition_stage", competition_stage);
+
+        std::cout << "allow_bullet_17mm:" << allow_bullet_17mm << std::endl;
+        if (allow_bullet_17mm > 0 && competition_stage == 4) {
+            auto message = serial_interfaces::msg::Tovision();
+            message.control_mode = 5;
+            message.sight_mode = 1;
+            message.hit_priority = {0, 0, 0, 0, 0, 0, 0, 0};
+            message.expect_spin_degree = 0;
+            message.dishit = {0, 0, 0, 0, 0, 0, 0, 0};
+            this->publisher_->publish(message);
+            RCLCPP_INFO(rclcpp::get_logger("ControlAutoAim"), "进入自瞄模式");
+
+        } else {
+            auto message = serial_interfaces::msg::Tovision();
+            message.control_mode = 5;
+            message.sight_mode = 1;
+            message.hit_priority = {0, 0, 0, 0, 0, 0, 0, 0};
+            message.expect_spin_degree = 0;
+            message.dishit = {0, 0, 0, 0, 0, 0, 0, 0};
+            this->publisher_->publish(message);
+            RCLCPP_INFO(rclcpp::get_logger("ControlAutoAim"), "不进入自瞄模式");
+        }
+
+        return NodeStatus::SUCCESS;
+    }
 
     rclcpp::Publisher<serial_interfaces::msg::Tovision>::SharedPtr publisher_;
     rclcpp::Node::SharedPtr node_;
-
-
 };

@@ -11,8 +11,8 @@ using Matrix4fMapConst = const Eigen::Map<const Eigen::Matrix4f, Eigen::Aligned>
 
 /// @brief  Point with covariance for PCL
 struct PointCovariance {
-  PCL_ADD_POINT4D;        ///< Point coordinates
-  Eigen::Matrix4f cov;    ///< 4x4 covariance matrix
+  PCL_ADD_POINT4D;      ///< Point coordinates
+  Eigen::Matrix4f cov;  ///< 4x4 covariance matrix
 
   /// @brief Get covariance matrix as Matrix4fMap
   Matrix4fMap getCovariance4fMap() { return Matrix4fMap(cov.data()); }
@@ -25,9 +25,9 @@ struct PointCovariance {
 
 /// @brief  Point with normal and covariance for PCL
 struct PointNormalCovariance {
-  PCL_ADD_POINT4D;      ///< Point coordinates
-  PCL_ADD_NORMAL4D      ///< Point normal
-  Eigen::Matrix4f cov;  ///< 4x4 covariance matrix
+  PCL_ADD_POINT4D;        ///< Point coordinates
+  PCL_ADD_NORMAL4D        ///< Point normal
+    Eigen::Matrix4f cov;  ///< 4x4 covariance matrix
 
   /// @brief Get covariance matrix as Matrix4fMap
   Matrix4fMap getCovariance4fMap() { return Matrix4fMap(cov.data()); }

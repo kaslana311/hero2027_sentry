@@ -1,27 +1,33 @@
-#include "cruiser_node.hpp"
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <random>
+#include <std_msgs/msg/bool.hpp>
+#include <thread>
+
 #include "behavior_node.hpp"
+#include "cruiser_node.hpp"
 #include "feasibility_calculate_node.hpp"
 #include "geometry_msgs/msg/point_stamped.hpp"
 #include "serial_interfaces/msg/gimbaldecision.hpp"
-#include <atomic>
-#include <thread>
-#include <memory>
-#include <chrono>
-#include <random>
-#include <std_msgs/msg/bool.hpp>
 
 using namespace std::literals;
 
-/** 
+/**
  * @brief 黑板数据更新独立线程，专门负责从话题获取数据并更新黑板
  */
 class BlackboardUpdater {
-public:
-    BlackboardUpdater(Blackboard::Ptr blackboard, rclcpp::Node::SharedPtr node, bool is_red_team)
-        : blackboard_(blackboard), node_(node), running_(false), is_red_team_(is_red_team){
+   public:
+    BlackboardUpdater(Blackboard::Ptr blackboard, rclcpp::Node::SharedPtr node,
+                      bool is_red_team)
+        : blackboard_(blackboard),
+          node_(node),
+          running_(false),
+          is_red_team_(is_red_team) {
         // 初始化订阅者
         // 裁判系统订阅
-        refree_subscriber_ = node_->create_subscription<serial_interfaces::msg::Refree>(
+        refree_subscriber_ = node_->create_subscription<
+            serial_interfaces::msg::Refree>(
             "refree_msg", 10,
             [this](const serial_interfaces::msg::Refree::SharedPtr msg) {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -31,7 +37,7 @@ public:
                 blackboard_->set("stage_time", msg->stage_time);
 
                 // 根据预先知道的我方颜色对裁判系统消息区分敌我
-                if(is_red_team_) {
+                if (is_red_team_) {
                     // RCLCPP_INFO(node_->get_logger(), "RED");
                     // 红方：我方血量
                     blackboard_->set("friend_hero", msg->red_hero);
@@ -50,9 +56,7 @@ public:
                     blackboard_->set("enemy_sentry", msg->blue_sentry);
                     blackboard_->set("enemy_outpost", msg->blue_outpost);
                     blackboard_->set("enemy_base", msg->blue_base);
-                }
-                else
-                {
+                } else {
                     // RCLCPP_INFO(node_->get_logger(), "BLUE");
                     // 红方：敌方血量
                     blackboard_->set("enemy_hero", msg->red_hero);
@@ -72,11 +76,14 @@ public:
                     blackboard_->set("friend_outpost", msg->blue_outpost);
                     blackboard_->set("friend_base", msg->blue_base);
                 }
-                
+
                 // 战场状态
-                blackboard_->set("status_supply_non_overlap", msg->status_supply_non_overlap);
-                blackboard_->set("status_supply_overlap", msg->status_supply_overlap);
-                blackboard_->set("status_supply_occupied", msg->status_supply_occupied);
+                blackboard_->set("status_supply_non_overlap",
+                                 msg->status_supply_non_overlap);
+                blackboard_->set("status_supply_overlap",
+                                 msg->status_supply_overlap);
+                blackboard_->set("status_supply_occupied",
+                                 msg->status_supply_occupied);
                 blackboard_->set("energy_activation", msg->energy_activation);
                 blackboard_->set("highland_status", msg->highland_status);
                 blackboard_->set("trapezoid_status", msg->trapezoid_status);
@@ -100,7 +107,8 @@ public:
                 blackboard_->set("bullet_17mm", msg->bullet_17mm);
                 blackboard_->set("bullet_42mm", msg->bullet_42mm);
                 blackboard_->set("remaining_gold", msg->remaining_gold);
-                blackboard_->set("projectile_allowance_fortress", msg->projectile_allowance_fortress);
+                blackboard_->set("projectile_allowance_fortress",
+                                 msg->projectile_allowance_fortress);
 
                 // 队友位置
                 blackboard_->set("hero_x", msg->hero_x);
@@ -113,55 +121,65 @@ public:
                 blackboard_->set("infantry4_y", msg->infantry4_y);
 
                 // 哨兵状态
-                blackboard_->set("sentry_bullet_allowance", msg->sentry_bullet_allowance);
-                blackboard_->set("sentry_remote_bullet_count", msg->sentry_remote_bullet_count);
-                blackboard_->set("sentry_remote_hp_count", msg->sentry_remote_hp_count);
-                blackboard_->set("sentry_confirm_revive", msg->sentry_confirm_revive);
-                blackboard_->set("sentry_immediate_revive", msg->sentry_immediate_revive);
+                blackboard_->set("sentry_bullet_allowance",
+                                 msg->sentry_bullet_allowance);
+                blackboard_->set("sentry_remote_bullet_count",
+                                 msg->sentry_remote_bullet_count);
+                blackboard_->set("sentry_remote_hp_count",
+                                 msg->sentry_remote_hp_count);
+                blackboard_->set("sentry_confirm_revive",
+                                 msg->sentry_confirm_revive);
+                blackboard_->set("sentry_immediate_revive",
+                                 msg->sentry_immediate_revive);
                 blackboard_->set("sentry_revive_cost", msg->sentry_revive_cost);
 
                 // 附加状态
-                blackboard_->set("additional_status_bit0", msg->additional_status_bit0);
-                blackboard_->set("additional_status_bits1_11", msg->additional_status_bits1_11);
-                blackboard_->set("additional_status_bits12_15", msg->additional_status_bits12_15);
+                blackboard_->set("additional_status_bit0",
+                                 msg->additional_status_bit0);
+                blackboard_->set("additional_status_bits1_11",
+                                 msg->additional_status_bits1_11);
+                blackboard_->set("additional_status_bits12_15",
+                                 msg->additional_status_bits12_15);
             });
         // 雷达站消息订阅
-        radar_subscriber_ = node_->create_subscription<serial_interfaces::msg::Radar>(
-            "radar_msg", 10,
-            [this](const serial_interfaces::msg::Radar::SharedPtr msg) {
-                std::lock_guard<std::mutex> lock(mutex_);
-                // 更新敌方坐标信息到黑板
-                blackboard_->set("robot_1_x", msg->robot_1_position.x);
-                blackboard_->set("robot_1_y", msg->robot_1_position.y);
-                
-                RCLCPP_DEBUG(node_->get_logger(), 
-                    "黑板雷达数据更新: 敌方位置=(%f, %f)",
-                    msg->robot_1_position.x, msg->robot_1_position.y);
-            });
+        radar_subscriber_ =
+            node_->create_subscription<serial_interfaces::msg::Radar>(
+                "radar_msg", 10,
+                [this](const serial_interfaces::msg::Radar::SharedPtr msg) {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    // 更新敌方坐标信息到黑板
+                    blackboard_->set("robot_1_x", msg->robot_1_position.x);
+                    blackboard_->set("robot_1_y", msg->robot_1_position.y);
+
+                    RCLCPP_DEBUG(node_->get_logger(),
+                                 "黑板雷达数据更新: 敌方位置=(%f, %f)",
+                                 msg->robot_1_position.x,
+                                 msg->robot_1_position.y);
+                });
         // 触发式消息订阅
-        trigger_subscriber_ = node_->create_subscription<geometry_msgs::msg::Point>(
-            "trigger_msg", 10,
-            [this](const geometry_msgs::msg::Point::SharedPtr msg) {
-                std::lock_guard<std::mutex> lock(mutex_);
-                // 更新触发点到黑板
-                blackboard_->set("trigger_point_x", msg->x);
-                blackboard_->set("trigger_point_y", msg->y);
-                
-                RCLCPP_INFO(node_->get_logger(), 
-                    "黑板触发点更新: (%.3f, %.3f)",
-                    msg->x, msg->y);
-            });
-            
+        trigger_subscriber_ =
+            node_->create_subscription<geometry_msgs::msg::Point>(
+                "trigger_msg", 10,
+                [this](const geometry_msgs::msg::Point::SharedPtr msg) {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    // 更新触发点到黑板
+                    blackboard_->set("trigger_point_x", msg->x);
+                    blackboard_->set("trigger_point_y", msg->y);
+
+                    RCLCPP_INFO(node_->get_logger(),
+                                "黑板触发点更新: (%.3f, %.3f)", msg->x, msg->y);
+                });
+
         RCLCPP_INFO(node_->get_logger(), "黑板数据更新器已创建");
     }
-    
+
     // 启动更新线程
     void start() {
         running_ = true;
         update_thread_ = std::thread(&BlackboardUpdater::update_loop, this);
         RCLCPP_INFO(node_->get_logger(), "黑板数据更新线程已启动");
     }
-    
+
     // 停止更新线程
     void stop() {
         running_ = false;
@@ -170,56 +188,57 @@ public:
         }
         RCLCPP_INFO(node_->get_logger(), "黑板数据更新线程已停止");
     }
-    
-private:
+
+   private:
     // 更新循环，在独立线程中运行
     void update_loop() {
-        rclcpp::Rate rate(20); // 20Hz的更新频率
+        rclcpp::Rate rate(20);  // 20Hz的更新频率
         while (running_ && rclcpp::ok()) {
             // 处理ROS消息队列
             rclcpp::spin_some(node_);
             rate.sleep();
         }
     }
-    
+
     Blackboard::Ptr blackboard_;
     rclcpp::Node::SharedPtr node_;
     std::atomic<bool> running_;
     std::thread update_thread_;
     std::mutex mutex_;
-    
+
     // 订阅者
-    rclcpp::Subscription<serial_interfaces::msg::Refree>::SharedPtr refree_subscriber_;
-    rclcpp::Subscription<serial_interfaces::msg::Radar>::SharedPtr radar_subscriber_;
-    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr trigger_subscriber_;
+    rclcpp::Subscription<serial_interfaces::msg::Refree>::SharedPtr
+        refree_subscriber_;
+    rclcpp::Subscription<serial_interfaces::msg::Radar>::SharedPtr
+        radar_subscriber_;
+    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr
+        trigger_subscriber_;
 
     // 判断本局比赛红方还是蓝方
     // true：红方 false：蓝方
     bool is_red_team_ = true;
 };
-/** 
+/**
  * @brief 血量变化率监测独立线程
-*/
-class hp_spin_watcher
-{
-public:
+ */
+class hp_spin_watcher {
+   public:
     hp_spin_watcher(Blackboard::Ptr blackboard, rclcpp::Node::SharedPtr node)
         : blackboard_(blackboard), node_(node), running_(false) {
-        
         // 创建消息发布者
         hp_danger_publisher_ = node_->create_publisher<std_msgs::msg::Bool>(
             "hp_danger_status", 10);
-            
+
         RCLCPP_INFO(node_->get_logger(), "血量变化率监测器已创建");
     }
-    
+
     // 启动监测线程
     void start() {
         running_ = true;
         watch_thread_ = std::thread(&hp_spin_watcher::watch_loop, this);
         RCLCPP_INFO(node_->get_logger(), "血量变化率监测线程已启动");
     }
-    
+
     // 停止监测线程
     void stop() {
         running_ = false;
@@ -228,8 +247,8 @@ public:
         }
         RCLCPP_INFO(node_->get_logger(), "血量变化率监测线程已停止");
     }
-    
-private:
+
+   private:
     struct HpRecord {
         std::chrono::system_clock::time_point timestamp;
         int hp;
@@ -237,71 +256,79 @@ private:
 
     struct TimeComparator {
         bool operator()(const HpRecord& a, const HpRecord& b) const {
-            return a.timestamp > b.timestamp; // 最小堆（堆顶是最旧记录）
+            return a.timestamp > b.timestamp;  // 最小堆（堆顶是最旧记录）
         }
     };
 
     // 监测循环，在独立线程中运行
     void watch_loop() {
-        rclcpp::Rate rate(10); // 10Hz的监测频率
-        
+        rclcpp::Rate rate(10);  // 10Hz的监测频率
+
         // 保存最新记录的变量
         HpRecord latest_record{std::chrono::system_clock::now(), 0};
-        
+
         while (running_ && rclcpp::ok()) {
             // 获取当前血量
             int current_hp = 0;
-            if (blackboard_->get("current_hp", current_hp)) 
-            {
+            if (blackboard_->get("current_hp", current_hp)) {
                 auto now = std::chrono::system_clock::now();
-                
+
                 {
                     std::lock_guard<std::mutex> lock(queue_mutex_);
-                    
+
                     // 更新最新记录
                     latest_record = {now, current_hp};
-                    
+
                     // 清理过期数据（超过2秒的记录）
                     while (!hp_queue_.empty()) {
-                        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            now - hp_queue_.top().timestamp).count();
+                        auto elapsed = std::chrono::duration_cast<
+                                           std::chrono::milliseconds>(
+                                           now - hp_queue_.top().timestamp)
+                                           .count();
                         if (elapsed > 2000) {
                             hp_queue_.pop();
                         } else {
                             break;  // 如果堆顶元素没过期，后面的也不会过期
                         }
                     }
-                    
+
                     // 添加新记录到队列
                     hp_queue_.push(latest_record);
-                    
+
                     // 计算血量变化
                     if (!hp_queue_.empty()) {
                         // 获取最旧记录（堆顶）
                         const auto& oldest = hp_queue_.top();
-                        
+
                         // 使用先前保存的最新记录
                         const auto& newest = latest_record;
-                        
+
                         // 计算时间差
-                        auto time_diff = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            newest.timestamp - oldest.timestamp).count();
-                        
+                        auto time_diff =
+                            std::chrono::duration_cast<
+                                std::chrono::milliseconds>(newest.timestamp -
+                                                           oldest.timestamp)
+                                .count();
+
                         // 只有当最新和最旧记录不同时才计算血量变化
                         if (time_diff > 0) {
                             // 计算血量变化（旧血量 - 新血量），正值表示血量减少
                             int hp_change = oldest.hp - newest.hp;
-                            
-                            // RCLCPP_INFO(node_->get_logger(), "最旧记录(%ld毫秒前): %d, 最新记录: %d, 差值: %d", 
-                                // time_diff, oldest.hp, newest.hp, hp_change);
-                            
+
+                            // RCLCPP_INFO(node_->get_logger(),
+                            // "最旧记录(%ld毫秒前): %d, 最新记录: %d, 差值:
+                            // %d", time_diff, oldest.hp, newest.hp, hp_change);
+
                             // 如果两秒内血量减少超过30
                             if (hp_change > 30 && time_diff <= 2000) {
-                                RCLCPP_WARN(node_->get_logger(), "检测到危险血量变化！%ld毫秒内减少%d点血量", 
+                                RCLCPP_WARN(
+                                    node_->get_logger(),
+                                    "检测到危险血量变化！%ld毫秒内减少%d点血量",
                                     time_diff, hp_change);
-                                
+
                                 // 发布危险状态消息
-                                auto msg = std::make_unique<std_msgs::msg::Bool>();
+                                auto msg =
+                                    std::make_unique<std_msgs::msg::Bool>();
                                 msg->data = true;
                                 hp_danger_publisher_->publish(*msg);
                             }
@@ -309,20 +336,21 @@ private:
                     }
                 }
             }
-            
+
             rate.sleep();
         }
     }
-    
+
     Blackboard::Ptr blackboard_;
     rclcpp::Node::SharedPtr node_;
     std::atomic<bool> running_;
     std::thread watch_thread_;
-    
+
     // 使用优先队列实现最小堆，按时间戳排序（最旧的记录在堆顶）
-    std::priority_queue<HpRecord, std::vector<HpRecord>, TimeComparator> hp_queue_;
+    std::priority_queue<HpRecord, std::vector<HpRecord>, TimeComparator>
+        hp_queue_;
     std::mutex queue_mutex_;  // 保护血量记录的互斥锁
-    
+
     // 危险状态发布者
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr hp_danger_publisher_;
 };
@@ -330,18 +358,16 @@ private:
 /**
  * @brief 云台控制：上位机决策端
  */
-class GimbalSerialNode
-{
-public:
-    explicit GimbalSerialNode(
-        rclcpp::Node::SharedPtr node,
-        BT::Blackboard::Ptr blackboard)
-        : node_(node), blackboard_(blackboard), running_(false)
-    {
+class GimbalSerialNode {
+   public:
+    explicit GimbalSerialNode(rclcpp::Node::SharedPtr node,
+                              BT::Blackboard::Ptr blackboard)
+        : node_(node), blackboard_(blackboard), running_(false) {
         // 创建发布者
-        gimbal_pub_ = node_->create_publisher<serial_interfaces::msg::Gimbaldecision>(
-            "gimbal_decision", 10);
-            
+        gimbal_pub_ =
+            node_->create_publisher<serial_interfaces::msg::Gimbaldecision>(
+                "gimbal_decision", 10);
+
         RCLCPP_INFO(node_->get_logger(), "云台控制节点已创建");
     }
 
@@ -351,7 +377,7 @@ public:
         update_thread_ = std::thread(&GimbalSerialNode::update_loop, this);
         RCLCPP_INFO(node_->get_logger(), "云台控制线程已启动");
     }
-    
+
     // 停止更新线程
     void stop() {
         running_ = false;
@@ -361,52 +387,51 @@ public:
         RCLCPP_INFO(node_->get_logger(), "云台控制线程已停止");
     }
 
-private:
-    void update_loop()
-    {
+   private:
+    void update_loop() {
         rclcpp::Rate rate(10);  // 10Hz的更新频率
-        
+
         while (running_ && rclcpp::ok()) {
             auto msg = serial_interfaces::msg::Gimbaldecision();
             msg.targets.resize(7);
-            
+
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 // 从黑板读取数据
                 uint8_t is_auto_aim;
-                if(blackboard_->get("is_auto_aim", is_auto_aim)) {
+                if (blackboard_->get("is_auto_aim", is_auto_aim)) {
                     msg.is_auto_aim = is_auto_aim;
                 }
-                
+
                 uint8_t auto_aim_mode;
-                if(blackboard_->get("auto_aim_mode", auto_aim_mode)) {
+                if (blackboard_->get("auto_aim_mode", auto_aim_mode)) {
                     msg.auto_aim_mode = auto_aim_mode;
                 }
-                
+
                 std::vector<serial_interfaces::msg::Target> targets;
-                if(blackboard_->get("targets", targets)) {
+                if (blackboard_->get("targets", targets)) {
                     msg.targets = targets;
                 }
-                
+
                 uint8_t is_gimbal_patrol;
-                if(blackboard_->get("is_gimbal_patrol", is_gimbal_patrol)) {
+                if (blackboard_->get("is_gimbal_patrol", is_gimbal_patrol)) {
                     msg.is_gimbal_patrol = is_gimbal_patrol;
                 }
-                
+
                 float yaw_degrees;
-                if(blackboard_->get("yaw_degrees", yaw_degrees)) {
+                if (blackboard_->get("yaw_degrees", yaw_degrees)) {
                     msg.yaw_degrees = yaw_degrees;
                 }
-                
+
                 uint8_t is_reached;
-                if(blackboard_->get("is_reached", is_reached)) {
+                if (blackboard_->get("is_reached", is_reached)) {
                     msg.is_reached = is_reached;
                 }
             }
-            
+
             // 发布消息
             gimbal_pub_->publish(msg);
-            
+
             rate.sleep();
         }
     }
@@ -416,38 +441,41 @@ private:
     std::atomic<bool> running_;
     std::thread update_thread_;
     std::mutex mutex_;
-    rclcpp::Publisher<serial_interfaces::msg::Gimbaldecision>::SharedPtr gimbal_pub_;
+    rclcpp::Publisher<serial_interfaces::msg::Gimbaldecision>::SharedPtr
+        gimbal_pub_;
 };
 
-/** 
+/**
  * @brief 哨兵攻击状态监控独立线程
-*/
-class sentry_attack_watcher
-{
-public:
+ */
+class sentry_attack_watcher {
+   public:
     enum class State {
-        STATE_1,    // 监控敌方哨兵血量
-        STATE_2,    // 等待敌方哨兵血量恢复
-        STATE_3     // 倒计时状态
+        STATE_1,  // 监控敌方哨兵血量
+        STATE_2,  // 等待敌方哨兵血量恢复
+        STATE_3   // 倒计时状态
     };
 
-    sentry_attack_watcher(Blackboard::Ptr blackboard, rclcpp::Node::SharedPtr node)
-        : blackboard_(blackboard), node_(node), running_(false), 
-          current_state_(State::STATE_1), counter_(0) {
-        
+    sentry_attack_watcher(Blackboard::Ptr blackboard,
+                          rclcpp::Node::SharedPtr node)
+        : blackboard_(blackboard),
+          node_(node),
+          running_(false),
+          current_state_(State::STATE_1),
+          counter_(0) {
         // 初始化can_attack_sentry为true
         blackboard_->set("can_attack_sentry", true);
-        
+
         RCLCPP_INFO(node_->get_logger(), "哨兵攻击状态监控器已创建");
     }
-    
+
     // 启动监测线程
     void start() {
         running_ = true;
         watch_thread_ = std::thread(&sentry_attack_watcher::watch_loop, this);
         RCLCPP_INFO(node_->get_logger(), "哨兵攻击状态监控线程已启动");
     }
-    
+
     // 停止监测线程
     void stop() {
         running_ = false;
@@ -456,12 +484,12 @@ public:
         }
         RCLCPP_INFO(node_->get_logger(), "哨兵攻击状态监控线程已停止");
     }
-    
-private:
+
+   private:
     // 监测循环，在独立线程中运行
     void watch_loop() {
-        rclcpp::Rate rate(2); // 0.5秒一次回调 (2Hz)
-        
+        rclcpp::Rate rate(2);  // 0.5秒一次回调 (2Hz)
+
         while (running_ && rclcpp::ok()) {
             switch (current_state_) {
                 case State::STATE_1:
@@ -474,11 +502,11 @@ private:
                     handle_state_3();
                     break;
             }
-            
+
             rate.sleep();
         }
     }
-    
+
     // 状态1：监控敌方哨兵血量
     void handle_state_1() {
         int enemy_sentry_hp = 0;
@@ -487,12 +515,13 @@ private:
                 // 敌方哨兵血量为0，禁止攻击并进入状态2
                 blackboard_->set("can_attack_sentry", false);
                 current_state_ = State::STATE_2;
-                RCLCPP_INFO(node_->get_logger(), "状态1->状态2: 敌方哨兵血量为0，禁止攻击");
+                RCLCPP_INFO(node_->get_logger(),
+                            "状态1->状态2: 敌方哨兵血量为0，禁止攻击");
             }
             // 血量不为0时不做处理，保持状态1
         }
     }
-    
+
     // 状态2：等待敌方哨兵血量恢复
     void handle_state_2() {
         int enemy_sentry_hp = 0;
@@ -504,46 +533,54 @@ private:
                 // 血量恢复到40，进入状态3并重置计时器
                 current_state_ = State::STATE_3;
                 counter_ = 0;  // 重新计时
-                RCLCPP_INFO(node_->get_logger(), "状态2->状态3: 敌方哨兵复活，血量恢复到40，开始倒计时");
+                RCLCPP_INFO(
+                    node_->get_logger(),
+                    "状态2->状态3: 敌方哨兵复活，血量恢复到40，开始倒计时");
             } else {
                 // 血量不为0也不为20，回到状态1
                 blackboard_->set("can_attack_sentry", true);
                 current_state_ = State::STATE_1;
-                RCLCPP_INFO(node_->get_logger(), "状态2->状态1: 敌方哨兵血量为%d", enemy_sentry_hp);
+                RCLCPP_INFO(node_->get_logger(),
+                            "状态2->状态1: 敌方哨兵血量为%d", enemy_sentry_hp);
             }
         }
     }
-    
+
     // 状态3：倒计时状态
     void handle_state_3() {
         int enemy_sentry_hp = 0;
         counter_++;  // 每次进入状态3就递增计数器
-        
+
         if (blackboard_->get("enemy_sentry", enemy_sentry_hp)) {
             // 检查是否需要退出状态3
-            if (enemy_sentry_hp != 40 || counter_ >= 120) {  // 血量不为40或者超过60秒
+            if (enemy_sentry_hp != 40 ||
+                counter_ >= 120) {  // 血量不为40或者超过60秒
                 // 允许攻击并返回状态1
                 blackboard_->set("can_attack_sentry", true);
                 current_state_ = State::STATE_1;
-                
+
                 if (counter_ >= 120) {
-                    RCLCPP_INFO(node_->get_logger(), "状态3->状态1: 倒计时60秒结束，允许攻击");
+                    RCLCPP_INFO(node_->get_logger(),
+                                "状态3->状态1: 倒计时60秒结束，允许攻击");
                 } else {
-                    RCLCPP_INFO(node_->get_logger(), "状态3->状态1: 敌方哨兵血量变为%d，允许攻击", enemy_sentry_hp);
+                    RCLCPP_INFO(node_->get_logger(),
+                                "状态3->状态1: 敌方哨兵血量变为%d，允许攻击",
+                                enemy_sentry_hp);
                 }
                 counter_ = 0;  // 重置计数器
             } else {
                 // 继续在状态3中等待，计数器继续累加
-                RCLCPP_DEBUG(node_->get_logger(), "状态3: 倒计时中... (%d/120)", counter_);
+                RCLCPP_DEBUG(node_->get_logger(), "状态3: 倒计时中... (%d/120)",
+                             counter_);
             }
         }
     }
-    
+
     Blackboard::Ptr blackboard_;
     rclcpp::Node::SharedPtr node_;
     std::atomic<bool> running_;
     std::thread watch_thread_;
-    
-    State current_state_;    // 当前状态
-    int counter_;           // 状态3的计时器
+
+    State current_state_;  // 当前状态
+    int counter_;          // 状态3的计时器
 };

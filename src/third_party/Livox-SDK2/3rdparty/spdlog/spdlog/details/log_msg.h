@@ -5,36 +5,36 @@
 
 #pragma once
 
-#include "spdlog/common.h"
-#include "spdlog/details/os.h"
-
 #include <string>
 #include <utility>
 
+#include "spdlog/common.h"
+#include "spdlog/details/os.h"
+
 namespace spdlog {
 namespace details {
-struct log_msg
-{
-
-    log_msg(source_loc loc, const std::string *loggers_name, level::level_enum lvl, string_view_t view)
-        : logger_name(loggers_name)
-        , level(lvl)
+struct log_msg {
+    log_msg(source_loc loc, const std::string *loggers_name,
+            level::level_enum lvl, string_view_t view)
+        : logger_name(loggers_name),
+          level(lvl)
 #ifndef SPDLOG_NO_DATETIME
-        , time(os::now())
+          ,
+          time(os::now())
 #endif
 
 #ifndef SPDLOG_NO_THREAD_ID
-        , thread_id(os::thread_id())
+          ,
+          thread_id(os::thread_id())
 #endif
-        , source(loc)
-        , payload(view)
-    {
+          ,
+          source(loc),
+          payload(view) {
     }
 
-    log_msg(const std::string *loggers_name, level::level_enum lvl, string_view_t view)
-        : log_msg(source_loc{}, loggers_name, lvl, view)
-    {
-    }
+    log_msg(const std::string *loggers_name, level::level_enum lvl,
+            string_view_t view)
+        : log_msg(source_loc{}, loggers_name, lvl, view) {}
 
     log_msg(const log_msg &other) = default;
 
@@ -51,5 +51,5 @@ struct log_msg
     source_loc source;
     const string_view_t payload;
 };
-} // namespace details
-} // namespace spdlog
+}  // namespace details
+}  // namespace spdlog

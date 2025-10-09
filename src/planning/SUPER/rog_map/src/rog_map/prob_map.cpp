@@ -1,25 +1,25 @@
 /**
-* This file is part of ROG-Map
-*
-* Copyright 2024 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
-* Developed by Yunfan REN <renyf at connect dot hku dot hk>
-* for more information see <https://github.com/hku-mars/ROG-Map>.
-* If you use this code, please cite the respective publications as
-* listed on the above website.
-*
-* ROG-Map is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Lesser General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* ROG-Map is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public License
-* along with ROG-Map. If not, see <http://www.gnu.org/licenses/>.
-*/
+ * This file is part of ROG-Map
+ *
+ * Copyright 2024 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
+ * Developed by Yunfan REN <renyf at connect dot hku dot hk>
+ * for more information see <https://github.com/hku-mars/ROG-Map>.
+ * If you use this code, please cite the respective publications as
+ * listed on the above website.
+ *
+ * ROG-Map is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ROG-Map is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with ROG-Map. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include <rog_map/prob_map.h>
 using namespace rog_map;
@@ -31,53 +31,48 @@ void ProbMap::initProbMap() {
         throw std::runtime_error(" -- [ROGMap] ProbMap can only init once.");
     }
     init_once = true;
-    initSlidingMap(cfg_.half_map_size_i, cfg_.resolution,
-                   cfg_.map_sliding_en, cfg_.map_sliding_thresh,
-                   cfg_.fix_map_origin);
+    initSlidingMap(cfg_.half_map_size_i, cfg_.resolution, cfg_.map_sliding_en,
+                   cfg_.map_sliding_thresh, cfg_.fix_map_origin);
     time_consuming_.resize(7);
     inf_map_ = std::make_shared<InfMap>(cfg_);
 
-
     if (cfg_.frontier_extraction_en) {
-        fcnt_map_ = std::make_shared<FreeCntMap>(cfg_.half_map_size_i + Vec3i::Constant(2),
-                                                 cfg_.resolution,
-                                                 cfg_.map_sliding_en,
-                                                 cfg_.map_sliding_thresh,
-                                                 cfg_.fix_map_origin);
+        fcnt_map_ = std::make_shared<FreeCntMap>(
+            cfg_.half_map_size_i + Vec3i::Constant(2), cfg_.resolution,
+            cfg_.map_sliding_en, cfg_.map_sliding_thresh, cfg_.fix_map_origin);
     }
 
     if (cfg_.esdf_en) {
         esdf_map_ = std::make_shared<ESDFMap>();
-        esdf_map_->initESDFMap(cfg_.half_map_size_i,
-                               cfg_.resolution,
-                               cfg_.esdf_resolution,
-                               cfg_.esdf_local_update_box,
-                               cfg_.map_sliding_en,
-                               cfg_.map_sliding_thresh,
-                               cfg_.fix_map_origin,
-                               cfg_.unk_thresh);
+        esdf_map_->initESDFMap(cfg_.half_map_size_i, cfg_.resolution,
+                               cfg_.esdf_resolution, cfg_.esdf_local_update_box,
+                               cfg_.map_sliding_en, cfg_.map_sliding_thresh,
+                               cfg_.fix_map_origin, cfg_.unk_thresh);
     }
-
 
     posToGlobalIndex(cfg_.visualization_range, sc_.visualization_range_i);
     posToGlobalIndex(cfg_.virtual_ceil_height, sc_.virtual_ceil_height_id_g);
-    posToGlobalIndex(cfg_.virtual_ground_height, sc_.virtual_ground_height_id_g);
+    posToGlobalIndex(cfg_.virtual_ground_height,
+                     sc_.virtual_ground_height_id_g);
 
     cfg_.virtual_ceil_height = sc_.virtual_ceil_height_id_g * cfg_.resolution;
-    cfg_.virtual_ground_height = sc_.virtual_ground_height_id_g * cfg_.resolution;
+    cfg_.virtual_ground_height =
+        sc_.virtual_ground_height_id_g * cfg_.resolution;
 
-    cout<<"[ProbMap] virtual_ceil_height: "<<cfg_.virtual_ceil_height<<endl;
-    cout<< "[ProbMap] virtual_ground_height: "<<cfg_.virtual_ground_height<<endl;
+    cout << "[ProbMap] virtual_ceil_height: " << cfg_.virtual_ceil_height
+         << endl;
+    cout << "[ProbMap] virtual_ground_height: " << cfg_.virtual_ground_height
+         << endl;
 
     if (!cfg_.map_sliding_en) {
-        std::cout << YELLOW << " -- [ProbMap] Map sliding disabled, set origin to [" << cfg_.fix_map_origin.transpose()
-            << "] -- " << RESET << std::endl;
+        std::cout << YELLOW
+                  << " -- [ProbMap] Map sliding disabled, set origin to ["
+                  << cfg_.fix_map_origin.transpose() << "] -- " << RESET
+                  << std::endl;
         slideAllMap(cfg_.fix_map_origin);
     }
 
-
     int map_size = sc_.map_size_i.prod();
-
 
     occupancy_buffer_.resize(map_size, 0);
     raycast_data_.raycaster.setResolution(cfg_.resolution);
@@ -86,17 +81,14 @@ void ProbMap::initProbMap() {
 
     resetLocalMap();
 
-    std::cout << GREEN << " -- [ProbMap] Init successfully -- ." << RESET << std::endl;
+    std::cout << GREEN << " -- [ProbMap] Init successfully -- ." << RESET
+              << std::endl;
     printMapInformation();
 }
 
-Vec3f ProbMap::getLocalMapOrigin() const {
-    return local_map_origin_d_;
-}
+Vec3f ProbMap::getLocalMapOrigin() const { return local_map_origin_d_; }
 
-Vec3f ProbMap::getLocalMapSize() const {
-    return cfg_.map_size_d;
-}
+Vec3f ProbMap::getLocalMapSize() const { return cfg_.map_size_d; }
 
 // Query====================================================
 bool ProbMap::isOccupied(const Vec3f& pos) const {
@@ -210,7 +202,6 @@ bool ProbMap::isKnownFreeInflate(const Vec3f& pos) const {
     return inf_map_->isKnownFreeInflate(pos);
 }
 
-
 bool ProbMap::isOccupiedInflate(const Vec3f& pos) const {
     return inf_map_->isOccupiedInflate(pos);
 }
@@ -221,12 +212,10 @@ bool ProbMap::isUnknownInflate(const Vec3f& pos) const {
 
 // Query====================================================
 
-
 void ProbMap::writeTimeConsumingToLog(std::ofstream& log_file) {
     for (long unsigned int i = 0; i < time_consuming_.size(); i++) {
         log_file << time_consuming_[i];
-        if (i != time_consuming_.size() - 1)
-            log_file << ", ";
+        if (i != time_consuming_.size() - 1) log_file << ", ";
     }
     log_file << std::endl;
 }
@@ -236,7 +225,8 @@ void ProbMap::writeMapInfoToLog(std::ofstream& log_file) {
     log_file << "\tmap_size_d: " << cfg_.map_size_d.transpose() << std::endl;
     log_file << "\tresolution: " << cfg_.resolution << std::endl;
     log_file << "\tmap_size_i: " << sc_.map_size_i.transpose() << std::endl;
-    log_file << "\tlocal_update_box_size: " << cfg_.local_update_box_d.transpose() << std::endl;
+    log_file << "\tlocal_update_box_size: "
+             << cfg_.local_update_box_d.transpose() << std::endl;
     log_file << "\tp_min: " << cfg_.p_min << std::endl;
     log_file << "\tp_max: " << cfg_.p_max << std::endl;
     log_file << "\tp_hit: " << cfg_.p_hit << std::endl;
@@ -244,14 +234,20 @@ void ProbMap::writeMapInfoToLog(std::ofstream& log_file) {
     log_file << "\tp_occ: " << cfg_.p_occ << std::endl;
     log_file << "\tp_free: " << cfg_.p_free << std::endl;
     log_file << "\tunk_thresh: " << cfg_.unk_thresh << std::endl;
-    log_file << "\tmap_sliding_thresh: " << cfg_.map_sliding_thresh << std::endl;
+    log_file << "\tmap_sliding_thresh: " << cfg_.map_sliding_thresh
+             << std::endl;
     log_file << "\tmap_sliding_en: " << cfg_.map_sliding_en << std::endl;
-    log_file << "\tfix_map_origin: " << cfg_.fix_map_origin.transpose() << std::endl;
-    log_file << "\tvisualization_range: " << cfg_.visualization_range.transpose() << std::endl;
-    log_file << "\tvirtual_ceil_height: " << cfg_.virtual_ceil_height << std::endl;
-    log_file << "\tvirtual_ground_height: " << cfg_.virtual_ground_height << std::endl;
+    log_file << "\tfix_map_origin: " << cfg_.fix_map_origin.transpose()
+             << std::endl;
+    log_file << "\tvisualization_range: "
+             << cfg_.visualization_range.transpose() << std::endl;
+    log_file << "\tvirtual_ceil_height: " << cfg_.virtual_ceil_height
+             << std::endl;
+    log_file << "\tvirtual_ground_height: " << cfg_.virtual_ground_height
+             << std::endl;
     log_file << "\tbatch_update_size: " << cfg_.batch_update_size << std::endl;
-    log_file << "\tfrontier_extraction_en: " << cfg_.frontier_extraction_en << std::endl;
+    log_file << "\tfrontier_extraction_en: " << cfg_.frontier_extraction_en
+             << std::endl;
     inf_map_->writeMapInfoToLog(log_file);
 }
 
@@ -274,7 +270,8 @@ void ProbMap::updateOccPointCloud(const PointCloud& input_cloud) {
 
         posToGlobalIndex(p, pt_id_g);
 
-        if (p.z() > cfg_.virtual_ceil_height || p.z() < cfg_.virtual_ground_height) {
+        if (p.z() > cfg_.virtual_ceil_height ||
+            p.z() < cfg_.virtual_ground_height) {
             continue;
         }
         if (insideLocalMap(pt_id_g)) {
@@ -286,7 +283,7 @@ void ProbMap::updateOccPointCloud(const PointCloud& input_cloud) {
             localmap_min = localmap_min.cwiseMin(p);
         }
     }
-    if(cfg_.map_sliding_en) {
+    if (cfg_.map_sliding_en) {
         local_map_bound_max_d_ = localmap_max;
         local_map_bound_min_d_ = localmap_min;
     }
@@ -309,28 +306,35 @@ void ProbMap::updateProbMap(const PointCloud& cloud, const Pose& pose) {
     TimeConsuming tc("updateMap", false);
     const Vec3f& pos = pose.first;
     time_consuming_[4] = cloud.size();
-    if (cfg_.map_sliding_en && !insideLocalMap(pos) && raycast_data_.batch_update_counter == 0) {
-        std::cout << YELLOW << " -- [ROGMapCore] cur_pose out of map range, reset the map." << RESET << std::endl;
-        std::cout << YELLOW << " -- [ROGMapCore] Sliding to map center at: " << pos.transpose() << RESET << std::endl;
+    if (cfg_.map_sliding_en && !insideLocalMap(pos) &&
+        raycast_data_.batch_update_counter == 0) {
+        std::cout
+            << YELLOW
+            << " -- [ROGMapCore] cur_pose out of map range, reset the map."
+            << RESET << std::endl;
+        std::cout << YELLOW << " -- [ROGMapCore] Sliding to map center at: "
+                  << pos.transpose() << RESET << std::endl;
         slideAllMap(pos);
         return;
     }
 
     if (pos.z() > cfg_.virtual_ceil_height) {
-        std::cout << YELLOW << " -- [ROGMapCore] Odom above virtual ceil, please check map parameter -- ." << RESET
-            << std::endl;
+        std::cout << YELLOW
+                  << " -- [ROGMapCore] Odom above virtual ceil, please check "
+                     "map parameter -- ."
+                  << RESET << std::endl;
         return;
-    }
-    else if (pos.z() < cfg_.virtual_ground_height) {
-        std::cout << YELLOW << " -- [ROGMapCore] Odom below virtual ground, please check map parameter -- ." << RESET
-            << std::endl;
+    } else if (pos.z() < cfg_.virtual_ground_height) {
+        std::cout << YELLOW
+                  << " -- [ROGMapCore] Odom below virtual ground, please check "
+                     "map parameter -- ."
+                  << RESET << std::endl;
         return;
     }
 
-    if (raycast_data_.batch_update_counter == 0 &&
-        cfg_.map_sliding_en  &&
-        (map_empty_ || (pos - local_map_origin_d_).norm() > cfg_.map_sliding_thresh)
-        ) {
+    if (raycast_data_.batch_update_counter == 0 && cfg_.map_sliding_en &&
+        (map_empty_ ||
+         (pos - local_map_origin_d_).norm() > cfg_.map_sliding_thresh)) {
         slideAllMap(pos);
     }
 
@@ -359,9 +363,12 @@ void ProbMap::updateProbMap(const PointCloud& cloud, const Pose& pose) {
     static bool first = true;
     if (first) {
         first = false;
-        for (double dx = -cfg_.raycast_range_min; dx <= cfg_.raycast_range_min; dx += cfg_.resolution) {
-            for (double dy = -cfg_.raycast_range_min; dy <= cfg_.raycast_range_min; dy += cfg_.resolution) {
-                for (double dz = -cfg_.raycast_range_min; dz <= cfg_.raycast_range_min; dz += cfg_.resolution) {
+        for (double dx = -cfg_.raycast_range_min; dx <= cfg_.raycast_range_min;
+             dx += cfg_.resolution) {
+            for (double dy = -cfg_.raycast_range_min;
+                 dy <= cfg_.raycast_range_min; dy += cfg_.resolution) {
+                for (double dz = -cfg_.raycast_range_min;
+                     dz <= cfg_.raycast_range_min; dz += cfg_.resolution) {
                     Vec3f p(dx, dy, dz);
                     if (p.norm() <= cfg_.raycast_range_min) {
                         Vec3f pp = pos + p;
@@ -388,11 +395,9 @@ GridType ProbMap::getGridType(Vec3i& id_g) const {
     double ret = occupancy_buffer_[hash_id];
     if (isKnownFree(ret)) {
         return GridType::KNOWN_FREE;
-    }
-    else if (isOccupied(ret)) {
+    } else if (isOccupied(ret)) {
         return GridType::OCCUPIED;
-    }
-    else {
+    } else {
         return GridType::UNKNOWN;
     }
 }
@@ -411,8 +416,9 @@ GridType ProbMap::getGridType(const Vec3f& pos) const {
 }
 
 GridType ProbMap::getInfGridType(const Vec3f& pos) const {
-    // NOTE, we consider, if the pos is not inside prob map, it is also out of inf map.
-    if(!insideLocalMap(pos)) {
+    // NOTE, we consider, if the pos is not inside prob map, it is also out of
+    // inf map.
+    if (!insideLocalMap(pos)) {
         return OUT_OF_MAP;
     }
     return inf_map_->getGridType(pos);
@@ -425,21 +431,25 @@ double ProbMap::getMapValue(const Vec3f& pos) const {
     return occupancy_buffer_[getHashIndexFromPos(pos)];
 }
 
-void
-ProbMap::boxSearch(const Vec3f& _box_min, const Vec3f& _box_max, const GridType& gt, vec_E<Vec3f>& out_points) const {
+void ProbMap::boxSearch(const Vec3f& _box_min, const Vec3f& _box_max,
+                        const GridType& gt, vec_E<Vec3f>& out_points) const {
     out_points.clear();
     if (map_empty_) {
-        std::cout << YELLOW << " -- [ROG] Map is empty, cannot perform box search." << RESET << std::endl;
+        std::cout << YELLOW
+                  << " -- [ROG] Map is empty, cannot perform box search."
+                  << RESET << std::endl;
         return;
     }
     if ((_box_max - _box_min).minCoeff() <= 0) {
-        std::cout << YELLOW << " -- [ROG] Box search failed, box size is zero." << RESET << std::endl;
+        std::cout << YELLOW << " -- [ROG] Box search failed, box size is zero."
+                  << RESET << std::endl;
         return;
     }
     Vec3f box_min_d = _box_min, box_max_d = _box_max;
     boundBoxByLocalMap(box_min_d, box_max_d);
     if ((box_max_d - box_min_d).minCoeff() <= 0) {
-        std::cout << YELLOW << " -- [ROG] Box search failed, box size is zero." << RESET << std::endl;
+        std::cout << YELLOW << " -- [ROG] Box search failed, box size is zero."
+                  << RESET << std::endl;
         return;
     }
     Vec3i box_min_id_g, box_max_id_g;
@@ -460,8 +470,7 @@ ProbMap::boxSearch(const Vec3f& _box_min, const Vec3f& _box_max, const GridType&
                 }
             }
         }
-    }
-    else if (gt == OCCUPIED) {
+    } else if (gt == OCCUPIED) {
         out_points.reserve(box_size.prod() / 3);
         for (int i = box_min_id_g.x() + 1; i < box_max_id_g.x(); i++) {
             for (int j = box_min_id_g.y() + 1; j < box_max_id_g.y(); j++) {
@@ -475,8 +484,7 @@ ProbMap::boxSearch(const Vec3f& _box_min, const Vec3f& _box_max, const GridType&
                 }
             }
         }
-    }
-    else if (gt == FRONTIER) {
+    } else if (gt == FRONTIER) {
         out_points.reserve(box_size.prod() / 3);
         for (int i = box_min_id_g.x() + 1; i < box_max_id_g.x(); i++) {
             for (int j = box_min_id_g.y() + 1; j < box_max_id_g.y(); j++) {
@@ -490,13 +498,14 @@ ProbMap::boxSearch(const Vec3f& _box_min, const Vec3f& _box_max, const GridType&
                 }
             }
         }
-    }
-    else {
-        throw std::runtime_error(" -- [ROG-Map] Box search does not support KNOWN_FREE.");
+    } else {
+        throw std::runtime_error(
+            " -- [ROG-Map] Box search does not support KNOWN_FREE.");
     }
 }
 
-void ProbMap::boxSearchInflate(const Vec3f& box_min, const Vec3f& box_max, const GridType& gt,
+void ProbMap::boxSearchInflate(const Vec3f& box_min, const Vec3f& box_max,
+                               const GridType& gt,
                                vec_E<Vec3f>& out_points) const {
     inf_map_->boxSearch(box_min, box_max, gt, out_points);
 }
@@ -504,7 +513,8 @@ void ProbMap::boxSearchInflate(const Vec3f& box_min, const Vec3f& box_max, const
 void ProbMap::boundBoxByLocalMap(Vec3f& box_min, Vec3f& box_max) const {
     if ((box_max - box_min).minCoeff() <= 0) {
         box_min = box_max;
-        std::cout << YELLOW << "-- [ROG] Bound box is invalid." << RESET << std::endl;
+        std::cout << YELLOW << "-- [ROG] Bound box is invalid." << RESET
+                  << std::endl;
         return;
     }
 
@@ -524,8 +534,7 @@ void ProbMap::resetCell(const int& hash_id) {
         if (cfg_.esdf_en) {
             esdf_map_->updateGridCounter(pos, OCCUPIED, UNKNOWN);
         }
-    }
-    else if (isKnownFree(ret)) {
+    } else if (isKnownFree(ret)) {
         /// if current state is free
         Vec3f pos;
         hashIdToPos(hash_id, pos);
@@ -540,8 +549,7 @@ void ProbMap::resetCell(const int& hash_id) {
                 fcnt_map_->updateFrontierCounter(id_g, false);
             }
         }
-    }
-    else {
+    } else {
         // nothing need to do
     }
     ret = 0;
@@ -563,30 +571,28 @@ void ProbMap::probabilisticMapFromCache() {
         globalIndexToPos(id_g, pos);
         if (raycast_data_.hit_cnt[hash_id] > 0) {
             hitPointUpdate(pos, hash_id, raycast_data_.hit_cnt[hash_id]);
-        }
-        else {
+        } else {
             missPointUpdate(pos, hash_id,
-                            raycast_data_.operation_cnt[hash_id] - raycast_data_.hit_cnt[hash_id]);
+                            raycast_data_.operation_cnt[hash_id] -
+                                raycast_data_.hit_cnt[hash_id]);
         }
         raycast_data_.hit_cnt[hash_id] = 0;
         raycast_data_.operation_cnt[hash_id] = 0;
     }
 }
 
-void ProbMap::hitPointUpdate(const Vec3f& pos, const int& hash_id, const int& hit_num) {
+void ProbMap::hitPointUpdate(const Vec3f& pos, const int& hash_id,
+                             const int& hit_num) {
     float& ret = occupancy_buffer_[hash_id];
     GridType from_type = UNDEFINED;
 
     if (isOccupied(ret)) {
         from_type = GridType::OCCUPIED;
-    }
-    else if (isKnownFree(ret)) {
+    } else if (isKnownFree(ret)) {
         from_type = GridType::KNOWN_FREE;
-    }
-    else {
+    } else {
         from_type = GridType::UNKNOWN;
     }
-
 
     ret += cfg_.l_hit * hit_num;
     if (ret > cfg_.l_max) {
@@ -596,11 +602,9 @@ void ProbMap::hitPointUpdate(const Vec3f& pos, const int& hash_id, const int& hi
     GridType to_type;
     if (isOccupied(ret)) {
         to_type = GridType::OCCUPIED;
-    }
-    else if (isKnownFree(ret)) {
+    } else if (isKnownFree(ret)) {
         to_type = GridType::KNOWN_FREE;
-    }
-    else {
+    } else {
         to_type = GridType::UNKNOWN;
     }
 
@@ -621,16 +625,15 @@ void ProbMap::hitPointUpdate(const Vec3f& pos, const int& hash_id, const int& hi
     }
 }
 
-void ProbMap::missPointUpdate(const Vec3f& pos, const int& hash_id, const int& hit_num) {
+void ProbMap::missPointUpdate(const Vec3f& pos, const int& hash_id,
+                              const int& hit_num) {
     float& ret = occupancy_buffer_[hash_id];
     GridType from_type;
     if (isOccupied(ret)) {
         from_type = GridType::OCCUPIED;
-    }
-    else if (isKnownFree(ret)) {
+    } else if (isKnownFree(ret)) {
         from_type = GridType::KNOWN_FREE;
-    }
-    else {
+    } else {
         from_type = GridType::UNKNOWN;
     }
     ret += cfg_.l_miss * hit_num;
@@ -641,11 +644,9 @@ void ProbMap::missPointUpdate(const Vec3f& pos, const int& hash_id, const int& h
     GridType to_type;
     if (isOccupied(ret)) {
         to_type = GridType::OCCUPIED;
-    }
-    else if (isKnownFree(ret)) {
+    } else if (isKnownFree(ret)) {
         to_type = GridType::KNOWN_FREE;
-    }
-    else {
+    } else {
         to_type = GridType::UNKNOWN;
     }
     // Catch the jump edge
@@ -660,7 +661,6 @@ void ProbMap::missPointUpdate(const Vec3f& pos, const int& hash_id, const int& h
             esdf_map_->updateGridCounter(center_pos, from_type, to_type);
         }
 
-
         if (cfg_.frontier_extraction_en && to_type == KNOWN_FREE) {
             Vec3i id_g;
             posToGlobalIndex(pos, id_g);
@@ -669,7 +669,8 @@ void ProbMap::missPointUpdate(const Vec3f& pos, const int& hash_id, const int& h
     }
 }
 
-void ProbMap::raycastProcess(const PointCloud& input_cloud, const Vec3f& cur_odom) {
+void ProbMap::raycastProcess(const PointCloud& input_cloud,
+                             const Vec3f& cur_odom) {
     // bounding box of updated region
     raycast_data_.cache_box_min = cur_odom;
     raycast_data_.cache_box_max = cur_odom;
@@ -708,14 +709,16 @@ void ProbMap::raycastProcess(const PointCloud& input_cloud, const Vec3f& cur_odo
         if (!cfg_.raycasting_en) {
             if (insideLocalMap(p)) {
                 double sqrdis = (p - cur_odom).squaredNorm();
-                if(sqrdis<cfg_.sqr_raycast_range_min){
+                if (sqrdis < cfg_.sqr_raycast_range_min) {
                     continue;
                 }
                 posToGlobalIndex(p, pt_id_g);
                 insertUpdateCandidate(pt_id_g, true);
                 // record cache box size;
-                raycast_data_.cache_box_min = raycast_data_.cache_box_min.cwiseMin(p);
-                raycast_data_.cache_box_max = raycast_data_.cache_box_max.cwiseMax(p);
+                raycast_data_.cache_box_min =
+                    raycast_data_.cache_box_min.cwiseMin(p);
+                raycast_data_.cache_box_max =
+                    raycast_data_.cache_box_max.cwiseMax(p);
             }
             continue;
         }
@@ -728,8 +731,7 @@ void ProbMap::raycastProcess(const PointCloud& input_cloud, const Vec3f& cur_odo
             const double dz = p.z() - cur_odom.z();
             const double pc = cfg_.virtual_ceil_height - cur_odom.z();
             p = cur_odom + (p - cur_odom).normalized() * pc / dz;
-        }
-        else if (p.z() < cfg_.virtual_ground_height) {
+        } else if (p.z() < cfg_.virtual_ground_height) {
             update_hit = false;
             // find the intersect point with the ground
             const double dz = p.z() - cur_odom.z();
@@ -746,20 +748,17 @@ void ProbMap::raycastProcess(const PointCloud& input_cloud, const Vec3f& cur_odo
             update_hit = false;
         }
 
-        if(sqr_dis < cfg_.sqr_raycast_range_min) {
+        if (sqr_dis < cfg_.sqr_raycast_range_min) {
             continue;
         }
 
         // local map bound
         if (((p - raycast_box_min).minCoeff() < 0) ||
             ((p - raycast_box_max).maxCoeff() > 0)) {
-            p = lineBoxIntersectPoint(p,
-                                      cur_odom,
-                                      raycast_box_min,
+            p = lineBoxIntersectPoint(p, cur_odom, raycast_box_min,
                                       raycast_box_max);
             update_hit = false;
         }
-
 
         // record cache box size;
         raycast_data_.cache_box_min = raycast_data_.cache_box_min.cwiseMin(p);
@@ -777,7 +776,8 @@ void ProbMap::raycastProcess(const PointCloud& input_cloud, const Vec3f& cur_odo
     if (cfg_.raycasting_en) {
         // 4) process all inf points, updae free probability
         for (const auto& p : raycasting_cloud) {
-            Vec3f raycast_start = (p - cur_odom).normalized() * cfg_.raycast_range_min + cur_odom;
+            Vec3f raycast_start =
+                (p - cur_odom).normalized() * cfg_.raycast_range_min + cur_odom;
             raycast_data_.raycaster.setInput(raycast_start, p);
             Vec3f ray_pt;
             while (raycast_data_.raycaster.step(ray_pt)) {
@@ -806,7 +806,8 @@ void ProbMap::insertUpdateCandidate(const Vec3i& id_g, bool is_hit) {
 void ProbMap::updateLocalBox(const Vec3f& cur_odom) {
     /* This function is only used for decide the local update range
      * and do not related to the map origin and map bound
-     * the map origin and map bound is only update in [SlidingMap::mapSliding(const Vec3f &odom)]
+     * the map origin and map bound is only update in
+     * [SlidingMap::mapSliding(const Vec3f &odom)]
      * */
     // The local map should be inside in index wise
     // update: the virtual floor and ceil should not influence the raycasting.
@@ -828,21 +829,23 @@ void ProbMap::updateLocalBox(const Vec3f& cur_odom) {
     globalIndexToPos(local_updatebox_max_i, raycast_data_.local_update_box_max);
 
     // the local update box must inside the local map
-    raycast_data_.local_update_box_max = raycast_data_.local_update_box_max.cwiseMin(
-        local_map_bound_max_d_);
-    raycast_data_.local_update_box_min = raycast_data_.local_update_box_min.cwiseMax(
-        local_map_bound_min_d_);
+    raycast_data_.local_update_box_max =
+        raycast_data_.local_update_box_max.cwiseMin(local_map_bound_max_d_);
+    raycast_data_.local_update_box_min =
+        raycast_data_.local_update_box_min.cwiseMax(local_map_bound_min_d_);
 }
 
 void ProbMap::resetLocalMap() {
-    std::cout << YELLOW << " -- [Prob-Map] Clear all local map." << RESET << std::endl;
-    double unk_value = (cfg_.l_free + cfg_.l_occ)/2.0;
+    std::cout << YELLOW << " -- [Prob-Map] Clear all local map." << RESET
+              << std::endl;
+    double unk_value = (cfg_.l_free + cfg_.l_occ) / 2.0;
     // Clear local map
     std::fill(occupancy_buffer_.begin(), occupancy_buffer_.end(), unk_value);
     while (!raycast_data_.update_cache_id_g.empty()) {
         raycast_data_.update_cache_id_g.pop();
     }
     raycast_data_.batch_update_counter = 0;
-    std::fill(raycast_data_.operation_cnt.begin(), raycast_data_.operation_cnt.end(), 0);
+    std::fill(raycast_data_.operation_cnt.begin(),
+              raycast_data_.operation_cnt.end(), 0);
     std::fill(raycast_data_.hit_cnt.begin(), raycast_data_.hit_cnt.end(), 0);
 }

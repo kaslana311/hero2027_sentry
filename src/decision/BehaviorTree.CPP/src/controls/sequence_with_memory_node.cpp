@@ -76,7 +76,7 @@ NodeStatus SequenceWithMemory::tick()
         throw LogicError("[", name(), "]: A children should not return IDLE");
       }
     }  // end switch
-  }    // end while loop
+  }  // end while loop
 
   // The entire while loop completed. This means that all the children returned SUCCESS.
   if(current_child_idx_ == children_count)

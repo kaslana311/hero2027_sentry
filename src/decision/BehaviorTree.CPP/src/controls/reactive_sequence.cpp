@@ -82,7 +82,7 @@ NodeStatus ReactiveSequence::tick()
         throw LogicError("[", name(), "]: A children should not return IDLE");
       }
     }  // end switch
-  }    //end for
+  }  //end for
 
   resetChildren();
 

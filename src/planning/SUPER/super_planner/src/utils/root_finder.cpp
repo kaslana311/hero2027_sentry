@@ -1,6 +1,7 @@
 #include "utils/optimization/root_finder.h"
 
-int math_utils::RootFinderPriv::polyMod(double *u, double *v, double *r, int lu, int lv) {
+int math_utils::RootFinderPriv::polyMod(double *u, double *v, double *r, int lu,
+                                        int lv) {
     int orderu = lu - 1;
     int orderv = lv - 1;
 
@@ -55,8 +56,8 @@ double math_utils::RootFinderPriv::polyEval(double *p, int len, double x) {
     return retVal;
 }
 
-
-std::set<double> math_utils::RootFinderPriv::solveCub(double a, double b, double c, double d) {
+std::set<double> math_utils::RootFinderPriv::solveCub(double a, double b,
+                                                      double c, double d) {
     std::set<double> roots;
 
     constexpr double cos120 = -0.50;
@@ -76,8 +77,7 @@ std::set<double> math_utils::RootFinderPriv::solveCub(double a, double b, double
     if (fabs(a) < DBL_EPSILON) {
         if (fabs(b) < DBL_EPSILON) {
             // Linear equation
-            if (fabs(c) > DBL_EPSILON)
-                roots.insert(-d / c);
+            if (fabs(c) > DBL_EPSILON) roots.insert(-d / c);
         } else {
             // Quadratic equation
             double discriminant = c * c - 4.0 * b * d;
@@ -95,7 +95,8 @@ std::set<double> math_utils::RootFinderPriv::solveCub(double a, double b, double
         double bb = b * b;
         double bover3a = b * (1.0 / 3.0) * inva;
         double p = (3.0 * a * c - bb) * (1.0 / 3.0) * invaa;
-        double halfq = (2.0 * bb * b - 9.0 * a * b * c + 27.0 * a * a * d) * (0.5 / 27.0) * invaa * inva;
+        double halfq = (2.0 * bb * b - 9.0 * a * b * c + 27.0 * a * a * d) *
+                       (0.5 / 27.0) * invaa * inva;
         double yy = p * p * p / 27.0 + halfq * halfq;
 
         if (yy > DBL_EPSILON) {
@@ -104,7 +105,8 @@ std::set<double> math_utils::RootFinderPriv::solveCub(double a, double b, double
             double uuu = -halfq + y;
             double vvv = -halfq - y;
             double www = fabs(uuu) > fabs(vvv) ? uuu : vvv;
-            double w = (www < 0) ? -pow(fabs(www), 1.0 / 3.0) : pow(www, 1.0 / 3.0);
+            double w =
+                (www < 0) ? -pow(fabs(www), 1.0 / 3.0) : pow(www, 1.0 / 3.0);
             roots.insert(w - p / (3.0 * w) - bover3a);
         } else if (yy < -DBL_EPSILON) {
             // Sqrt is negative: three real solutions
@@ -138,7 +140,8 @@ std::set<double> math_utils::RootFinderPriv::solveCub(double a, double b, double
         } else {
             // Sqrt is zero: two real solutions
             double www = -halfq;
-            double w = (www < 0.0) ? -pow(fabs(www), 1.0 / 3.0) : pow(www, 1.0 / 3.0);
+            double w =
+                (www < 0.0) ? -pow(fabs(www), 1.0 / 3.0) : pow(www, 1.0 / 3.0);
             // First solution
             roots.insert(w + w - bover3a);
             // Second solution, rotate +120 degrees
@@ -148,7 +151,8 @@ std::set<double> math_utils::RootFinderPriv::solveCub(double a, double b, double
     return roots;
 }
 
-int math_utils::RootFinderPriv::solveResolvent(double *x, double a, double b, double c) {
+int math_utils::RootFinderPriv::solveResolvent(double *x, double a, double b,
+                                               double c) {
     double a2 = a * a;
     double q = (a2 - 3.0 * b) / 9.0;
     double r = (a * (2.0 * a2 - 9.0 * b) + 27.0 * c) / 54.0;
@@ -190,7 +194,9 @@ int math_utils::RootFinderPriv::solveResolvent(double *x, double a, double b, do
     }
 }
 
-std::set<double> math_utils::RootFinderPriv::solveQuartMonic(double a, double b, double c, double d) {
+std::set<double> math_utils::RootFinderPriv::solveQuartMonic(double a, double b,
+                                                             double c,
+                                                             double d) {
     std::set<double> roots;
 
     double a3 = -b;
@@ -217,12 +223,13 @@ std::set<double> math_utils::RootFinderPriv::solveQuartMonic(double a, double b,
     // h1 + h2 = y && h1*h2 = d  <=>  h^2 - y*h + d = 0    (h === q)
 
     D = y * y - 4.0 * d;
-    if (fabs(D) < DBL_EPSILON) //In other words: D == 0
+    if (fabs(D) < DBL_EPSILON)  // In other words: D == 0
     {
         q1 = q2 = y * 0.5;
-        // g1 + g2 = a && g1 + g2 = b - y   <=>   g^2 - a*g + b - y = 0    (p === g)
+        // g1 + g2 = a && g1 + g2 = b - y   <=>   g^2 - a*g + b - y = 0    (p
+        // === g)
         D = a * a - 4.0 * (b - y);
-        if (fabs(D) < DBL_EPSILON) //In other words: D == 0
+        if (fabs(D) < DBL_EPSILON)  // In other words: D == 0
         {
             p1 = p2 = a * 0.5;
         } else {
@@ -262,7 +269,9 @@ std::set<double> math_utils::RootFinderPriv::solveQuartMonic(double a, double b,
     return roots;
 }
 
-std::set<double> math_utils::RootFinderPriv::solveQuart(double a, double b, double c, double d, double e) {
+std::set<double> math_utils::RootFinderPriv::solveQuart(double a, double b,
+                                                        double c, double d,
+                                                        double e) {
     if (fabs(a) < DBL_EPSILON) {
         return solveCub(b, c, d, e);
     } else {
@@ -270,12 +279,11 @@ std::set<double> math_utils::RootFinderPriv::solveQuart(double a, double b, doub
     }
 }
 
-std::set<double>
-math_utils::RootFinderPriv::eigenSolveRealRoots(const Eigen::VectorXd &coeffs, double lbound, double ubound,
-                                                double tol) {
+std::set<double> math_utils::RootFinderPriv::eigenSolveRealRoots(
+    const Eigen::VectorXd &coeffs, double lbound, double ubound, double tol) {
     std::set<double> rts;
 
-    int order = (int) coeffs.size() - 1;
+    int order = (int)coeffs.size() - 1;
     Eigen::VectorXd monicCoeffs(order + 1);
     monicCoeffs << 1.0, coeffs.tail(order) / coeffs(0);
 
@@ -298,7 +306,8 @@ math_utils::RootFinderPriv::eigenSolveRealRoots(const Eigen::VectorXd &coeffs, d
     return rts;
 }
 
-double math_utils::RootFinderPriv::numSignVar(double x, double **sturmSeqs, int *szSeq, int len) {
+double math_utils::RootFinderPriv::numSignVar(double x, double **sturmSeqs,
+                                              int *szSeq, int len) {
     double y, lasty;
     int signVar = 0;
     lasty = polyEval(sturmSeqs[0], szSeq[0], x);
@@ -313,7 +322,8 @@ double math_utils::RootFinderPriv::numSignVar(double x, double **sturmSeqs, int 
     return signVar;
 };
 
-void math_utils::RootFinderPriv::polyDeri(double *coeffs, double *dcoeffs, int len) {
+void math_utils::RootFinderPriv::polyDeri(double *coeffs, double *dcoeffs,
+                                          int len) {
     int horder = len - 1;
     for (int i = 0; i < horder; i++) {
         dcoeffs[i] = (horder - i) * coeffs[i];
@@ -321,9 +331,11 @@ void math_utils::RootFinderPriv::polyDeri(double *coeffs, double *dcoeffs, int l
     return;
 }
 
-template<typename F, typename DF>
-double math_utils::RootFinderPriv::safeNewton(const F &func, const DF &dfunc, const double &l, const double &h,
-                                              const double &tol, const int &maxIts) {
+template <typename F, typename DF>
+double math_utils::RootFinderPriv::safeNewton(const F &func, const DF &dfunc,
+                                              const double &l, const double &h,
+                                              const double &tol,
+                                              const int &maxIts) {
     double xh, xl;
     double fl = func(l);
     double fh = func(h);
@@ -382,20 +394,28 @@ double math_utils::RootFinderPriv::safeNewton(const F &func, const DF &dfunc, co
     return rts;
 }
 
-double
-math_utils::RootFinderPriv::shrinkInterval(double *coeffs, int numCoeffs, double lbound, double ubound, double tol) {
+double math_utils::RootFinderPriv::shrinkInterval(double *coeffs, int numCoeffs,
+                                                  double lbound, double ubound,
+                                                  double tol) {
     double *dcoeffs = new double[numCoeffs - 1];
     polyDeri(coeffs, dcoeffs, numCoeffs);
-    auto func = [&coeffs, &numCoeffs](double x) { return polyEval(coeffs, numCoeffs, x); };
-    auto dfunc = [&dcoeffs, &numCoeffs](double x) { return polyEval(dcoeffs, numCoeffs - 1, x); };
+    auto func = [&coeffs, &numCoeffs](double x) {
+        return polyEval(coeffs, numCoeffs, x);
+    };
+    auto dfunc = [&dcoeffs, &numCoeffs](double x) {
+        return polyEval(dcoeffs, numCoeffs - 1, x);
+    };
     constexpr int maxDblIts = 128;
     double rts = safeNewton(func, dfunc, lbound, ubound, tol, maxDblIts);
     delete[] dcoeffs;
     return rts;
 }
 
-void math_utils::RootFinderPriv::recurIsolate(double l, double r, double fl, double fr, int lnv, int rnv, double tol,
-                                              double **sturmSeqs, int *szSeq, int len, std::set<double> &rts) {
+void math_utils::RootFinderPriv::recurIsolate(double l, double r, double fl,
+                                              double fr, int lnv, int rnv,
+                                              double tol, double **sturmSeqs,
+                                              int *szSeq, int len,
+                                              std::set<double> &rts) {
     int nrts = lnv - rnv;
     double fm;
     double m;
@@ -413,7 +433,8 @@ void math_utils::RootFinderPriv::recurIsolate(double l, double r, double fl, dou
             for (int i = 0; i < maxDblIts; i++) {
                 // Calculate the root with even multiplicity
                 if (fl * fr < 0) {
-                    rts.insert(shrinkInterval(sturmSeqs[1], szSeq[1], l, r, tol));
+                    rts.insert(
+                        shrinkInterval(sturmSeqs[1], szSeq[1], l, r, tol));
                     return;
                 }
 
@@ -463,8 +484,10 @@ void math_utils::RootFinderPriv::recurIsolate(double l, double r, double fl, dou
                     bias++;
                     biased = true;
                 } else if (lnv != mnv && rnv != mnv) {
-                    recurIsolate(l, m, fl, fm, lnv, mnv, tol, sturmSeqs, szSeq, len, rts);
-                    recurIsolate(m, r, fm, fr, mnv, rnv, tol, sturmSeqs, szSeq, len, rts);
+                    recurIsolate(l, m, fl, fm, lnv, mnv, tol, sturmSeqs, szSeq,
+                                 len, rts);
+                    recurIsolate(m, r, fm, fr, mnv, rnv, tol, sturmSeqs, szSeq,
+                                 len, rts);
                     return;
                 } else if (lnv == mnv) {
                     l = m;
@@ -481,12 +504,12 @@ void math_utils::RootFinderPriv::recurIsolate(double l, double r, double fl, dou
     }
 };
 
-std::set<double>
-math_utils::RootFinderPriv::isolateRealRoots(const Eigen::VectorXd &coeffs, double lbound, double ubound, double tol) {
+std::set<double> math_utils::RootFinderPriv::isolateRealRoots(
+    const Eigen::VectorXd &coeffs, double lbound, double ubound, double tol) {
     std::set<double> rts;
 
     // Calculate monic coefficients
-    int order = (int) coeffs.size() - 1;
+    int order = (int)coeffs.size() - 1;
     Eigen::VectorXd monicCoeffs(order + 1);
     monicCoeffs << 1.0, coeffs.tail(order) / coeffs(0);
 
@@ -505,8 +528,10 @@ math_utils::RootFinderPriv::isolateRealRoots(const Eigen::VectorXd &coeffs, doub
         }
     }
     nonzeroCoeffs = nonzeroCoeffs.head(nonzeros).eval();
-    Eigen::VectorXd kojimaVec = nonzeroCoeffs.tail(nonzeros - 1).cwiseQuotient(
-            nonzeroCoeffs.head(nonzeros - 1)).cwiseAbs();
+    Eigen::VectorXd kojimaVec =
+        nonzeroCoeffs.tail(nonzeros - 1)
+            .cwiseQuotient(nonzeroCoeffs.head(nonzeros - 1))
+            .cwiseAbs();
     kojimaVec.tail(1) /= 2.0;
     double rho_k = 2.0 * kojimaVec.maxCoeff();
 
@@ -519,8 +544,10 @@ math_utils::RootFinderPriv::isolateRealRoots(const Eigen::VectorXd &coeffs, doub
 
     // Build Sturm sequence
     int len = monicCoeffs.size();
-    double sturmSeqs[(RootFinderParam::highestOrder + 1) * (RootFinderParam::highestOrder + 1)];
-    int szSeq[RootFinderParam::highestOrder + 1] = {0}; // Explicit ini as zero (gcc may neglect this in -O3)
+    double sturmSeqs[(RootFinderParam::highestOrder + 1) *
+                     (RootFinderParam::highestOrder + 1)];
+    int szSeq[RootFinderParam::highestOrder + 1] = {
+        0};  // Explicit ini as zero (gcc may neglect this in -O3)
     double *offsetSeq[RootFinderParam::highestOrder + 1];
     int num = 0;
 
@@ -538,8 +565,7 @@ math_utils::RootFinderPriv::isolateRealRoots(const Eigen::VectorXd &coeffs, doub
     bool remainderConstant = false;
     int idx = 0;
     while (!remainderConstant) {
-        szSeq[idx + 2] = polyMod(offsetSeq[idx],
-                                 offsetSeq[idx + 1],
+        szSeq[idx + 2] = polyMod(offsetSeq[idx], offsetSeq[idx + 1],
                                  &(sturmSeqs[(idx + 3) * len - szSeq[idx]]),
                                  szSeq[idx], szSeq[idx + 1]);
         offsetSeq[idx + 2] = sturmSeqs + (idx + 3) * len - szSeq[idx + 2];
@@ -554,18 +580,16 @@ math_utils::RootFinderPriv::isolateRealRoots(const Eigen::VectorXd &coeffs, doub
     }
 
     // Isolate all distinct roots inside the open interval recursively
-    recurIsolate(lbound, ubound,
-                 polyEval(offsetSeq[0], szSeq[0], lbound),
+    recurIsolate(lbound, ubound, polyEval(offsetSeq[0], szSeq[0], lbound),
                  polyEval(offsetSeq[0], szSeq[0], ubound),
                  numSignVar(lbound, offsetSeq, szSeq, len),
-                 numSignVar(ubound, offsetSeq, szSeq, len),
-                 tol, offsetSeq, szSeq, len, rts);
+                 numSignVar(ubound, offsetSeq, szSeq, len), tol, offsetSeq,
+                 szSeq, len, rts);
 
     return rts;
 }
 
-
-Eigen::VectorXd math_utils::RootFinder::polySqr(const Eigen::VectorXd &coef)       {
+Eigen::VectorXd math_utils::RootFinder::polySqr(const Eigen::VectorXd &coef) {
     int coefSize = coef.size();
     int resultSize = coefSize * 2 - 1;
     int lbound, rbound;
@@ -577,12 +601,12 @@ Eigen::VectorXd math_utils::RootFinder::polySqr(const Eigen::VectorXd &coef)    
         lbound = lbound > 0 ? lbound : 0;
         rbound = coefSize < (i + 1) ? coefSize : (i + 1);
         rbound += lbound;
-        if (rbound & 1) //faster than rbound % 2 == 1
+        if (rbound & 1)  // faster than rbound % 2 == 1
         {
-            rbound >>= 1; //faster than rbound /= 2
+            rbound >>= 1;  // faster than rbound /= 2
             temp += coef(rbound) * coef(rbound);
         } else {
-            rbound >>= 1; //faster than rbound /= 2
+            rbound >>= 1;  // faster than rbound /= 2
         }
 
         for (int j = lbound; j < rbound; j++) {
@@ -594,10 +618,10 @@ Eigen::VectorXd math_utils::RootFinder::polySqr(const Eigen::VectorXd &coef)    
     return result;
 }
 
-
-double math_utils::RootFinder::polyVal(const Eigen::VectorXd &coeffs, double x, bool numericalStability)   {
+double math_utils::RootFinder::polyVal(const Eigen::VectorXd &coeffs, double x,
+                                       bool numericalStability) {
     double retVal = 0.0;
-    int order = (int) coeffs.size() - 1;
+    int order = (int)coeffs.size() - 1;
 
     if (order >= 0) {
         if (fabs(x) < DBL_EPSILON) {
@@ -625,7 +649,8 @@ double math_utils::RootFinder::polyVal(const Eigen::VectorXd &coeffs, double x, 
     return retVal;
 }
 
-int math_utils::RootFinder::countRoots(const Eigen::VectorXd &coeffs, double l, double r)         {
+int math_utils::RootFinder::countRoots(const Eigen::VectorXd &coeffs, double l,
+                                       double r) {
     int nRoots = 0;
 
     int originalSize = coeffs.size();
@@ -640,14 +665,17 @@ int math_utils::RootFinder::countRoots(const Eigen::VectorXd &coeffs, double l, 
 
     if (valid > 0 && fabs(coeffs(originalSize - 1)) > DBL_EPSILON) {
         Eigen::VectorXd monicCoeffs(valid);
-        monicCoeffs << 1.0, coeffs.segment(originalSize - valid + 1, valid - 1) / coeffs(originalSize - valid);
+        monicCoeffs << 1.0,
+            coeffs.segment(originalSize - valid + 1, valid - 1) /
+                coeffs(originalSize - valid);
 
         // Build the Sturm sequence
         int len = monicCoeffs.size();
         int order = len - 1;
-        double sturmSeqs[(RootFinderParam::highestOrder + 1) * (RootFinderParam::highestOrder + 1)];
-        int szSeq[
-                RootFinderParam::highestOrder + 1] = {0}; // Explicit ini as zero (gcc may neglect this in -O3)
+        double sturmSeqs[(RootFinderParam::highestOrder + 1) *
+                         (RootFinderParam::highestOrder + 1)];
+        int szSeq[RootFinderParam::highestOrder + 1] = {
+            0};  // Explicit ini as zero (gcc may neglect this in -O3)
         int num = 0;
 
         for (int i = 0; i < len; i++) {
@@ -661,27 +689,33 @@ int math_utils::RootFinder::countRoots(const Eigen::VectorXd &coeffs, double l, 
         bool remainderConstant = false;
         int idx = 0;
         while (!remainderConstant) {
-            szSeq[idx + 2] = RootFinderPriv::polyMod(&(sturmSeqs[(idx + 1) * len - szSeq[idx]]),
-                                                     &(sturmSeqs[(idx + 2) * len - szSeq[idx + 1]]),
-                                                     &(sturmSeqs[(idx + 3) * len - szSeq[idx]]),
-                                                     szSeq[idx], szSeq[idx + 1]);
+            szSeq[idx + 2] = RootFinderPriv::polyMod(
+                &(sturmSeqs[(idx + 1) * len - szSeq[idx]]),
+                &(sturmSeqs[(idx + 2) * len - szSeq[idx + 1]]),
+                &(sturmSeqs[(idx + 3) * len - szSeq[idx]]), szSeq[idx],
+                szSeq[idx + 1]);
             remainderConstant = szSeq[idx + 2] == 1;
             for (int i = 1; i < szSeq[idx + 2]; i++) {
-                sturmSeqs[(idx + 3) * len - szSeq[idx + 2] + i] /= -fabs(
-                        sturmSeqs[(idx + 3) * len - szSeq[idx + 2]]);
+                sturmSeqs[(idx + 3) * len - szSeq[idx + 2] + i] /=
+                    -fabs(sturmSeqs[(idx + 3) * len - szSeq[idx + 2]]);
             }
-            sturmSeqs[(idx + 3) * len - szSeq[idx + 2]] /= -fabs(sturmSeqs[(idx + 3) * len - szSeq[idx + 2]]);
+            sturmSeqs[(idx + 3) * len - szSeq[idx + 2]] /=
+                -fabs(sturmSeqs[(idx + 3) * len - szSeq[idx + 2]]);
             num++;
             idx++;
         }
 
         // Count numbers of sign variations at two boundaries
         double yl, lastyl, yr, lastyr;
-        lastyl = RootFinderPriv::polyEval(&(sturmSeqs[len - szSeq[0]]), szSeq[0], l);
-        lastyr = RootFinderPriv::polyEval(&(sturmSeqs[len - szSeq[0]]), szSeq[0], r);
+        lastyl =
+            RootFinderPriv::polyEval(&(sturmSeqs[len - szSeq[0]]), szSeq[0], l);
+        lastyr =
+            RootFinderPriv::polyEval(&(sturmSeqs[len - szSeq[0]]), szSeq[0], r);
         for (int i = 1; i < num; i++) {
-            yl = RootFinderPriv::polyEval(&(sturmSeqs[(i + 1) * len - szSeq[i]]), szSeq[i], l);
-            yr = RootFinderPriv::polyEval(&(sturmSeqs[(i + 1) * len - szSeq[i]]), szSeq[i], r);
+            yl = RootFinderPriv::polyEval(
+                &(sturmSeqs[(i + 1) * len - szSeq[i]]), szSeq[i], l);
+            yr = RootFinderPriv::polyEval(
+                &(sturmSeqs[(i + 1) * len - szSeq[i]]), szSeq[i], r);
             if (lastyl == 0.0 || lastyl * yl < 0.0) {
                 ++nRoots;
             }
@@ -696,9 +730,9 @@ int math_utils::RootFinder::countRoots(const Eigen::VectorXd &coeffs, double l, 
     return nRoots;
 }
 
-std::set<double>
-math_utils::RootFinder::solvePolynomial(const Eigen::VectorXd &coeffs, double lbound, double ubound, double tol,
-                                        bool isolation)    {
+std::set<double> math_utils::RootFinder::solvePolynomial(
+    const Eigen::VectorXd &coeffs, double lbound, double ubound, double tol,
+    bool isolation) {
     std::set<double> rts;
 
     int valid = coeffs.size();
@@ -731,15 +765,19 @@ math_utils::RootFinder::solvePolynomial(const Eigen::VectorXd &coeffs, double lb
     } else {
         Eigen::VectorXd ncoeffs(std::max(5, nonzeros));
         ncoeffs.setZero();
-        ncoeffs.tail(nonzeros) << coeffs.segment(coeffs.size() - valid, nonzeros);
+        ncoeffs.tail(nonzeros)
+            << coeffs.segment(coeffs.size() - valid, nonzeros);
 
         if (nonzeros <= 5) {
-            rts = RootFinderPriv::solveQuart(ncoeffs(0), ncoeffs(1), ncoeffs(2), ncoeffs(3), ncoeffs(4));
+            rts = RootFinderPriv::solveQuart(ncoeffs(0), ncoeffs(1), ncoeffs(2),
+                                             ncoeffs(3), ncoeffs(4));
         } else {
             if (isolation) {
-                rts = RootFinderPriv::isolateRealRoots(ncoeffs, lbound, ubound, tol);
+                rts = RootFinderPriv::isolateRealRoots(ncoeffs, lbound, ubound,
+                                                       tol);
             } else {
-                rts = RootFinderPriv::eigenSolveRealRoots(ncoeffs, lbound, ubound, tol);
+                rts = RootFinderPriv::eigenSolveRealRoots(ncoeffs, lbound,
+                                                          ubound, tol);
             }
         }
 

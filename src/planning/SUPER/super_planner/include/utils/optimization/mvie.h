@@ -6,33 +6,26 @@
 
 #include <data_structure/base/ellipsoid.h>
 
-
 namespace optimization_utils {
 
-    using namespace geometry_utils;
+using namespace geometry_utils;
 
-    class MVIE {
-    public:
-        MVIE() = default;
+class MVIE {
+   public:
+    MVIE() = default;
 
-        ~MVIE() = default;
+    ~MVIE() = default;
 
-        static void chol3d(const Eigen::Matrix3d &A,
-                           Eigen::Matrix3d &L);
+    static void chol3d(const Eigen::Matrix3d &A, Eigen::Matrix3d &L);
 
-        static bool smoothedL1(const double &mu,
-                               const double &x,
-                               double &f,
-                               double &df);
+    static bool smoothedL1(const double &mu, const double &x, double &f,
+                           double &df);
 
-        static double costMVIE(void *data,
-                               const Eigen::VectorXd &x,
-                               Eigen::VectorXd &grad);
+    static double costMVIE(void *data, const Eigen::VectorXd &x,
+                           Eigen::VectorXd &grad);
 
-        // R is also assumed to be a rotation matrix
-        static bool maxVolInsEllipsoid(const Eigen::MatrixX4d &hPoly,
-                                       Ellipsoid &ellipsoid);
-
-    };
-}
-
+    // R is also assumed to be a rotation matrix
+    static bool maxVolInsEllipsoid(const Eigen::MatrixX4d &hPoly,
+                                   Ellipsoid &ellipsoid);
+};
+}  // namespace optimization_utils

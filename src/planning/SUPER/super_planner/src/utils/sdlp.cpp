@@ -11,8 +11,7 @@ double sdlp::cross2(const double *a, const double *b) {
 }
 
 bool sdlp::unit2(const double *a, double *b) {
-    const double mag = std::sqrt(a[0] * a[0] +
-                                 a[1] * a[1]);
+    const double mag = std::sqrt(a[0] * a[0] + a[1] * a[1]);
     if (mag < 2.0 * eps) {
         return true;
     }
@@ -21,7 +20,7 @@ bool sdlp::unit2(const double *a, double *b) {
     return false;
 }
 
-template<int d>
+template <int d>
 bool sdlp::unit(double *a) {
     double mag = 0.0;
     for (int i = 0; i <= d; i++) {
@@ -37,7 +36,7 @@ bool sdlp::unit(double *a) {
     return false;
 }
 
-template<int d>
+template <int d>
 int sdlp::lp_no_con(const double *n_vec, const double *d_vec, double *opt) {
     double n_dot_d = 0.0;
     double d_dot_d = 0.0;
@@ -50,8 +49,7 @@ int sdlp::lp_no_con(const double *n_vec, const double *d_vec, double *opt) {
         d_dot_d = 1.0;
     }
     for (int i = 0; i <= d; i++) {
-        opt[i] = -n_vec[i] +
-                 d_vec[i] * n_dot_d / d_dot_d;
+        opt[i] = -n_vec[i] + d_vec[i] * n_dot_d / d_dot_d;
     }
     /* normalize the optimal point */
     if (unit<d>(opt)) {
@@ -61,7 +59,6 @@ int sdlp::lp_no_con(const double *n_vec, const double *d_vec, double *opt) {
         return MINIMUM;
     }
 }
-
 
 int sdlp::move_to_front(const int i, int *next, int *prev) {
     if (i == 0 || i == next[0]) {
@@ -79,7 +76,8 @@ int sdlp::move_to_front(const int i, int *next, int *prev) {
     return previ;
 }
 
-void sdlp::lp_min_lin_rat(const bool degen, const double *cw_vec, const double *ccw_vec, const double *n_vec,
+void sdlp::lp_min_lin_rat(const bool degen, const double *cw_vec,
+                          const double *ccw_vec, const double *n_vec,
                           const double *d_vec, double *opt) {
     /* linear rational function case */
     const double d_cw = dot2(cw_vec, d_vec);
@@ -96,8 +94,7 @@ void sdlp::lp_min_lin_rat(const bool degen, const double *cw_vec, const double *
             opt[1] = ccw_vec[1];
         }
         /* check CW/CCW bounds are not near a poles */
-    } else if (std::fabs(d_cw) > 2.0 * eps &&
-               std::fabs(d_ccw) > 2.0 * eps) {
+    } else if (std::fabs(d_cw) > 2.0 * eps && std::fabs(d_ccw) > 2.0 * eps) {
         /* the valid region does not contain a poles */
         if (d_cw * d_ccw > 0.0) {
             /* find which end has the minimum value */
@@ -152,8 +149,8 @@ void sdlp::lp_min_lin_rat(const bool degen, const double *cw_vec, const double *
     }
 }
 
-int sdlp::wedge(const double (*halves)[2], const int m, int *next, int *prev, double *cw_vec, double *ccw_vec,
-                bool *degen) {
+int sdlp::wedge(const double (*halves)[2], const int m, int *next, int *prev,
+                double *cw_vec, double *ccw_vec, bool *degen) {
     int i;
     double d_cw, d_ccw;
     bool offensive;
@@ -192,11 +189,9 @@ int sdlp::wedge(const double (*halves)[2], const int m, int *next, int *prev, do
                 unit2(ccw_vec, ccw_vec);
                 offensive = true;
             }
-        } else if (d_ccw <= -2.0 * eps &&
-                   d_cw <= -2.0 * eps) {
+        } else if (d_ccw <= -2.0 * eps && d_cw <= -2.0 * eps) {
             return INFEASIBLE;
-        } else if (d_cw <= -2.0 * eps ||
-                   d_ccw <= -2.0 * eps ||
+        } else if (d_cw <= -2.0 * eps || d_ccw <= -2.0 * eps ||
                    cross2(cw_vec, halves[i]) < 0.0) {
             /* degenerate */
             if (d_cw <= -2.0 * eps) {
@@ -237,7 +232,8 @@ int sdlp::wedge(const double (*halves)[2], const int m, int *next, int *prev, do
     return MINIMUM;
 }
 
-int sdlp::lp_base_case(const double (*halves)[2], const int m, const double *n_vec, const double *d_vec, double *opt,
+int sdlp::lp_base_case(const double (*halves)[2], const int m,
+                       const double *n_vec, const double *d_vec, double *opt,
                        int *next, int *prev) {
     double cw_vec[2], ccw_vec[2];
     bool degen;
@@ -249,7 +245,8 @@ int sdlp::lp_base_case(const double (*halves)[2], const int m, const double *n_v
     if (status == INFEASIBLE) {
         return status;
     }
-    /* no non-trivial constraints one the plane: return the unconstrained optimum */
+    /* no non-trivial constraints one the plane: return the unconstrained
+     * optimum */
     if (status == UNBOUNDED) {
         return lp_no_con<1>(n_vec, d_vec, opt);
     }
@@ -257,14 +254,15 @@ int sdlp::lp_base_case(const double (*halves)[2], const int m, const double *n_v
     if (std::fabs(cross2(n_vec, d_vec)) < 2.0 * eps * eps) {
         if (dot2(n_vec, n_vec) < 2.0 * eps * eps ||
             dot2(d_vec, d_vec) > 2.0 * eps * eps) {
-            /* numerator is zero or numerator and denominator are linearly dependent */
+            /* numerator is zero or numerator and denominator are linearly
+             * dependent */
             opt[0] = cw_vec[0];
             opt[1] = cw_vec[1];
             status = AMBIGUOUS;
         } else {
-            /* numerator is non-zero and denominator is zero minimize linear functional on circle */
-            if (!degen &&
-                cross2(cw_vec, n_vec) <= 0.0 &&
+            /* numerator is non-zero and denominator is zero minimize linear
+             * functional on circle */
+            if (!degen && cross2(cw_vec, n_vec) <= 0.0 &&
                 cross2(n_vec, ccw_vec) <= 0.0) {
                 /* optimum is in interior of feasible region */
                 opt[0] = -n_vec[0];
@@ -288,7 +286,7 @@ int sdlp::lp_base_case(const double (*halves)[2], const int m, const double *n_v
     return status;
 }
 
-template<int d>
+template <int d>
 void sdlp::findimax(const double *pln, int *imax) {
     *imax = 0;
     double rmax = std::fabs(pln[0]);
@@ -301,9 +299,9 @@ void sdlp::findimax(const double *pln, int *imax) {
     }
 }
 
-
-template<int d>
-void sdlp::vector_up(const double *equation, const int ivar, const double *low_vector, double *vector) {
+template <int d>
+void sdlp::vector_up(const double *equation, const int ivar,
+                     const double *low_vector, double *vector) {
     vector[ivar] = 0.0;
     for (int i = 0; i <= d; i++) {
         if (i != ivar) {
@@ -315,8 +313,9 @@ void sdlp::vector_up(const double *equation, const int ivar, const double *low_v
     vector[ivar] /= equation[ivar];
 }
 
-template<int d>
-void sdlp::vector_down(const double *elim_eqn, const int ivar, const double *old_vec, double *new_vec) {
+template <int d>
+void sdlp::vector_down(const double *elim_eqn, const int ivar,
+                       const double *old_vec, double *new_vec) {
     double ve = 0.0;
     double ee = 0.0;
     for (int i = 0; i <= d; i++) {
@@ -326,26 +325,26 @@ void sdlp::vector_down(const double *elim_eqn, const int ivar, const double *old
     const double fac = ve / ee;
     for (int i = 0; i <= d; i++) {
         if (i != ivar) {
-            new_vec[i < ivar ? i : i - 1] =
-                    old_vec[i] - elim_eqn[i] * fac;
+            new_vec[i < ivar ? i : i - 1] = old_vec[i] - elim_eqn[i] * fac;
         }
     }
 }
 
-template<int d>
-void sdlp::plane_down(const double *elim_eqn, const int ivar, const double *old_plane, double *new_plane) {
+template <int d>
+void sdlp::plane_down(const double *elim_eqn, const int ivar,
+                      const double *old_plane, double *new_plane) {
     const double crit = old_plane[ivar] / elim_eqn[ivar];
     for (int i = 0; i <= d; i++) {
         if (i != ivar) {
-            new_plane[i < ivar ? i : i - 1] =
-                    old_plane[i] - elim_eqn[i] * crit;
+            new_plane[i < ivar ? i : i - 1] = old_plane[i] - elim_eqn[i] * crit;
         }
     }
 }
 
-template<int d>
-int sdlp::linfracprog(const double *halves, const int max_size, const int m, const double *n_vec, const double *d_vec,
-                      double *opt, double *work, int *next, int *prev) {
+template <int d>
+int sdlp::linfracprog(const double *halves, const int max_size, const int m,
+                      const double *n_vec, const double *d_vec, double *opt,
+                      double *work, int *next, int *prev) {
     int status, imax;
     double *new_opt, *new_n_vec, *new_d_vec, *new_halves, *new_work;
     const double *plane_i;
@@ -369,7 +368,8 @@ int sdlp::linfracprog(const double *halves, const int max_size, const int m, con
     new_halves = new_d_vec + d;
     new_work = new_halves + max_size * d;
     for (int i = 0; i != m; i = next[i]) {
-        /* if the optimum is not in half space i then project the problem onto that plane */
+        /* if the optimum is not in half space i then project the problem onto
+         * that plane */
         plane_i = halves + i * (d + 1);
         /* determine if the optimum is on the correct side of plane_i */
         val = 0.0;
@@ -388,7 +388,9 @@ int sdlp::linfracprog(const double *halves, const int max_size, const int m, con
                     double *new_plane = new_halves + j * d;
                     for (int k = 0; k <= d; k++) {
                         const int l = k < imax ? k : k - 1;
-                        new_plane[l] = k != imax ? old_plane[k] - plane_i[k] * crit : new_plane[l];
+                        new_plane[l] = k != imax
+                                           ? old_plane[k] - plane_i[k] * crit
+                                           : new_plane[l];
                     }
                 }
             }
@@ -403,8 +405,9 @@ int sdlp::linfracprog(const double *halves, const int max_size, const int m, con
                 plane_down<d>(plane_i, imax, d_vec, new_d_vec);
             }
             /* solve sub problem */
-            status = linfracprog < d - 1 > (new_halves, max_size, i, new_n_vec,
-                    new_d_vec, new_opt, new_work, next, prev);
+            status =
+                linfracprog<d - 1>(new_halves, max_size, i, new_n_vec,
+                                   new_d_vec, new_opt, new_work, next, prev);
             /* back substitution */
             if (status != INFEASIBLE) {
                 vector_up<d>(plane_i, imax, new_opt, opt);
@@ -428,13 +431,13 @@ int sdlp::linfracprog(const double *halves, const int max_size, const int m, con
     return status;
 }
 
-template<>
-int
-sdlp::linfracprog<1>(const double *halves, const int max_size, const int m, const double *n_vec, const double *d_vec,
-                     double *opt, double *work, int *next, int *prev) {
+template <>
+int sdlp::linfracprog<1>(const double *halves, const int max_size, const int m,
+                         const double *n_vec, const double *d_vec, double *opt,
+                         double *work, int *next, int *prev) {
     if (m > 0) {
-        return lp_base_case((const double (*)[2]) halves, m,
-                            n_vec, d_vec, opt, next, prev);
+        return lp_base_case((const double (*)[2])halves, m, n_vec, d_vec, opt,
+                            next, prev);
     } else {
         return lp_no_con<1>(n_vec, d_vec, opt);
     }
@@ -458,9 +461,11 @@ void sdlp::rand_permutation(const int n, int *p) {
     }
 }
 
-template<int d>
-double sdlp::linprog(const Eigen::Matrix<double, d, 1> &c, const Eigen::Matrix<double, -1, d> &A,
-                     const Eigen::Matrix<double, -1, 1> &b, Eigen::Matrix<double, d, 1> &x) {
+template <int d>
+double sdlp::linprog(const Eigen::Matrix<double, d, 1> &c,
+                     const Eigen::Matrix<double, -1, d> &A,
+                     const Eigen::Matrix<double, -1, 1> &b,
+                     Eigen::Matrix<double, d, 1> &x) {
     int m = b.size() + 1;
     x.setZero();
     if (m <= 1) {
@@ -469,7 +474,8 @@ double sdlp::linprog(const Eigen::Matrix<double, d, 1> &c, const Eigen::Matrix<d
 
     Eigen::VectorXi perm(m - 1);
     Eigen::VectorXi next(m);
-    /* original allocated size is m, here changed to m + 1 for legal tail accessing */
+    /* original allocated size is m, here changed to m + 1 for legal tail
+     * accessing */
     Eigen::VectorXi prev(m + 1);
     Eigen::Matrix<double, d + 1, 1> n_vec;
     Eigen::Matrix<double, d + 1, 1> d_vec;
@@ -503,10 +509,9 @@ double sdlp::linprog(const Eigen::Matrix<double, d, 1> &c, const Eigen::Matrix<d
     /* flag the last plane */
     next(perm(m - 2) + 1) = m;
 
-    int status = sdlp::linfracprog<d>(halves.data(), m, m,
-                                      n_vec.data(), d_vec.data(),
-                                      opt.data(), work.data(),
-                                      next.data(), prev.data());
+    int status =
+        sdlp::linfracprog<d>(halves.data(), m, m, n_vec.data(), d_vec.data(),
+                             opt.data(), work.data(), next.data(), prev.data());
 
     /* handle states for linprog whose definitions differ from linfracprog */
     double minimum = INFINITY;
@@ -525,8 +530,12 @@ double sdlp::linprog(const Eigen::Matrix<double, d, 1> &c, const Eigen::Matrix<d
     return minimum;
 }
 
-template double sdlp::linprog<1>(const Eigen::Matrix<double, 1, 1> &c, const Eigen::Matrix<double, -1, 1> &A,
-                                 const Eigen::Matrix<double, -1, 1> &b, Eigen::Matrix<double, 1, 1> &x);
+template double sdlp::linprog<1>(const Eigen::Matrix<double, 1, 1> &c,
+                                 const Eigen::Matrix<double, -1, 1> &A,
+                                 const Eigen::Matrix<double, -1, 1> &b,
+                                 Eigen::Matrix<double, 1, 1> &x);
 
-template double sdlp::linprog<4>(const Eigen::Matrix<double, 4, 1> &c, const Eigen::Matrix<double, -1, 4> &A,
-                                 const Eigen::Matrix<double, -1, 1> &b, Eigen::Matrix<double, 4, 1> &x);
+template double sdlp::linprog<4>(const Eigen::Matrix<double, 4, 1> &c,
+                                 const Eigen::Matrix<double, -1, 4> &A,
+                                 const Eigen::Matrix<double, -1, 1> &b,
+                                 Eigen::Matrix<double, 4, 1> &x);

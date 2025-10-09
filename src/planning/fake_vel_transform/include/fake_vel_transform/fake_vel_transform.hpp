@@ -30,43 +30,44 @@
 
 namespace fake_vel_transform {
 class FakeVelTransform : public rclcpp::Node {
- public:
-  explicit FakeVelTransform(const rclcpp::NodeOptions& options);
+   public:
+    explicit FakeVelTransform(const rclcpp::NodeOptions& options);
 
- private:
-  void syncCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& odom,
-                    const nav_msgs::msg::Path::ConstSharedPtr& local_plan);
-  void odometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& msg);
-  void localPlanCallback(const nav_msgs::msg::Path::ConstSharedPtr& msg);
-  void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
+   private:
+    void syncCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& odom,
+                      const nav_msgs::msg::Path::ConstSharedPtr& local_plan);
+    void odometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& msg);
+    void localPlanCallback(const nav_msgs::msg::Path::ConstSharedPtr& msg);
+    void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
 
-  geometry_msgs::msg::Twist transformVelocity(
-      const geometry_msgs::msg::Twist::SharedPtr& twist, float yaw_diff);
+    geometry_msgs::msg::Twist transformVelocity(
+        const geometry_msgs::msg::Twist::SharedPtr& twist, float yaw_diff);
 
-  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
 
-  message_filters::Subscriber<nav_msgs::msg::Odometry> odom_sub_filter_;
-  message_filters::Subscriber<nav_msgs::msg::Path> local_plan_sub_filter_;
-  using SyncPolicy =
-      message_filters::sync_policies::ApproximateTime<nav_msgs::msg::Odometry,
-                                                      nav_msgs::msg::Path>;
-  std::unique_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
+    message_filters::Subscriber<nav_msgs::msg::Odometry> odom_sub_filter_;
+    message_filters::Subscriber<nav_msgs::msg::Path> local_plan_sub_filter_;
+    using SyncPolicy =
+        message_filters::sync_policies::ApproximateTime<nav_msgs::msg::Odometry,
+                                                        nav_msgs::msg::Path>;
+    std::unique_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
 
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_chassis_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr
+        cmd_vel_chassis_pub_;
 
-//   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+    //   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
-  std::string base_link_;
-  std::string fake_base_link_;
-  std::string odom_topic_;
-  std::string local_plan_topic_;
-  std::string input_cmd_vel_topic_;
-  std::string output_cmd_vel_topic_;
+    std::string base_link_;
+    std::string fake_base_link_;
+    std::string odom_topic_;
+    std::string local_plan_topic_;
+    std::string input_cmd_vel_topic_;
+    std::string output_cmd_vel_topic_;
 
-  std::mutex cmd_vel_mutex_;
-  geometry_msgs::msg::Twist::SharedPtr latest_cmd_vel_;
-  double current_robot_base_angle_;
-  rclcpp::Time last_controller_activate_time_;
+    std::mutex cmd_vel_mutex_;
+    geometry_msgs::msg::Twist::SharedPtr latest_cmd_vel_;
+    double current_robot_base_angle_;
+    rclcpp::Time last_controller_activate_time_;
 };
 
 }  // namespace fake_vel_transform

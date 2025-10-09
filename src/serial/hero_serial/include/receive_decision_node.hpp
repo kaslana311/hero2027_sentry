@@ -8,23 +8,19 @@
 #include "serial_interfaces/msg/gimbaldecision.hpp"
 
 class ReceiveDecisionNode : public rclcpp::Node {
- public:
-  ReceiveDecisionNode();
-  ~ReceiveDecisionNode() = default;
+   public:
+    ReceiveDecisionNode();
+    ~ReceiveDecisionNode() = default;
 
- private:
-  BoostAsio boost_asio_;
-  SendGimbalParser parser_;
+   private:
+    BoostAsio boost_asio_;
+    SendGimbalParser parser_;
 
-  // serial_interfaces::msg::Gimbaldecision::SharedPtr gimbal_decision_;
-  rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::Publisher<serial_interfaces::msg::Gimbaldecision>::SharedPtr decision_pub_;
-  void TimerCallback();
+    // serial_interfaces::msg::Gimbaldecision::SharedPtr gimbal_decision_;
+    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Publisher<serial_interfaces::msg::Gimbaldecision>::SharedPtr
+        decision_pub_;
+    void TimerCallback();
     // 查找帧头
-  size_t FindFrameHeader(const std::vector<uint8_t>& data);
-
-
-  
-
-
+    size_t FindFrameHeader(const std::vector<uint8_t>& data);
 };

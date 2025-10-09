@@ -13,127 +13,129 @@
 #include <vector>
 
 class AsyncSerialPort {
- public:
-  AsyncSerialPort(const std::string& port, unsigned int baud_rate = 115200,
-                  size_t read_buffer_size = 1024)
-      : io_context_(),
-        serial_port_(io_context_),
-        read_buffer_(read_buffer_size) {
-    Open(port, baud_rate);
-    StartIoThread();
-  }
-
-  ~AsyncSerialPort() { Close(); }
-
-  // 异步写接口
-  void WriteAsync(const std::vector<uint8_t>& data) {
-    {
-      std::lock_guard<std::mutex> lock(write_mutex_);
-      write_queue_.push(data);
+   public:
+    AsyncSerialPort(const std::string& port, unsigned int baud_rate = 115200,
+                    size_t read_buffer_size = 1024)
+        : io_context_(),
+          serial_port_(io_context_),
+          read_buffer_(read_buffer_size) {
+        Open(port, baud_rate);
+        StartIoThread();
     }
 
-    if (!is_writing_) {
-      StartWrite();
-    }
-  }
+    ~AsyncSerialPort() { Close(); }
 
-  // 获取已接收数据（清空缓冲区）
-  std::vector<uint8_t> ReadBufferedData() {
-    std::lock_guard<std::mutex> lock(receive_mutex_);
-    std::vector<uint8_t> data;
-    data.swap(receive_buffer_);
-    return data;
-  }
+    // 异步写接口
+    void WriteAsync(const std::vector<uint8_t>& data) {
+        {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            write_queue_.push(data);
+        }
 
- private:
-  void Open(const std::string& port, unsigned int baud_rate) {
-    try {
-      serial_port_.open(port);
-      serial_port_.set_option(
-          boost::asio::serial_port_base::baud_rate(baud_rate));
-      serial_port_.set_option(boost::asio::serial_port_base::character_size(8));
-      serial_port_.set_option(boost::asio::serial_port_base::stop_bits(
-          boost::asio::serial_port_base::stop_bits::one));
-      serial_port_.set_option(boost::asio::serial_port_base::parity(
-          boost::asio::serial_port_base::parity::none));
-      StartRead();
-    } catch (const boost::system::system_error& e) {
-      throw std::runtime_error("Serial open failed: " + std::string(e.what()));
-    }
-  }
-
-  void Close() {
-    io_context_.stop();
-    if (io_thread_.joinable()) {
-      io_thread_.join();
-    }
-    boost::system::error_code ec;
-    serial_port_.close(ec);
-  }
-
-  void StartIoThread() {
-    io_thread_ = std::thread([this]() { io_context_.run(); });
-  }
-
-  void StartRead() {
-    serial_port_.async_read_some(
-        boost::asio::buffer(read_buffer_),
-        boost::bind(&AsyncSerialPort::HandleRead, this,
-                    boost::asio::placeholders::error,
-                    boost::asio::placeholders::bytes_transferred));
-  }
-
-  void HandleRead(const boost::system::error_code& ec,
-                  size_t bytes_transferred) {
-    if (!ec && bytes_transferred > 0) {
-      std::lock_guard<std::mutex> lock(receive_mutex_);
-      receive_buffer_.insert(receive_buffer_.end(), read_buffer_.begin(),
-                             read_buffer_.begin() + bytes_transferred);
-    }
-    StartRead();  // 持续读取
-  }
-
-  void StartWrite() {
-    std::lock_guard<std::mutex> lock(write_mutex_);
-    if (write_queue_.empty()) {
-      is_writing_ = false;
-      return;
+        if (!is_writing_) {
+            StartWrite();
+        }
     }
 
-    is_writing_ = true;
-    auto data = write_queue_.front();
-    write_queue_.pop();
-
-    boost::asio::async_write(
-        serial_port_, boost::asio::buffer(data),
-        boost::bind(&AsyncSerialPort::HandleWrite, this,
-                    boost::asio::placeholders::error,
-                    boost::asio::placeholders::bytes_transferred));
-  }
-
-  void HandleWrite(const boost::system::error_code& ec, size_t) {
-    if (!ec) {
-      StartWrite();  // 继续写入队列数据
-    } else {
-      std::lock_guard<std::mutex> lock(write_mutex_);
-      is_writing_ = false;
+    // 获取已接收数据（清空缓冲区）
+    std::vector<uint8_t> ReadBufferedData() {
+        std::lock_guard<std::mutex> lock(receive_mutex_);
+        std::vector<uint8_t> data;
+        data.swap(receive_buffer_);
+        return data;
     }
-  }
 
-  // IO成员
-  boost::asio::io_context io_context_;
-  boost::asio::serial_port serial_port_;
-  std::thread io_thread_;
+   private:
+    void Open(const std::string& port, unsigned int baud_rate) {
+        try {
+            serial_port_.open(port);
+            serial_port_.set_option(
+                boost::asio::serial_port_base::baud_rate(baud_rate));
+            serial_port_.set_option(
+                boost::asio::serial_port_base::character_size(8));
+            serial_port_.set_option(boost::asio::serial_port_base::stop_bits(
+                boost::asio::serial_port_base::stop_bits::one));
+            serial_port_.set_option(boost::asio::serial_port_base::parity(
+                boost::asio::serial_port_base::parity::none));
+            StartRead();
+        } catch (const boost::system::system_error& e) {
+            throw std::runtime_error("Serial open failed: " +
+                                     std::string(e.what()));
+        }
+    }
 
-  // 接收相关
-  std::vector<uint8_t> read_buffer_;
-  std::vector<uint8_t> receive_buffer_;
-  std::mutex receive_mutex_;
+    void Close() {
+        io_context_.stop();
+        if (io_thread_.joinable()) {
+            io_thread_.join();
+        }
+        boost::system::error_code ec;
+        serial_port_.close(ec);
+    }
 
-  // 发送相关
-  std::mutex write_mutex_;
-  std::queue<std::vector<uint8_t>> write_queue_;
-  bool is_writing_ = false;
+    void StartIoThread() {
+        io_thread_ = std::thread([this]() { io_context_.run(); });
+    }
+
+    void StartRead() {
+        serial_port_.async_read_some(
+            boost::asio::buffer(read_buffer_),
+            boost::bind(&AsyncSerialPort::HandleRead, this,
+                        boost::asio::placeholders::error,
+                        boost::asio::placeholders::bytes_transferred));
+    }
+
+    void HandleRead(const boost::system::error_code& ec,
+                    size_t bytes_transferred) {
+        if (!ec && bytes_transferred > 0) {
+            std::lock_guard<std::mutex> lock(receive_mutex_);
+            receive_buffer_.insert(receive_buffer_.end(), read_buffer_.begin(),
+                                   read_buffer_.begin() + bytes_transferred);
+        }
+        StartRead();  // 持续读取
+    }
+
+    void StartWrite() {
+        std::lock_guard<std::mutex> lock(write_mutex_);
+        if (write_queue_.empty()) {
+            is_writing_ = false;
+            return;
+        }
+
+        is_writing_ = true;
+        auto data = write_queue_.front();
+        write_queue_.pop();
+
+        boost::asio::async_write(
+            serial_port_, boost::asio::buffer(data),
+            boost::bind(&AsyncSerialPort::HandleWrite, this,
+                        boost::asio::placeholders::error,
+                        boost::asio::placeholders::bytes_transferred));
+    }
+
+    void HandleWrite(const boost::system::error_code& ec, size_t) {
+        if (!ec) {
+            StartWrite();  // 继续写入队列数据
+        } else {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            is_writing_ = false;
+        }
+    }
+
+    // IO成员
+    boost::asio::io_context io_context_;
+    boost::asio::serial_port serial_port_;
+    std::thread io_thread_;
+
+    // 接收相关
+    std::vector<uint8_t> read_buffer_;
+    std::vector<uint8_t> receive_buffer_;
+    std::mutex receive_mutex_;
+
+    // 发送相关
+    std::mutex write_mutex_;
+    std::queue<std::vector<uint8_t>> write_queue_;
+    bool is_writing_ = false;
 };
 
 // 使用案例

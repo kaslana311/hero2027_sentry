@@ -1,11 +1,11 @@
-#include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include "waypoint_mission/ros2_waypoint_planner.hpp"
 
 #define BACKWARD_HAS_DW 1
 #include "utils/backward.hpp"
-namespace backward{
-    backward::SignalHandling sh;
+namespace backward {
+backward::SignalHandling sh;
 }
 
 int main(int argc, char **argv) {

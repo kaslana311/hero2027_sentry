@@ -6,9 +6,11 @@
 
 #ifdef USE_ROS1
 #ifdef USE_ROS2
-#error "Cannot use both USE_ROS1 and USE_ROS2 at the same time. Please define only one."
+#error \
+    "Cannot use both USE_ROS1 and USE_ROS2 at the same time. Please define only one."
 #endif
 #endif
 
 #include "rog_map_ros/rog_map_ros1.hpp"
+
 #include "rog_map_ros/rog_map_ros2.hpp"

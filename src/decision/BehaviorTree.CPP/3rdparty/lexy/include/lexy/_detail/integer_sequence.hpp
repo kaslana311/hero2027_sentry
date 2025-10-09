@@ -11,7 +11,7 @@ namespace lexy::_detail
 template <typename T, T... Indices>
 struct integer_sequence
 {
-    using type = integer_sequence<T, Indices...>;
+  using type = integer_sequence<T, Indices...>;
 };
 template <std::size_t... Indices>
 using index_sequence = integer_sequence<std::size_t, Indices...>;
@@ -31,24 +31,25 @@ using make_index_sequence = __make_integer_seq<integer_sequence, std::size_t, Si
 template <class Sequence1, class Sequence2>
 struct concat_seq;
 template <std::size_t... I1, std::size_t... I2>
-struct concat_seq<index_sequence<I1...>, index_sequence<I2...>>
+struct concat_seq<index_sequence<I1...>, index_sequence<I2...> >
 {
-    using type = index_sequence<I1..., (sizeof...(I1) + I2)...>;
+  using type = index_sequence<I1..., (sizeof...(I1) + I2)...>;
 };
 
 template <size_t N>
 struct _make_index_sequence : concat_seq<typename _make_index_sequence<N / 2>::type,
                                          typename _make_index_sequence<N - N / 2>::type>
-{};
+{
+};
 template <>
 struct _make_index_sequence<0>
 {
-    using type = index_sequence<>;
+  using type = index_sequence<>;
 };
 template <>
 struct _make_index_sequence<1>
 {
-    using type = index_sequence<0>;
+  using type = index_sequence<0>;
 };
 
 template <std::size_t Size>
@@ -58,7 +59,6 @@ using make_index_sequence = typename _make_index_sequence<Size>::type;
 
 template <typename... T>
 using index_sequence_for = make_index_sequence<sizeof...(T)>;
-} // namespace lexy::_detail
+}  // namespace lexy::_detail
 
-#endif // LEXY_DETAIL_INTEGER_SEQUENCE_HPP_INCLUDED
-
+#endif  // LEXY_DETAIL_INTEGER_SEQUENCE_HPP_INCLUDED

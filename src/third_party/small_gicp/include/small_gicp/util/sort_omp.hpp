@@ -47,7 +47,9 @@ void merge_sort_omp(RandomAccessIterator first, RandomAccessIterator last, const
 #pragma omp parallel num_threads(num_threads)
   {
 #pragma omp single nowait
-    { merge_sort_omp_impl(first, last, comp); }
+    {
+      merge_sort_omp_impl(first, last, comp);
+    }
   }
 #else
   std::stable_sort(first, last, comp);
@@ -97,7 +99,9 @@ void quick_sort_omp(RandomAccessIterator first, RandomAccessIterator last, const
 #pragma omp parallel num_threads(num_threads)
   {
 #pragma omp single nowait
-    { quick_sort_omp_impl(first, last, comp); }
+    {
+      quick_sort_omp_impl(first, last, comp);
+    }
   }
 #else
   std::sort(first, last, comp);

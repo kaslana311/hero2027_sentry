@@ -150,8 +150,8 @@
   ZMQ_MAKE_VERSION(CPPZMQ_VERSION_MAJOR, CPPZMQ_VERSION_MINOR, CPPZMQ_VERSION_PATCH)
 
 //  Detect whether the compiler supports C++11 rvalue references.
-#if(defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 2)) &&      \
-    defined(__GXX_EXPERIMENTAL_CXX0X__))
+#if (defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 2)) &&     \
+     defined(__GXX_EXPERIMENTAL_CXX0X__))
 #define ZMQ_HAS_RVALUE_REFS
 #define ZMQ_DELETED_FUNCTION = delete
 #elif defined(__clang__)

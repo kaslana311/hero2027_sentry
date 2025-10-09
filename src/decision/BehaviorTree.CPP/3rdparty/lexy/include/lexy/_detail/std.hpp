@@ -15,7 +15,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 struct forward_iterator_tag;
 struct bidirectional_iterator_tag;
 _GLIBCXX_END_NAMESPACE_VERSION
-} // namespace std
+}  // namespace std
 
 #elif defined(_LIBCPP_VERSION)
 
@@ -32,7 +32,7 @@ namespace std
 {
 struct forward_iterator_tag;
 struct bidirectional_iterator_tag;
-} // namespace std
+}  // namespace std
 
 #endif
 
@@ -45,9 +45,9 @@ namespace lexy::_detail
 template <typename T, typename... Args>
 T* construct_at(T* ptr, Args&&... args)
 {
-    return ::new ((void*)ptr) T(LEXY_FWD(args)...);
+  return ::new((void*)ptr) T(LEXY_FWD(args)...);
 }
-} // namespace lexy::_detail
+}  // namespace lexy::_detail
 
 #elif defined(_MSC_VER)
 
@@ -57,20 +57,21 @@ namespace lexy::_detail
 template <typename T, typename... Args>
 constexpr T* construct_at(T* ptr, Args&&... args)
 {
-#    if defined(_MSVC_CONSTEXPR)
-    _MSVC_CONSTEXPR
-#    endif
-    return ::new ((void*)ptr) T(LEXY_FWD(args)...);
+#if defined(_MSVC_CONSTEXPR)
+  _MSVC_CONSTEXPR
+#endif
+  return ::new((void*)ptr) T(LEXY_FWD(args)...);
 }
-} // namespace lexy::_detail
+}  // namespace lexy::_detail
 
 #else
 
 namespace lexy::_detail
 {
 struct _construct_at_tag
-{};
-} // namespace lexy::_detail
+{
+};
+}  // namespace lexy::_detail
 
 namespace std
 {
@@ -79,20 +80,19 @@ namespace std
 template <typename T, typename... Args>
 constexpr T* construct_at(lexy::_detail::_construct_at_tag, T* ptr, Args&&... args)
 {
-    return ::new ((void*)ptr) T(LEXY_FWD(args)...);
+  return ::new((void*)ptr) T(LEXY_FWD(args)...);
 }
-} // namespace std
+}  // namespace std
 
 namespace lexy::_detail
 {
 template <typename T, typename... Args>
 constexpr T* construct_at(T* ptr, Args&&... args)
 {
-    return std::construct_at(lexy::_detail::_construct_at_tag{}, ptr, LEXY_FWD(args)...);
+  return std::construct_at(lexy::_detail::_construct_at_tag{}, ptr, LEXY_FWD(args)...);
 }
-} // namespace lexy::_detail
+}  // namespace lexy::_detail
 
 #endif
 
-#endif // LEXY_DETAIL_STD_HPP_INCLUDED
-
+#endif  // LEXY_DETAIL_STD_HPP_INCLUDED

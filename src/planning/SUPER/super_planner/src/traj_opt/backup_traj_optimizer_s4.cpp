@@ -1,27 +1,28 @@
 /**
-* This file is part of SUPER
-*
-* Copyright 2025 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
-* Developed by Yunfan REN <renyf at connect dot hku dot hk>
-* for more information see <https://github.com/hku-mars/SUPER>.
-* If you use this code, please cite the respective publications as
-* listed on the above website.
-*
-* SUPER is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Lesser General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* SUPER is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public License
-* along with SUPER. If not, see <http://www.gnu.org/licenses/>.
-*/
+ * This file is part of SUPER
+ *
+ * Copyright 2025 Yunfan REN, MaRS Lab, University of Hong Kong, <mars.hku.hk>
+ * Developed by Yunfan REN <renyf at connect dot hku dot hk>
+ * for more information see <https://github.com/hku-mars/SUPER>.
+ * If you use this code, please cite the respective publications as
+ * listed on the above website.
+ *
+ * SUPER is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * SUPER is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with SUPER. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include <traj_opt/backup_traj_optimizer_s4.h>
+
 #include <utils/header/color_msg_utils.hpp>
 
 using namespace traj_opt;
@@ -29,24 +30,20 @@ using namespace color_text;
 using namespace super_utils;
 
 //========================================================================
-void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
-                                          const Eigen::MatrixX3d &coeffs,
-                                          const PolyhedronH &hPoly,
-                                          const double &smoothFactor,
-                                          const int &integralResolution,
-                                          const Eigen::VectorXd &magnitudeBounds,
-                                          const Eigen::VectorXd &penaltyWeights,
-                                          flatness::FlatnessMap &flatMap,
-                                          double &cost,
-                                          Eigen::VectorXd &gradT,
-                                          Eigen::MatrixX3d &gradC,
-                                          VecDf &pena_log) {
-//    opt_vars.magnitudeBounds
-//            << cfg_.max_vel, cfg_.max_acc, cfg_.max_jerk, cfg_.max_omg, cfg_.min_acc_thr, cfg_.max_acc_thr;
-//    opt_vars.penaltyWeights << cfg_.penna_pos, cfg_.penna_vel,
-//            cfg_.penna_acc, cfg_.penna_jerk,
-//            cfg_.penna_attract, cfg_.penna_omg,
-//            cfg_.penna_thr;
+void BackupTrajOpt::constraintsFunctional(
+    const Eigen::VectorXd &T, const Eigen::MatrixX3d &coeffs,
+    const PolyhedronH &hPoly, const double &smoothFactor,
+    const int &integralResolution, const Eigen::VectorXd &magnitudeBounds,
+    const Eigen::VectorXd &penaltyWeights, flatness::FlatnessMap &flatMap,
+    double &cost, Eigen::VectorXd &gradT, Eigen::MatrixX3d &gradC,
+    VecDf &pena_log) {
+    //    opt_vars.magnitudeBounds
+    //            << cfg_.max_vel, cfg_.max_acc, cfg_.max_jerk, cfg_.max_omg,
+    //            cfg_.min_acc_thr, cfg_.max_acc_thr;
+    //    opt_vars.penaltyWeights << cfg_.penna_pos, cfg_.penna_vel,
+    //            cfg_.penna_acc, cfg_.penna_jerk,
+    //            cfg_.penna_attract, cfg_.penna_omg,
+    //            cfg_.penna_thr;
     const double vmax = magnitudeBounds[0];
     const double amax = magnitudeBounds[1];
     const double jmax = magnitudeBounds[2];
@@ -71,7 +68,6 @@ void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
     const double weightOmg = penaltyWeights[5];
     const double weightAccThr = penaltyWeights[6];
 
-
     Eigen::Vector3d pos, vel, acc, jer, sna;
     Eigen::Vector3d totalGradPos, totalGradVel, totalGradAcc, totalGradJer;
     double totalGradPsi, totalGradPsiD;
@@ -87,8 +83,10 @@ void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
     Eigen::Vector3d outerNormal;
 
     double violaPos, violaVel, violaAcc, violaJer, violaOmg, violaThrust;
-    double violaPosPenaD, violaVelPenaD, violaAccPenaD, violaJerPenaD, violaOmgPenaD, violaThrustPenaD;
-    double violaPosPena, violaVelPena, violaAccPena, violaJerPena, violaOmgPena, violaThrustPena;
+    double violaPosPenaD, violaVelPenaD, violaAccPenaD, violaJerPenaD,
+        violaOmgPenaD, violaThrustPenaD;
+    double violaPosPena, violaVelPena, violaAccPena, violaJerPena, violaOmgPena,
+        violaThrustPena;
     double node, pena;
     const auto pieceNum = T.size();
     const double integralFrac = 1.0 / integralResolution;
@@ -118,11 +116,16 @@ void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
             s6 = s4 * s2;
             s7 = s4 * s3;
             beta0 << 1.0, s1, s2, s3, s4, s5, s6, s7;
-            beta1 << 0.0, 1.0, 2.0 * s1, 3.0 * s2, 4.0 * s3, 5.0 * s4, 6.0 * s5, 7.0 * s6;
-            beta2 << 0.0, 0.0, 2.0, 6.0 * s1, 12.0 * s2, 20.0 * s3, 30.0 * s4, 42.0 * s5;
-            beta3 << 0.0, 0.0, 0.0, 6.0, 24.0 * s1, 60.0 * s2, 120.0 * s3, 210.0 * s4;
-            beta4 << 0.0, 0.0, 0.0, 0.0, 24.0, 120.0 * s1, 360.0 * s2, 840.0 * s3;
-//            beta5 << 0.0, 0.0, 0.0, 0., 0.0, 120.0, 720.0 * s1, 2520.0 * s2;
+            beta1 << 0.0, 1.0, 2.0 * s1, 3.0 * s2, 4.0 * s3, 5.0 * s4, 6.0 * s5,
+                7.0 * s6;
+            beta2 << 0.0, 0.0, 2.0, 6.0 * s1, 12.0 * s2, 20.0 * s3, 30.0 * s4,
+                42.0 * s5;
+            beta3 << 0.0, 0.0, 0.0, 6.0, 24.0 * s1, 60.0 * s2, 120.0 * s3,
+                210.0 * s4;
+            beta4 << 0.0, 0.0, 0.0, 0.0, 24.0, 120.0 * s1, 360.0 * s2,
+                840.0 * s3;
+            //            beta5 << 0.0, 0.0, 0.0, 0., 0.0, 120.0, 720.0 * s1,
+            //            2520.0 * s2;
             pos = c.transpose() * beta0;
             vel = c.transpose() * beta1;
             acc = c.transpose() * beta2;
@@ -135,7 +138,7 @@ void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
             violaAcc = acc.squaredNorm() - amaxSqr;
             violaJer = jer.squaredNorm() - jmaxSqr;
             gradThr = 0.0;
-//            gradQuat.setZero();
+            //            gradQuat.setZero();
             gradPos << 0, 0, 0;
             gradVel << 0, 0, 0;
             gradAcc << 0, 0, 0;
@@ -147,7 +150,8 @@ void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
                 for (int k = 0; k < K; k++) {
                     outerNormal = hPoly.block<1, 3>(k, 0);
                     violaPos = outerNormal.dot(pos) + hPoly(k, 3);
-                    if (gcopter::smoothedL1(violaPos, smoothFactor, violaPosPena, violaPosPenaD)) {
+                    if (gcopter::smoothedL1(violaPos, smoothFactor,
+                                            violaPosPena, violaPosPenaD)) {
                         gradPos += weightPos * violaPosPenaD * outerNormal;
                         pena += weightPos * violaPosPena;
                         pos_penna_log += weightPos * violaPosPena;
@@ -155,19 +159,25 @@ void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
                 }
             }
 
-            if (weightVel > 0 && gcopter::smoothedL1(violaVel, smoothFactor, violaVelPena, violaVelPenaD)) {
+            if (weightVel > 0 &&
+                gcopter::smoothedL1(violaVel, smoothFactor, violaVelPena,
+                                    violaVelPenaD)) {
                 gradVel += weightVel * violaVelPenaD * 2.0 * vel;
                 pena += weightVel * violaVelPena;
                 vel_penna_log += weightVel * violaVelPena;
             }
 
-            if (weightAcc > 0 && gcopter::smoothedL1(violaAcc, smoothFactor, violaAccPena, violaAccPenaD)) {
+            if (weightAcc > 0 &&
+                gcopter::smoothedL1(violaAcc, smoothFactor, violaAccPena,
+                                    violaAccPenaD)) {
                 gradAcc += weightAcc * violaAccPenaD * 2.0 * acc;
                 pena += weightAcc * violaAccPena;
                 acc_penna_log += weightAcc * violaAccPena;
             }
 
-            if (weightJer > 0 && gcopter::smoothedL1(violaJer, smoothFactor, violaJerPena, violaJerPenaD)) {
+            if (weightJer > 0 &&
+                gcopter::smoothedL1(violaJer, smoothFactor, violaJerPena,
+                                    violaJerPenaD)) {
                 gradJer += weightJer * violaJerPenaD * 2.0 * jer;
                 pena += weightJer * violaJerPena;
                 jer_penna_log += weightJer * violaJerPena;
@@ -176,31 +186,37 @@ void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
             if (weightOmg > 0 && weightAccThr > 0) {
                 flatMap.forward(vel, acc, jer, 0.0, 0.0, thr, quat, omg);
                 violaOmg = omg.squaredNorm() - omgmaxSqr;
-                violaThrust = (thr - thrustMean) * (thr - thrustMean) - thrustSqrRadi;
+                violaThrust =
+                    (thr - thrustMean) * (thr - thrustMean) - thrustSqrRadi;
 
-                if (gcopter::smoothedL1(violaOmg, smoothFactor, violaOmgPena, violaOmgPenaD)) {
+                if (gcopter::smoothedL1(violaOmg, smoothFactor, violaOmgPena,
+                                        violaOmgPenaD)) {
                     gradOmg += weightOmg * violaOmgPenaD * 2.0 * omg;
                     pena += weightOmg * violaOmgPena;
                     omg_penna_log += weightOmg * violaOmgPena;
                 }
 
-                if (gcopter::smoothedL1(violaThrust, smoothFactor, violaThrustPena, violaThrustPenaD)) {
-                    gradThr += weightAccThr * violaThrustPenaD * 2.0 * (thr - thrustMean);
+                if (gcopter::smoothedL1(violaThrust, smoothFactor,
+                                        violaThrustPena, violaThrustPenaD)) {
+                    gradThr += weightAccThr * violaThrustPenaD * 2.0 *
+                               (thr - thrustMean);
                     pena += weightAccThr * violaThrustPena;
                     thr_penna_log += weightAccThr * violaThrustPena;
                 }
 
-//            if (smoothedL1(violaTheta, smoothFactor, violaThetaPena, violaThetaPenaD))
-//            {
-//                gradQuat += weightTheta * violaThetaPenaD /
-//                            sqrt(1.0 - cos_theta * cos_theta) * 4.0 *
-//                            Eigen::Vector4d(0.0, quat(1), quat(2), 0.0);
-//                pena += weightTheta * violaThetaPena;
-//            }
+                //            if (smoothedL1(violaTheta, smoothFactor,
+                //            violaThetaPena, violaThetaPenaD))
+                //            {
+                //                gradQuat += weightTheta * violaThetaPenaD /
+                //                            sqrt(1.0 - cos_theta * cos_theta)
+                //                            * 4.0 * Eigen::Vector4d(0.0,
+                //                            quat(1), quat(2), 0.0);
+                //                pena += weightTheta * violaThetaPena;
+                //            }
 
-
-                flatMap.backward(gradPos, gradVel, gradAcc, gradJer, gradThr, Vec4f(0, 0, 0, 0), gradOmg,
-                                 totalGradPos, totalGradVel, totalGradAcc, totalGradJer,
+                flatMap.backward(gradPos, gradVel, gradAcc, gradJer, gradThr,
+                                 Vec4f(0, 0, 0, 0), gradOmg, totalGradPos,
+                                 totalGradVel, totalGradAcc, totalGradJer,
                                  totalGradPsi, totalGradPsiD);
 
             } else {
@@ -216,7 +232,8 @@ void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
                 if (violaAcc > max_acc_viola_log) max_acc_viola_log = violaAcc;
                 if (violaJer > max_jer_viola_log) max_jer_viola_log = violaJer;
                 if (violaOmg > max_omg_viola_log) max_omg_viola_log = violaOmg;
-                if (violaThrust > max_thr_viola_log) max_thr_viola_log = violaThrust;
+                if (violaThrust > max_thr_viola_log)
+                    max_thr_viola_log = violaThrust;
             }
 
             node = (j == 0 || j == integralResolution) ? 0.5 : 1.0;
@@ -226,23 +243,21 @@ void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
                                             beta2 * totalGradAcc.transpose() +
                                             beta3 * totalGradJer.transpose()) *
                                            node * step;
-            gradT(i) += (totalGradPos.dot(vel) +
-                         totalGradVel.dot(acc) +
-                         totalGradAcc.dot(jer) +
-                         totalGradJer.dot(sna)) *
-                        alpha * node * step +
+            gradT(i) += (totalGradPos.dot(vel) + totalGradVel.dot(acc) +
+                         totalGradAcc.dot(jer) + totalGradJer.dot(sna)) *
+                            alpha * node * step +
                         node * integralFrac * pena;
             cost += node * step * pena;
         }
     }
 
-//    pena_log(1) = pos_penna_log;
-//    pena_log(2) = vel_penna_log;
-//    pena_log(3) = acc_penna_log;
-//    pena_log(4) = jer_penna_log;
-//    pena_log(5) = att_penna_log;
-//    pena_log(6) = omg_penna_log;
-//    pena_log(7) = thr_penna_log;
+    //    pena_log(1) = pos_penna_log;
+    //    pena_log(2) = vel_penna_log;
+    //    pena_log(3) = acc_penna_log;
+    //    pena_log(4) = jer_penna_log;
+    //    pena_log(5) = att_penna_log;
+    //    pena_log(6) = omg_penna_log;
+    //    pena_log(7) = thr_penna_log;
     pena_log(1) = max_pos_viola_log;
     pena_log(2) = max_vel_viola_log;
     pena_log(3) = max_acc_viola_log;
@@ -252,9 +267,9 @@ void BackupTrajOpt::constraintsFunctional(const Eigen::VectorXd &T,
     pena_log(7) = max_thr_viola_log;
 }
 
-
-double BackupTrajOpt::costFunctional(void *ptr, const Eigen::VectorXd &x, Eigen::VectorXd &g) {
-//            TimeConsuming t_("cost functional");
+double BackupTrajOpt::costFunctional(void *ptr, const Eigen::VectorXd &x,
+                                     Eigen::VectorXd &g) {
+    //            TimeConsuming t_("cost functional");
     auto &obj = *static_cast<OptimizationVariables *>(ptr);
     obj.iter_num++;
     const long dimTau = obj.temporalDim;
@@ -278,7 +293,8 @@ double BackupTrajOpt::costFunctional(void *ptr, const Eigen::VectorXd &x, Eigen:
     switch (obj.pos_constraint_type) {
         case 1: {
             VecDf xi_e = xi;
-            obj.points = Eigen::Map<Eigen::Matrix<double, 3, Eigen::Dynamic>>(xi_e.data(), 3, xi_e.size() / 3);
+            obj.points = Eigen::Map<Eigen::Matrix<double, 3, Eigen::Dynamic>>(
+                xi_e.data(), 3, xi_e.size() / 3);
             break;
         }
         default: {
@@ -286,7 +302,6 @@ double BackupTrajOpt::costFunctional(void *ptr, const Eigen::VectorXd &x, Eigen:
             break;
         }
     }
-
 
     if (obj.weight_ts > 0) {
         gcopter::mapInfToInterval(obj.min_ts, obj.max_ts, tau_s, obj.ts);
@@ -310,19 +325,16 @@ double BackupTrajOpt::costFunctional(void *ptr, const Eigen::VectorXd &x, Eigen:
     obj.penalty_log.setZero();
     obj.penalty_log(0) = cost;
     constraintsFunctional(obj.times, obj.minco.getCoeffs(), obj.hPolytope,
-                          obj.smooth_eps, obj.integral_res,
-                          obj.magnitudeBounds, obj.penaltyWeights,
-                          obj.quadrotor_flatness,
-                          cost, obj.partialGradByTimes, obj.partialGradByCoeffs,
+                          obj.smooth_eps, obj.integral_res, obj.magnitudeBounds,
+                          obj.penaltyWeights, obj.quadrotor_flatness, cost,
+                          obj.partialGradByTimes, obj.partialGradByCoeffs,
                           obj.penalty_log);
 
     StatePVAJ partGradOfHeadPVAJ, partGradOfTailPVAJ;
     Mat3Df partGradOfWaypts;
-    obj.minco.propagateGradOfWayptsAndState(obj.partialGradByCoeffs, obj.partialGradByTimes,
-                                            obj.gradByTimes,
-                                            partGradOfHeadPVAJ,
-                                            partGradOfWaypts,
-                                            partGradOfTailPVAJ);
+    obj.minco.propagateGradOfWayptsAndState(
+        obj.partialGradByCoeffs, obj.partialGradByTimes, obj.gradByTimes,
+        partGradOfHeadPVAJ, partGradOfWaypts, partGradOfTailPVAJ);
     cost += weightT * obj.times.sum();
     obj.gradByTimes.array() += weightT;
     obj.gradByPoints.leftCols(obj.piece_num - 1) = partGradOfWaypts;
@@ -350,37 +362,46 @@ double BackupTrajOpt::costFunctional(void *ptr, const Eigen::VectorXd &x, Eigen:
     // Add ts cost and gradient;
     if (obj.weight_ts > 0) {
         // square cost
-//        cost += weight_ts * pow(obj.bod_.t_e - obj.ts, 2);
-//        obj.gradTs =
-//                partGradOfHeadPVAJ.col(0).dot(obj.bod_.exp_traj.getVel(obj.ts)) +
-//                partGradOfHeadPVAJ.col(1).dot(obj.bod_.exp_traj.getAcc(obj.ts)) +
-//                partGradOfHeadPVAJ.col(2).dot(obj.bod_.exp_traj.getJer(obj.ts)) +
-//                partGradOfHeadPVAJ.col(3).dot(obj.bod_.exp_traj.getSnap(obj.ts)) +
-//                -weight_ts * 2 * (obj.bod_.t_e - obj.ts);
-//        gcopter::propagateGradIntervalToInf(obj.bod_.t_0, obj.bod_.t_e, tau_s, obj.gradTs, gradTaus);
-//        g(g.size() - 1) = gradTaus;
+        //        cost += weight_ts * pow(obj.bod_.t_e - obj.ts, 2);
+        //        obj.gradTs =
+        //                partGradOfHeadPVAJ.col(0).dot(obj.bod_.exp_traj.getVel(obj.ts))
+        //                +
+        //                partGradOfHeadPVAJ.col(1).dot(obj.bod_.exp_traj.getAcc(obj.ts))
+        //                +
+        //                partGradOfHeadPVAJ.col(2).dot(obj.bod_.exp_traj.getJer(obj.ts))
+        //                +
+        //                partGradOfHeadPVAJ.col(3).dot(obj.bod_.exp_traj.getSnap(obj.ts))
+        //                + -weight_ts * 2 * (obj.bod_.t_e - obj.ts);
+        //        gcopter::propagateGradIntervalToInf(obj.bod_.t_0,
+        //        obj.bod_.t_e, tau_s, obj.gradTs, gradTaus); g(g.size() - 1) =
+        //        gradTaus;
         // linear cost
-//        double vioTs = (obj.bod_.t_e - obj.ts);
-//        double vioTsPen, vioTsPenD;
-//        gcopter::smoothedL1(vioTs, obj.smoothEps, vioTsPen, vioTsPenD);
-//        cost += weight_ts * vioTsPen;
-//        double gradTs = partGradOfHeadPVAJ.col(0).dot(obj.bod_.exp_traj.getVel(obj.ts)) +
-//                        partGradOfHeadPVAJ.col(1).dot(obj.bod_.exp_traj.getAcc(obj.ts)) +
-//                        partGradOfHeadPVAJ.col(2).dot(obj.bod_.exp_traj.getJer(obj.ts)) +
-//                        partGradOfHeadPVAJ.col(3).dot(obj.bod_.exp_traj.getSnap(obj.ts)) +
-//                        -weight_ts * vioTsPenD;
-//        gcopter::propagateGradIntervalToInf(obj.bod_.t_0, obj.bod_.t_e, tau_s, gradTs, gradTaus);
-//        g(g.size() - 1) = gradTaus;
+        //        double vioTs = (obj.bod_.t_e - obj.ts);
+        //        double vioTsPen, vioTsPenD;
+        //        gcopter::smoothedL1(vioTs, obj.smoothEps, vioTsPen,
+        //        vioTsPenD); cost += weight_ts * vioTsPen; double gradTs =
+        //        partGradOfHeadPVAJ.col(0).dot(obj.bod_.exp_traj.getVel(obj.ts))
+        //        +
+        //                        partGradOfHeadPVAJ.col(1).dot(obj.bod_.exp_traj.getAcc(obj.ts))
+        //                        +
+        //                        partGradOfHeadPVAJ.col(2).dot(obj.bod_.exp_traj.getJer(obj.ts))
+        //                        +
+        //                        partGradOfHeadPVAJ.col(3).dot(obj.bod_.exp_traj.getSnap(obj.ts))
+        //                        + -weight_ts * vioTsPenD;
+        //        gcopter::propagateGradIntervalToInf(obj.bod_.t_0,
+        //        obj.bod_.t_e, tau_s, gradTs, gradTaus); g(g.size() - 1) =
+        //        gradTaus;
 
         cost += weight_ts * (obj.max_ts - obj.ts);
         obj.gradTs =
-                partGradOfHeadPVAJ.col(0).dot(obj.exp_traj.getVel(obj.ts)) +
-                partGradOfHeadPVAJ.col(1).dot(obj.exp_traj.getAcc(obj.ts)) +
-                partGradOfHeadPVAJ.col(2).dot(obj.exp_traj.getJer(obj.ts)) +
-                partGradOfHeadPVAJ.col(3).dot(obj.exp_traj.getSnap(obj.ts)) +
-                -weight_ts;
+            partGradOfHeadPVAJ.col(0).dot(obj.exp_traj.getVel(obj.ts)) +
+            partGradOfHeadPVAJ.col(1).dot(obj.exp_traj.getAcc(obj.ts)) +
+            partGradOfHeadPVAJ.col(2).dot(obj.exp_traj.getJer(obj.ts)) +
+            partGradOfHeadPVAJ.col(3).dot(obj.exp_traj.getSnap(obj.ts)) +
+            -weight_ts;
 
-        gcopter::propagateGradIntervalToInf(obj.min_ts, obj.max_ts, tau_s, obj.gradTs, gradTaus);
+        gcopter::propagateGradIntervalToInf(obj.min_ts, obj.max_ts, tau_s,
+                                            obj.gradTs, gradTaus);
         g(g.size() - 1) = gradTaus;
 
     } else {
@@ -390,9 +411,10 @@ double BackupTrajOpt::costFunctional(void *ptr, const Eigen::VectorXd &x, Eigen:
 }
 
 bool BackupTrajOpt::processCorridor() {
-    PolyhedronV curIV, curIOB; // 走廊的顶点
+    PolyhedronV curIV, curIOB;  // 走廊的顶点
     if (!geometry_utils::enumerateVs(opt_vars.hPolytope, curIV)) {
-        std::cout << YELLOW << " -- [MINCO] enumerateVs failed." << RESET << std::endl;
+        std::cout << YELLOW << " -- [MINCO] enumerateVs failed." << RESET
+                  << std::endl;
         return false;
     }
     long nv = curIV.cols();
@@ -407,11 +429,14 @@ bool BackupTrajOpt::processCorridor() {
 
 bool BackupTrajOpt::setupProblemAndCheck() {
     // 1. Check if the corridor is feasible
-    const Eigen::ArrayXd norms = opt_vars.hPolytope.leftCols<3>().rowwise().norm();
+    const Eigen::ArrayXd norms =
+        opt_vars.hPolytope.leftCols<3>().rowwise().norm();
     opt_vars.hPolytope.array().colwise() /= norms;
 
     if (!processCorridor()) {
-        std::cout << YELLOW << " -- [processCorridor] Failed to get Overlap enumerateVs ." << RESET << std::endl;
+        std::cout << YELLOW
+                  << " -- [processCorridor] Failed to get Overlap enumerateVs ."
+                  << RESET << std::endl;
         return false;
     }
 
@@ -427,11 +452,13 @@ bool BackupTrajOpt::setupProblemAndCheck() {
             break;
         }
         default: {
-            opt_vars.spatialDim = opt_vars.vPolytope.cols() * opt_vars.piece_num;
+            opt_vars.spatialDim =
+                opt_vars.vPolytope.cols() * opt_vars.piece_num;
         }
     }
 
-    opt_vars.minco.setConditions(opt_vars.headPVAJ, opt_vars.tailPVAJ, opt_vars.piece_num);
+    opt_vars.minco.setConditions(opt_vars.headPVAJ, opt_vars.tailPVAJ,
+                                 opt_vars.piece_num);
     opt_vars.points.resize(3, opt_vars.piece_num);
     opt_vars.gradByPoints.resize(3, opt_vars.piece_num);
     opt_vars.partialGradByCoeffs.resize(8 * opt_vars.piece_num, 3);
@@ -441,20 +468,23 @@ bool BackupTrajOpt::setupProblemAndCheck() {
 
 double BackupTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
     // 1. Initialize the trajectory
-    //      the optimization varibles include time allocation [1] * pieceN + tailWaypoints [vPoly_size] * pieceN + split time [1]
+    //      the optimization varibles include time allocation [1] * pieceN +
+    //      tailWaypoints [vPoly_size] * pieceN + split time [1]
     Eigen::VectorXd x(opt_vars.temporalDim + opt_vars.spatialDim + 1);
     Eigen::Map<Eigen::VectorXd> tau(x.data(), opt_vars.temporalDim);
-    Eigen::Map<Eigen::VectorXd> xi(x.data() + opt_vars.temporalDim, opt_vars.spatialDim);
+    Eigen::Map<Eigen::VectorXd> xi(x.data() + opt_vars.temporalDim,
+                                   opt_vars.spatialDim);
 
     // 2. Initialize the optimization problem
     // 初始化均匀时间分配，均匀waypoint分配
-    Vec3f step = (opt_vars.tailPVAJ.col(0) - opt_vars.headPVAJ.col(0)) / opt_vars.piece_num;
+    Vec3f step = (opt_vars.tailPVAJ.col(0) - opt_vars.headPVAJ.col(0)) /
+                 opt_vars.piece_num;
     for (int i = 0; i < opt_vars.piece_num - 1; i++) {
         opt_vars.points.col(i) = step * (i + 1) + opt_vars.headPVAJ.col(0);
     }
     opt_vars.points.rightCols(1) = opt_vars.tailPVAJ.col(0);
 
-    if(opt_vars.given_init_ts_and_ps){
+    if (opt_vars.given_init_ts_and_ps) {
         opt_vars.times = opt_vars.given_init_t_vec;
         for (int i = 0; i < opt_vars.given_init_ps.size(); i++) {
             opt_vars.points.col(i) = opt_vars.given_init_ps[i];
@@ -481,7 +511,8 @@ double BackupTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
     }
 
     double tau_s;
-    gcopter::mapIntervalToInf(opt_vars.min_ts, opt_vars.max_ts, opt_vars.ts, tau_s);
+    gcopter::mapIntervalToInf(opt_vars.min_ts, opt_vars.max_ts, opt_vars.ts,
+                              tau_s);
     x(x.size() - 1) = tau_s;
     double minCostFunctional;
     lbfgs::lbfgs_parameter_t lbfgs_params;
@@ -504,20 +535,17 @@ double BackupTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
 
     TimeConsuming ttt(" -- [BackupTrajOpt]", false);
     if (opt_vars.debug_en) {
-        throw std::runtime_error(" -- [BackupTrajOpt] Debug mode is not supported yet.");
+        throw std::runtime_error(
+            " -- [BackupTrajOpt] Debug mode is not supported yet.");
     } else {
-        ret = lbfgs::lbfgs_optimize(x,
-                                    minCostFunctional,
-                                    &BackupTrajOpt::costFunctional,
-                                    nullptr,
-                                    nullptr,
-                                    &this->opt_vars,
-                                    lbfgs_params);
-
+        ret = lbfgs::lbfgs_optimize(x, minCostFunctional,
+                                    &BackupTrajOpt::costFunctional, nullptr,
+                                    nullptr, &this->opt_vars, lbfgs_params);
     }
     using namespace std;
     if (cfg_.print_optimizer_log) {
-        cout << " -- [BaclOpt] Opt finish, with iter num: " << opt_vars.iter_num << "\n";
+        cout << " -- [BaclOpt] Opt finish, with iter num: " << opt_vars.iter_num
+             << "\n";
         cout << "\tEnergy: " << opt_vars.penalty_log(0) << endl;
         cout << "\tPos: " << opt_vars.penalty_log(1) << endl;
         cout << "\tVel: " << opt_vars.penalty_log(2) << endl;
@@ -529,13 +557,18 @@ double BackupTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
         cout << "\tTs: " << opt_vars.ts << endl;
     }
     if ((cfg_.penna_pos > 0 && opt_vars.penalty_log(1) > 0.2) ||
-        (cfg_.penna_vel > 0 && opt_vars.penalty_log(2) > cfg_.max_vel * cfg_.penna_margin) ||
-        (cfg_.penna_acc > 0 && opt_vars.penalty_log(3) > cfg_.max_acc * cfg_.penna_margin) ||
-        (cfg_.penna_omg > 0 && opt_vars.penalty_log(6) > cfg_.max_omg * cfg_.penna_margin) ||
-        (cfg_.penna_thr > 0 && opt_vars.penalty_log(7) > cfg_.max_acc * cfg_.penna_margin)) {
+        (cfg_.penna_vel > 0 &&
+         opt_vars.penalty_log(2) > cfg_.max_vel * cfg_.penna_margin) ||
+        (cfg_.penna_acc > 0 &&
+         opt_vars.penalty_log(3) > cfg_.max_acc * cfg_.penna_margin) ||
+        (cfg_.penna_omg > 0 &&
+         opt_vars.penalty_log(6) > cfg_.max_omg * cfg_.penna_margin) ||
+        (cfg_.penna_thr > 0 &&
+         opt_vars.penalty_log(7) > cfg_.max_acc * cfg_.penna_margin)) {
         ret = -1;
         if (cfg_.print_optimizer_log) {
-            cout << " -- [BaclOpt] Opt finish, with iter num: " << opt_vars.iter_num << "\n";
+            cout << " -- [BaclOpt] Opt finish, with iter num: "
+                 << opt_vars.iter_num << "\n";
             cout << "\tEnergy: " << opt_vars.penalty_log(0) << endl;
             cout << "\tPos: " << opt_vars.penalty_log(1) << endl;
             cout << "\tVel: " << opt_vars.penalty_log(2) << endl;
@@ -546,20 +579,24 @@ double BackupTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
             cout << "\tThr: " << opt_vars.penalty_log(7) << endl;
             cout << "\tTs: " << opt_vars.ts << endl;
         }
-        ros_ptr_->warn(" -- [BackOpt] Opt failed, Omg or thr or Pos violation.");
+        ros_ptr_->warn(
+            " -- [BackOpt] Opt failed, Omg or thr or Pos violation.");
     }
 
     if (ret >= 0) {
         if (opt_vars.uniform_time_en) {
             gcopter::forwardMapTauToT(tau, opt_vars.total_time);
-            opt_vars.times.setConstant(opt_vars.total_time(0) / opt_vars.times.size());
+            opt_vars.times.setConstant(opt_vars.total_time(0) /
+                                       opt_vars.times.size());
         } else {
             gcopter::forwardMapTauToT(tau, opt_vars.times);
         }
         switch (opt_vars.pos_constraint_type) {
             case 1: {
                 VecDf xi_e = xi;
-                opt_vars.points = Eigen::Map<Eigen::Matrix<double, 3, Eigen::Dynamic>>(xi_e.data(), 3, xi_e.size() / 3);
+                opt_vars.points =
+                    Eigen::Map<Eigen::Matrix<double, 3, Eigen::Dynamic>>(
+                        xi_e.data(), 3, xi_e.size() / 3);
                 break;
             }
             default: {
@@ -571,36 +608,41 @@ double BackupTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
         opt_vars.tailPVAJ.setZero();
         opt_vars.headPVAJ = opt_vars.exp_traj.getState(opt_vars.ts);
         opt_vars.tailPVAJ.col(0) = opt_vars.points.rightCols(1);
-        opt_vars.minco.setConditions(opt_vars.headPVAJ, opt_vars.tailPVAJ, opt_vars.piece_num);
+        opt_vars.minco.setConditions(opt_vars.headPVAJ, opt_vars.tailPVAJ,
+                                     opt_vars.piece_num);
         opt_vars.minco.setEndPosition(opt_vars.points.rightCols(1));
-        opt_vars.minco.setParameters(opt_vars.points.leftCols(opt_vars.piece_num - 1), opt_vars.times);
+        opt_vars.minco.setParameters(
+            opt_vars.points.leftCols(opt_vars.piece_num - 1), opt_vars.times);
         opt_vars.minco.getTrajectory(traj);
     } else {
         traj.clear();
         minCostFunctional = INFINITY;
-        std::cout << YELLOW << " -- [MINCO] TrajOpt failed, " << lbfgs::lbfgs_strerror(ret) << RESET << std::endl;
+        std::cout << YELLOW << " -- [MINCO] TrajOpt failed, "
+                  << lbfgs::lbfgs_strerror(ret) << RESET << std::endl;
     }
     return minCostFunctional;
 }
 
-BackupTrajOpt::BackupTrajOpt(const traj_opt::Config &cfg, const ros_interface::RosInterface::Ptr &ros_ptr)
-        : cfg_(cfg), ros_ptr_(ros_ptr) {
+BackupTrajOpt::BackupTrajOpt(const traj_opt::Config &cfg,
+                             const ros_interface::RosInterface::Ptr &ros_ptr)
+    : cfg_(cfg), ros_ptr_(ros_ptr) {
     using namespace std;
 
     cfg_ = cfg;
     std::string filename = "back_opt_log.csv";
-    if(cfg_.save_log_en){
-        failed_traj_log.open(DEBUG_FILE_DIR(filename), std::ios::out | std::ios::trunc);
-        penalty_log.open(DEBUG_FILE_DIR("back_opt_penna.csv"), std::ios::out | std::ios::trunc);
+    if (cfg_.save_log_en) {
+        failed_traj_log.open(DEBUG_FILE_DIR(filename),
+                             std::ios::out | std::ios::trunc);
+        penalty_log.open(DEBUG_FILE_DIR("back_opt_penna.csv"),
+                         std::ios::out | std::ios::trunc);
     }
     opt_vars.magnitudeBounds.resize(6);
     opt_vars.penaltyWeights.resize(7);
     opt_vars.magnitudeBounds << cfg_.max_vel, cfg_.max_acc, cfg_.max_jerk,
-            cfg_.max_omg, cfg_.min_acc_thr * cfg_.mass, cfg_.max_acc_thr * cfg_.mass;
-    opt_vars.penaltyWeights << cfg_.penna_pos, cfg_.penna_vel,
-            cfg_.penna_acc, cfg_.penna_jerk,
-            cfg_.penna_attract, cfg_.penna_omg,
-            cfg_.penna_thr;
+        cfg_.max_omg, cfg_.min_acc_thr * cfg_.mass,
+        cfg_.max_acc_thr * cfg_.mass;
+    opt_vars.penaltyWeights << cfg_.penna_pos, cfg_.penna_vel, cfg_.penna_acc,
+        cfg_.penna_jerk, cfg_.penna_attract, cfg_.penna_omg, cfg_.penna_thr;
     opt_vars.rho = cfg_.penna_t;
     opt_vars.pos_constraint_type = cfg_.pos_constraint_type;
     opt_vars.block_energy_cost = cfg_.block_energy_cost;
@@ -616,34 +658,31 @@ BackupTrajOpt::BackupTrajOpt(const traj_opt::Config &cfg, const ros_interface::R
 
 bool BackupTrajOpt::checkTrajMagnitudeBound(Trajectory &out_traj) {
     if (cfg_.penna_vel > 0 && out_traj.getMaxVelRate() > 1.2 * cfg_.max_vel) {
-        std::cout << YELLOW << " -- [TrajOpt] Minco backup opt failed." << RESET << std::endl;
-        std::cout << YELLOW << "\t\tBackend Max vel:\t" << out_traj.getMaxVelRate() << " m/s" << RESET
+        std::cout << YELLOW << " -- [TrajOpt] Minco backup opt failed." << RESET
                   << std::endl;
+        std::cout << YELLOW << "\t\tBackend Max vel:\t"
+                  << out_traj.getMaxVelRate() << " m/s" << RESET << std::endl;
         return false;
     }
     if (cfg_.penna_acc > 0 && out_traj.getMaxAccRate() > 1.2 * cfg_.max_acc) {
-        std::cout << YELLOW << " -- [TrajOpt] Minco backup opt failed." << RESET << std::endl;
-        std::cout << YELLOW << "\t\tBackend Max Acc:\t" << out_traj.getMaxAccRate() << " m/s" << RESET
+        std::cout << YELLOW << " -- [TrajOpt] Minco backup opt failed." << RESET
                   << std::endl;
+        std::cout << YELLOW << "\t\tBackend Max Acc:\t"
+                  << out_traj.getMaxAccRate() << " m/s" << RESET << std::endl;
         return false;
     }
     return true;
 }
 
-bool
-BackupTrajOpt::optimize(const Trajectory &exp_traj,
-                        const double &t_0,
-                        const double &t_e,
-                        const double &heu_ts,
-                        const VecDf &heu_end_pt,
-                        double &heu_dur,
-                        const Polytope &sfc,
-                        Trajectory &out_traj,
-                        double &out_ts,
-                        const bool &debug) {
+bool BackupTrajOpt::optimize(const Trajectory &exp_traj, const double &t_0,
+                             const double &t_e, const double &heu_ts,
+                             const VecDf &heu_end_pt, double &heu_dur,
+                             const Polytope &sfc, Trajectory &out_traj,
+                             double &out_ts, const bool &debug) {
     opt_vars.hPolytope = sfc.GetPlanes();
     if (std::isnan(opt_vars.hPolytope.sum())) {
-        std::cout << YELLOW << " -- [BackTrajOpt] Polytope is nan." << RESET << std::endl;
+        std::cout << YELLOW << " -- [BackTrajOpt] Polytope is nan." << RESET
+                  << std::endl;
         return false;
     }
 
@@ -668,23 +707,25 @@ BackupTrajOpt::optimize(const Trajectory &exp_traj,
         opt_vars.total_time(0) = heu_dur;
     }
 
-
     out_traj.clear();
     PolyhedronH planes = sfc.GetPlanes();
     bool success{true};
 
     if (!setupProblemAndCheck()) {
-        std::cout << YELLOW << " -- [TrajOpt] Minco corridor preprocess error." << RESET << std::endl;
+        std::cout << YELLOW << " -- [TrajOpt] Minco corridor preprocess error."
+                  << RESET << std::endl;
         success = false;
     }
 
     if (success && std::isinf(optimize(out_traj, cfg_.opt_accuracy))) {
-        std::cout << YELLOW << " -- [SUPER] Minco backup_traj opt failed." << RESET << std::endl;
+        std::cout << YELLOW << " -- [SUPER] Minco backup_traj opt failed."
+                  << RESET << std::endl;
         success = false;
     }
 
     if (opt_vars.penalty_log(1) > cfg_.penna_pos * 0.05) {
-        std::cout << YELLOW << " -- [SUPER] Minco backup_traj out of corridor." << RESET << std::endl;
+        std::cout << YELLOW << " -- [SUPER] Minco backup_traj out of corridor."
+                  << RESET << std::endl;
         success = false;
     }
     out_ts = opt_vars.ts;
@@ -714,19 +755,15 @@ BackupTrajOpt::optimize(const Trajectory &exp_traj,
     return success;
 }
 
-bool
-BackupTrajOpt::optimize(const Trajectory &exp_traj,
-                        const double &t_0,
-                        const double &t_e,
-                        const double &heu_ts,
-                        const Polytope &sfc,
-                        const VecDf & init_t_vec,
-                        const vec_Vec3f &init_ps,
-                        Trajectory &out_traj,
-                        double & out_ts) {
+bool BackupTrajOpt::optimize(const Trajectory &exp_traj, const double &t_0,
+                             const double &t_e, const double &heu_ts,
+                             const Polytope &sfc, const VecDf &init_t_vec,
+                             const vec_Vec3f &init_ps, Trajectory &out_traj,
+                             double &out_ts) {
     opt_vars.hPolytope = sfc.GetPlanes();
     if (std::isnan(opt_vars.hPolytope.sum())) {
-        std::cout << YELLOW << " -- [BackTrajOpt] Polytope is nan." << RESET << std::endl;
+        std::cout << YELLOW << " -- [BackTrajOpt] Polytope is nan." << RESET
+                  << std::endl;
         return false;
     }
 
@@ -758,17 +795,20 @@ BackupTrajOpt::optimize(const Trajectory &exp_traj,
     bool success{true};
 
     if (!setupProblemAndCheck()) {
-        std::cout << YELLOW << " -- [TrajOpt] Minco corridor preprocess error." << RESET << std::endl;
+        std::cout << YELLOW << " -- [TrajOpt] Minco corridor preprocess error."
+                  << RESET << std::endl;
         success = false;
     }
 
     if (success && std::isinf(optimize(out_traj, cfg_.opt_accuracy))) {
-        std::cout << YELLOW << " -- [SUPER] Minco backup_traj opt failed." << RESET << std::endl;
+        std::cout << YELLOW << " -- [SUPER] Minco backup_traj opt failed."
+                  << RESET << std::endl;
         success = false;
     }
 
     if (opt_vars.penalty_log(1) > cfg_.penna_pos * 0.05) {
-        std::cout << YELLOW << " -- [SUPER] Minco backup_traj out of corridor." << RESET << std::endl;
+        std::cout << YELLOW << " -- [SUPER] Minco backup_traj out of corridor."
+                  << RESET << std::endl;
         success = false;
     }
     out_ts = opt_vars.ts;
@@ -776,7 +816,6 @@ BackupTrajOpt::optimize(const Trajectory &exp_traj,
     if (!checkTrajMagnitudeBound(out_traj)) {
         success = false;
     }
-
 
     return success;
 }

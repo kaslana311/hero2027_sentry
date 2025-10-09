@@ -2,10 +2,9 @@
 
 using namespace traj_opt;
 
-
-void
-MINCO_S2NU::setConditions(const Eigen::Matrix<double, 3, 2> &headState, const Eigen::Matrix<double, 3, 2> &tailState,
-                          const int &pieceNum) {
+void MINCO_S2NU::setConditions(const Eigen::Matrix<double, 3, 2> &headState,
+                               const Eigen::Matrix<double, 3, 2> &tailState,
+                               const int &pieceNum) {
     N = pieceNum;
     headPV = headState;
     tailPV = tailState;
@@ -17,8 +16,8 @@ MINCO_S2NU::setConditions(const Eigen::Matrix<double, 3, 2> &headState, const Ei
     return;
 }
 
-
-void MINCO_S2NU::setParameters(const Eigen::Matrix3Xd &inPs, const Eigen::VectorXd &ts) {
+void MINCO_S2NU::setParameters(const Eigen::Matrix3Xd &inPs,
+                               const Eigen::VectorXd &ts) {
     T1 = ts;
     T2 = T1.cwiseProduct(T1);
     T3 = T2.cwiseProduct(T1);
@@ -73,11 +72,8 @@ void MINCO_S2NU::getTrajectory(Trajectory &traj) const {
     traj.clear();
     traj.reserve(N);
     for (int i = 0; i < N; i++) {
-        traj.emplace_back(T1(i),
-                          b.block<4, 3>(4 * i, 0)
-                                  .transpose()
-                                  .rowwise()
-                                  .reverse());
+        traj.emplace_back(
+            T1(i), b.block<4, 3>(4 * i, 0).transpose().rowwise().reverse());
     }
     return;
 }
@@ -92,17 +88,15 @@ void MINCO_S2NU::getEnergy(double &energy) const {
     return;
 }
 
-const Eigen::MatrixX3d &MINCO_S2NU::getCoeffs() const {
-    return b;
-}
+const Eigen::MatrixX3d &MINCO_S2NU::getCoeffs() const { return b; }
 
 void MINCO_S2NU::getEnergyPartialGradByCoeffs(Eigen::MatrixX3d &gdC) const {
     gdC.resize(4 * N, 3);
     for (int i = 0; i < N; i++) {
-        gdC.row(4 * i + 3) = 12.0 * b.row(4 * i + 2) * T2(i) +
-                             24.0 * b.row(4 * i + 3) * T3(i);
-        gdC.row(4 * i + 2) = 8.0 * b.row(4 * i + 2) * T1(i) +
-                             12.0 * b.row(4 * i + 3) * T2(i);
+        gdC.row(4 * i + 3) =
+            12.0 * b.row(4 * i + 2) * T2(i) + 24.0 * b.row(4 * i + 3) * T3(i);
+        gdC.row(4 * i + 2) =
+            8.0 * b.row(4 * i + 2) * T1(i) + 12.0 * b.row(4 * i + 3) * T2(i);
         gdC.block<2, 3>(4 * i, 0).setZero();
     }
     return;
@@ -118,8 +112,10 @@ void MINCO_S2NU::getEnergyPartialGradByTimes(Eigen::VectorXd &gdT) const {
     return;
 }
 
-void MINCO_S2NU::propogateGrad(const Eigen::MatrixX3d &partialGradByCoeffs, const Eigen::VectorXd &partialGradByTimes,
-                               Eigen::Matrix3Xd &gradByPoints, Eigen::VectorXd &gradByTimes) {
+void MINCO_S2NU::propogateGrad(const Eigen::MatrixX3d &partialGradByCoeffs,
+                               const Eigen::VectorXd &partialGradByTimes,
+                               Eigen::Matrix3Xd &gradByPoints,
+                               Eigen::VectorXd &gradByTimes) {
     gradByPoints.resize(3, N - 1);
     gradByTimes.resize(N);
     Eigen::MatrixX3d adjGrad = partialGradByCoeffs;
@@ -136,36 +132,33 @@ void MINCO_S2NU::propogateGrad(const Eigen::MatrixX3d &partialGradByCoeffs, cons
         B1.row(0) = -6.0 * b.row(i * 4 + 3);
 
         // negative velocity
-        B1.row(1) = -(b.row(i * 4 + 1) +
-                      2.0 * T1(i) * b.row(i * 4 + 2) +
+        B1.row(1) = -(b.row(i * 4 + 1) + 2.0 * T1(i) * b.row(i * 4 + 2) +
                       3.0 * T2(i) * b.row(i * 4 + 3));
         B1.row(2) = B1.row(1);
 
         // negative acceleration
-        B1.row(3) = -(2.0 * b.row(i * 4 + 2) +
-                      6.0 * T1(i) * b.row(i * 4 + 3));
+        B1.row(3) = -(2.0 * b.row(i * 4 + 2) + 6.0 * T1(i) * b.row(i * 4 + 3));
 
-        gradByTimes(i) = B1.cwiseProduct(adjGrad.block<4, 3>(4 * i + 2, 0)).sum();
+        gradByTimes(i) =
+            B1.cwiseProduct(adjGrad.block<4, 3>(4 * i + 2, 0)).sum();
     }
 
     // negative velocity
-    B2.row(0) = -(b.row(4 * N - 3) +
-                  2.0 * T1(N - 1) * b.row(4 * N - 2) +
+    B2.row(0) = -(b.row(4 * N - 3) + 2.0 * T1(N - 1) * b.row(4 * N - 2) +
                   3.0 * T2(N - 1) * b.row(4 * N - 1));
 
     // negative acceleration
-    B2.row(1) = -(2.0 * b.row(4 * N - 2) +
-                  6.0 * T1(N - 1) * b.row(4 * N - 1));
+    B2.row(1) = -(2.0 * b.row(4 * N - 2) + 6.0 * T1(N - 1) * b.row(4 * N - 1));
 
-    gradByTimes(N - 1) = B2.cwiseProduct(adjGrad.block<2, 3>(4 * N - 2, 0)).sum();
+    gradByTimes(N - 1) =
+        B2.cwiseProduct(adjGrad.block<2, 3>(4 * N - 2, 0)).sum();
 
     gradByTimes += partialGradByTimes;
 }
 
-
-void
-MINCO_S3NU::setConditions(const Eigen::Matrix<double, 3, 3> &headState, const Eigen::Matrix<double, 3, 3> &tailState,
-                          const int &pieceNum) {
+void MINCO_S3NU::setConditions(const Eigen::Matrix<double, 3, 3> &headState,
+                               const Eigen::Matrix<double, 3, 3> &tailState,
+                               const int &pieceNum) {
     N = pieceNum;
     headPVA = headState;
     tailPVA = tailState;
@@ -179,8 +172,8 @@ MINCO_S3NU::setConditions(const Eigen::Matrix<double, 3, 3> &headState, const Ei
     return;
 }
 
-void
-MINCO_S3NU::setConditions(const Eigen::Matrix<double, 3, 3> &headState, const Eigen::Matrix<double, 3, 3> &tailState) {
+void MINCO_S3NU::setConditions(const Eigen::Matrix<double, 3, 3> &headState,
+                               const Eigen::Matrix<double, 3, 3> &tailState) {
     headPVA = headState;
     tailPVA = tailState;
 }
@@ -189,8 +182,8 @@ void MINCO_S3NU::setEndPosition(const Eigen::Vector3d &end_p) {
     tailPVA.col(0) = end_p;
 }
 
-
-void MINCO_S3NU::setParameters(const Eigen::Matrix3Xd &inPs, const Eigen::VectorXd &ts) {
+void MINCO_S3NU::setParameters(const Eigen::Matrix3Xd &inPs,
+                               const Eigen::VectorXd &ts) {
     T1 = ts;
     T2 = T1.cwiseProduct(T1);
     T3 = T2.cwiseProduct(T1);
@@ -273,15 +266,11 @@ void MINCO_S3NU::getTrajectory(Trajectory &traj) const {
     traj.clear();
     traj.reserve(N);
     for (int i = 0; i < N; i++) {
-        traj.emplace_back(T1(i),
-                          b.block<6, 3>(6 * i, 0)
-                                  .transpose()
-                                  .rowwise()
-                                  .reverse());
+        traj.emplace_back(
+            T1(i), b.block<6, 3>(6 * i, 0).transpose().rowwise().reverse());
     }
     return;
 }
-
 
 void MINCO_S3NU::getEnergy(double &energy) const {
     energy = 0.0;
@@ -296,9 +285,7 @@ void MINCO_S3NU::getEnergy(double &energy) const {
     return;
 }
 
-const Eigen::MatrixX3d &MINCO_S3NU::getCoeffs() const {
-    return b;
-}
+const Eigen::MatrixX3d &MINCO_S3NU::getCoeffs() const { return b; }
 
 void MINCO_S3NU::getEnergyPartialGradByCoeffs(Eigen::MatrixX3d &gdC) const {
     gdC.resize(6 * N, 3);
@@ -330,11 +317,13 @@ void MINCO_S3NU::getEnergyPartialGradByTimes(Eigen::VectorXd &gdT) const {
     return;
 }
 
-void MINCO_S3NU::propogateGrad(const Eigen::MatrixX3d &partialGradByCoeffs, const Eigen::VectorXd &partialGradByTimes,
-                               Eigen::Matrix3Xd &gradByPoints, Eigen::VectorXd &gradByTimes, bool free_end) {
+void MINCO_S3NU::propogateGrad(const Eigen::MatrixX3d &partialGradByCoeffs,
+                               const Eigen::VectorXd &partialGradByTimes,
+                               Eigen::Matrix3Xd &gradByPoints,
+                               Eigen::VectorXd &gradByTimes, bool free_end) {
     // 更新增加终点
     gradByTimes.resize(N);
-    Eigen::MatrixX3d adjGrad = partialGradByCoeffs; // [3] x [6 * N]
+    Eigen::MatrixX3d adjGrad = partialGradByCoeffs;  // [3] x [6 * N]
     A.solveAdj(adjGrad);
     if (free_end) {
         gradByPoints.resize(3, N);
@@ -353,64 +342,58 @@ void MINCO_S3NU::propogateGrad(const Eigen::MatrixX3d &partialGradByCoeffs, cons
     Eigen::Matrix3d B2;
     for (int i = 0; i < N - 1; i++) {
         // negative velocity
-        B1.row(2) = -(b.row(i * 6 + 1) +
-                      2.0 * T1(i) * b.row(i * 6 + 2) +
-                      3.0 * T2(i) * b.row(i * 6 + 3) +
-                      4.0 * T3(i) * b.row(i * 6 + 4) +
-                      5.0 * T4(i) * b.row(i * 6 + 5));
+        B1.row(2) =
+            -(b.row(i * 6 + 1) + 2.0 * T1(i) * b.row(i * 6 + 2) +
+              3.0 * T2(i) * b.row(i * 6 + 3) + 4.0 * T3(i) * b.row(i * 6 + 4) +
+              5.0 * T4(i) * b.row(i * 6 + 5));
         B1.row(3) = B1.row(2);
 
         // negative acceleration
-        B1.row(4) = -(2.0 * b.row(i * 6 + 2) +
-                      6.0 * T1(i) * b.row(i * 6 + 3) +
+        B1.row(4) = -(2.0 * b.row(i * 6 + 2) + 6.0 * T1(i) * b.row(i * 6 + 3) +
                       12.0 * T2(i) * b.row(i * 6 + 4) +
                       20.0 * T3(i) * b.row(i * 6 + 5));
 
         // negative jerk
-        B1.row(5) = -(6.0 * b.row(i * 6 + 3) +
-                      24.0 * T1(i) * b.row(i * 6 + 4) +
+        B1.row(5) = -(6.0 * b.row(i * 6 + 3) + 24.0 * T1(i) * b.row(i * 6 + 4) +
                       60.0 * T2(i) * b.row(i * 6 + 5));
 
         // negative snap
-        B1.row(0) = -(24.0 * b.row(i * 6 + 4) +
-                      120.0 * T1(i) * b.row(i * 6 + 5));
+        B1.row(0) =
+            -(24.0 * b.row(i * 6 + 4) + 120.0 * T1(i) * b.row(i * 6 + 5));
 
         // negative crackle
         B1.row(1) = -120.0 * b.row(i * 6 + 5);
 
-        gradByTimes(i) = B1.cwiseProduct(adjGrad.block<6, 3>(6 * i + 3, 0)).sum();
+        gradByTimes(i) =
+            B1.cwiseProduct(adjGrad.block<6, 3>(6 * i + 3, 0)).sum();
     }
 
     // negative velocity
-    B2.row(0) = -(b.row(6 * N - 5) +
-                  2.0 * T1(N - 1) * b.row(6 * N - 4) +
+    B2.row(0) = -(b.row(6 * N - 5) + 2.0 * T1(N - 1) * b.row(6 * N - 4) +
                   3.0 * T2(N - 1) * b.row(6 * N - 3) +
                   4.0 * T3(N - 1) * b.row(6 * N - 2) +
                   5.0 * T4(N - 1) * b.row(6 * N - 1));
 
     // negative acceleration
-    B2.row(1) = -(2.0 * b.row(6 * N - 4) +
-                  6.0 * T1(N - 1) * b.row(6 * N - 3) +
+    B2.row(1) = -(2.0 * b.row(6 * N - 4) + 6.0 * T1(N - 1) * b.row(6 * N - 3) +
                   12.0 * T2(N - 1) * b.row(6 * N - 2) +
                   20.0 * T3(N - 1) * b.row(6 * N - 1));
 
     // negative jerk
-    B2.row(2) = -(6.0 * b.row(6 * N - 3) +
-                  24.0 * T1(N - 1) * b.row(6 * N - 2) +
+    B2.row(2) = -(6.0 * b.row(6 * N - 3) + 24.0 * T1(N - 1) * b.row(6 * N - 2) +
                   60.0 * T2(N - 1) * b.row(6 * N - 1));
 
-    gradByTimes(N - 1) = B2.cwiseProduct(adjGrad.block<3, 3>(6 * N - 3, 0)).sum();
+    gradByTimes(N - 1) =
+        B2.cwiseProduct(adjGrad.block<3, 3>(6 * N - 3, 0)).sum();
     gradByTimes += partialGradByTimes;
 }
 
-void
-MINCO_S3NU::propagateGradOfWayptsAndState(const Eigen::MatrixX3d &partialGradByCoeffs,
-                                          const Eigen::VectorXd &partialGradByTimes,
-                                          Eigen::VectorXd &gradByTimes,
-                                          StatePVA &gradByHeadState,
-                                          Mat3Df &gradByPoints,
-                                          StatePVA &gradByTailState) {
-    Eigen::MatrixX3d adjGrad = partialGradByCoeffs; // [3] x [8 * N]
+void MINCO_S3NU::propagateGradOfWayptsAndState(
+    const Eigen::MatrixX3d &partialGradByCoeffs,
+    const Eigen::VectorXd &partialGradByTimes, Eigen::VectorXd &gradByTimes,
+    StatePVA &gradByHeadState, Mat3Df &gradByPoints,
+    StatePVA &gradByTailState) {
+    Eigen::MatrixX3d adjGrad = partialGradByCoeffs;  // [3] x [8 * N]
     A.solveAdj(adjGrad);
 
     gradByHeadState = adjGrad.block<3, 3>(0, 0).transpose();
@@ -423,65 +406,59 @@ MINCO_S3NU::propagateGradOfWayptsAndState(const Eigen::MatrixX3d &partialGradByC
         gradByPoints.col(i) = adjGrad.row(6 * i + 5).transpose();
     }
 
-
     Eigen::Matrix<double, 6, 3> B1;
     Eigen::Matrix3d B2;
     for (int i = 0; i < N - 1; i++) {
         // negative velocity
-        B1.row(2) = -(b.row(i * 6 + 1) +
-                      2.0 * T1(i) * b.row(i * 6 + 2) +
-                      3.0 * T2(i) * b.row(i * 6 + 3) +
-                      4.0 * T3(i) * b.row(i * 6 + 4) +
-                      5.0 * T4(i) * b.row(i * 6 + 5));
+        B1.row(2) =
+            -(b.row(i * 6 + 1) + 2.0 * T1(i) * b.row(i * 6 + 2) +
+              3.0 * T2(i) * b.row(i * 6 + 3) + 4.0 * T3(i) * b.row(i * 6 + 4) +
+              5.0 * T4(i) * b.row(i * 6 + 5));
         B1.row(3) = B1.row(2);
 
         // negative acceleration
-        B1.row(4) = -(2.0 * b.row(i * 6 + 2) +
-                      6.0 * T1(i) * b.row(i * 6 + 3) +
+        B1.row(4) = -(2.0 * b.row(i * 6 + 2) + 6.0 * T1(i) * b.row(i * 6 + 3) +
                       12.0 * T2(i) * b.row(i * 6 + 4) +
                       20.0 * T3(i) * b.row(i * 6 + 5));
 
         // negative jerk
-        B1.row(5) = -(6.0 * b.row(i * 6 + 3) +
-                      24.0 * T1(i) * b.row(i * 6 + 4) +
+        B1.row(5) = -(6.0 * b.row(i * 6 + 3) + 24.0 * T1(i) * b.row(i * 6 + 4) +
                       60.0 * T2(i) * b.row(i * 6 + 5));
 
         // negative snap
-        B1.row(0) = -(24.0 * b.row(i * 6 + 4) +
-                      120.0 * T1(i) * b.row(i * 6 + 5));
+        B1.row(0) =
+            -(24.0 * b.row(i * 6 + 4) + 120.0 * T1(i) * b.row(i * 6 + 5));
 
         // negative crackle
         B1.row(1) = -120.0 * b.row(i * 6 + 5);
 
-        gradByTimes(i) = B1.cwiseProduct(adjGrad.block<6, 3>(6 * i + 3, 0)).sum();
+        gradByTimes(i) =
+            B1.cwiseProduct(adjGrad.block<6, 3>(6 * i + 3, 0)).sum();
     }
 
     // negative velocity
-    B2.row(0) = -(b.row(6 * N - 5) +
-                  2.0 * T1(N - 1) * b.row(6 * N - 4) +
+    B2.row(0) = -(b.row(6 * N - 5) + 2.0 * T1(N - 1) * b.row(6 * N - 4) +
                   3.0 * T2(N - 1) * b.row(6 * N - 3) +
                   4.0 * T3(N - 1) * b.row(6 * N - 2) +
                   5.0 * T4(N - 1) * b.row(6 * N - 1));
 
     // negative acceleration
-    B2.row(1) = -(2.0 * b.row(6 * N - 4) +
-                  6.0 * T1(N - 1) * b.row(6 * N - 3) +
+    B2.row(1) = -(2.0 * b.row(6 * N - 4) + 6.0 * T1(N - 1) * b.row(6 * N - 3) +
                   12.0 * T2(N - 1) * b.row(6 * N - 2) +
                   20.0 * T3(N - 1) * b.row(6 * N - 1));
 
     // negative jerk
-    B2.row(2) = -(6.0 * b.row(6 * N - 3) +
-                  24.0 * T1(N - 1) * b.row(6 * N - 2) +
+    B2.row(2) = -(6.0 * b.row(6 * N - 3) + 24.0 * T1(N - 1) * b.row(6 * N - 2) +
                   60.0 * T2(N - 1) * b.row(6 * N - 1));
 
-    gradByTimes(N - 1) = B2.cwiseProduct(adjGrad.block<3, 3>(6 * N - 3, 0)).sum();
+    gradByTimes(N - 1) =
+        B2.cwiseProduct(adjGrad.block<3, 3>(6 * N - 3, 0)).sum();
     gradByTimes += partialGradByTimes;
 }
 
-
-void
-MINCO_S4NU::setConditions(const Eigen::Matrix<double, 3, 4> &headState, const Eigen::Matrix<double, 3, 4> &tailState,
-                          const int &pieceNum) {
+void MINCO_S4NU::setConditions(const Eigen::Matrix<double, 3, 4> &headState,
+                               const Eigen::Matrix<double, 3, 4> &tailState,
+                               const int &pieceNum) {
     N = pieceNum;
     headPVAJ = headState;
     tailPVAJ = tailState;
@@ -497,20 +474,19 @@ MINCO_S4NU::setConditions(const Eigen::Matrix<double, 3, 4> &headState, const Ei
     return;
 }
 
-void
-MINCO_S4NU::setConditions(const Eigen::Matrix<double, 3, 4> &headState, const Eigen::Matrix<double, 3, 4> &tailState) {
+void MINCO_S4NU::setConditions(const Eigen::Matrix<double, 3, 4> &headState,
+                               const Eigen::Matrix<double, 3, 4> &tailState) {
     headPVAJ = headState;
     tailPVAJ = tailState;
     return;
 }
 
-
 void MINCO_S4NU::setEndPosition(const Eigen::Vector3d &end_p) {
     tailPVAJ.col(0) = end_p;
 }
 
-
-void MINCO_S4NU::setParameters(const Eigen::MatrixXd &inPs, const Eigen::VectorXd &ts) {
+void MINCO_S4NU::setParameters(const Eigen::MatrixXd &inPs,
+                               const Eigen::VectorXd &ts) {
     T1 = ts;
     T2 = T1.cwiseProduct(T1);
     T3 = T2.cwiseProduct(T1);
@@ -628,11 +604,8 @@ void MINCO_S4NU::getTrajectory(Trajectory &traj) const {
     traj.clear();
     traj.reserve(N);
     for (int i = 0; i < N; i++) {
-        traj.emplace_back(T1(i),
-                          b.block<8, 3>(8 * i, 0)
-                                  .transpose()
-                                  .rowwise()
-                                  .reverse());
+        traj.emplace_back(
+            T1(i), b.block<8, 3>(8 * i, 0).transpose().rowwise().reverse());
     }
     return;
 }
@@ -654,9 +627,7 @@ void MINCO_S4NU::getEnergy(double &energy) const {
     return;
 }
 
-const Eigen::MatrixX3d &MINCO_S4NU::getCoeffs() const {
-    return b;
-}
+const Eigen::MatrixX3d &MINCO_S4NU::getCoeffs() const { return b; }
 
 void MINCO_S4NU::getEnergyPartialGradByCoeffs(Eigen::MatrixX3d &gdC) const {
     gdC.resize(8 * N, 3);
@@ -699,11 +670,13 @@ void MINCO_S4NU::getEnergyPartialGradByTimes(Eigen::VectorXd &gdT) const {
     return;
 }
 
-void MINCO_S4NU::propogateGrad(const Eigen::MatrixX3d &partialGradByCoeffs, const Eigen::VectorXd &partialGradByTimes,
-                               Eigen::Matrix3Xd &gradByPoints, Eigen::VectorXd &gradByTimes, bool free_end) {
+void MINCO_S4NU::propogateGrad(const Eigen::MatrixX3d &partialGradByCoeffs,
+                               const Eigen::VectorXd &partialGradByTimes,
+                               Eigen::Matrix3Xd &gradByPoints,
+                               Eigen::VectorXd &gradByTimes, bool free_end) {
     // 更新增加终点
     gradByTimes.resize(N);
-    Eigen::MatrixX3d adjGrad = partialGradByCoeffs; // [3] x [6 * N]
+    Eigen::MatrixX3d adjGrad = partialGradByCoeffs;  // [3] x [6 * N]
     A.solveAdj(adjGrad);
     if (free_end) {
         gradByPoints.resize(3, N);
@@ -722,54 +695,49 @@ void MINCO_S4NU::propogateGrad(const Eigen::MatrixX3d &partialGradByCoeffs, cons
     Eigen::Matrix<double, 4, 3> B2;
     for (int i = 0; i < N - 1; i++) {
         // negative velocity
-        B1.row(3) = -(b.row(i * 8 + 1) +
-                      2.0 * T1(i) * b.row(i * 8 + 2) +
-                      3.0 * T2(i) * b.row(i * 8 + 3) +
-                      4.0 * T3(i) * b.row(i * 8 + 4) +
-                      5.0 * T4(i) * b.row(i * 8 + 5) +
-                      6.0 * T5(i) * b.row(i * 8 + 6) +
-                      7.0 * T6(i) * b.row(i * 8 + 7));
+        B1.row(3) =
+            -(b.row(i * 8 + 1) + 2.0 * T1(i) * b.row(i * 8 + 2) +
+              3.0 * T2(i) * b.row(i * 8 + 3) + 4.0 * T3(i) * b.row(i * 8 + 4) +
+              5.0 * T4(i) * b.row(i * 8 + 5) + 6.0 * T5(i) * b.row(i * 8 + 6) +
+              7.0 * T6(i) * b.row(i * 8 + 7));
         B1.row(4) = B1.row(3);
 
         // negative acceleration
-        B1.row(5) = -(2.0 * b.row(i * 8 + 2) +
-                      6.0 * T1(i) * b.row(i * 8 + 3) +
-                      12.0 * T2(i) * b.row(i * 8 + 4) +
-                      20.0 * T3(i) * b.row(i * 8 + 5) +
-                      30.0 * T4(i) * b.row(i * 8 + 6) +
-                      42.0 * T5(i) * b.row(i * 8 + 7));
+        B1.row(5) = -(
+            2.0 * b.row(i * 8 + 2) + 6.0 * T1(i) * b.row(i * 8 + 3) +
+            12.0 * T2(i) * b.row(i * 8 + 4) + 20.0 * T3(i) * b.row(i * 8 + 5) +
+            30.0 * T4(i) * b.row(i * 8 + 6) + 42.0 * T5(i) * b.row(i * 8 + 7));
 
         // negative jerk
-        B1.row(6) = -(6.0 * b.row(i * 8 + 3) +
-                      24.0 * T1(i) * b.row(i * 8 + 4) +
+        B1.row(6) = -(6.0 * b.row(i * 8 + 3) + 24.0 * T1(i) * b.row(i * 8 + 4) +
                       60.0 * T2(i) * b.row(i * 8 + 5) +
                       120.0 * T3(i) * b.row(i * 8 + 6) +
                       210.0 * T4(i) * b.row(i * 8 + 7));
 
         // negative snap
-        B1.row(7) = -(24.0 * b.row(i * 8 + 4) +
-                      120.0 * T1(i) * b.row(i * 8 + 5) +
-                      360.0 * T2(i) * b.row(i * 8 + 6) +
-                      840.0 * T3(i) * b.row(i * 8 + 7));
+        B1.row(7) =
+            -(24.0 * b.row(i * 8 + 4) + 120.0 * T1(i) * b.row(i * 8 + 5) +
+              360.0 * T2(i) * b.row(i * 8 + 6) +
+              840.0 * T3(i) * b.row(i * 8 + 7));
 
         // negative crackle
-        B1.row(0) = -(120.0 * b.row(i * 8 + 5) +
-                      720.0 * T1(i) * b.row(i * 8 + 6) +
-                      2520.0 * T2(i) * b.row(i * 8 + 7));
+        B1.row(0) =
+            -(120.0 * b.row(i * 8 + 5) + 720.0 * T1(i) * b.row(i * 8 + 6) +
+              2520.0 * T2(i) * b.row(i * 8 + 7));
 
         // negative d_crackle
-        B1.row(1) = -(720.0 * b.row(i * 8 + 6) +
-                      5040.0 * T1(i) * b.row(i * 8 + 7));
+        B1.row(1) =
+            -(720.0 * b.row(i * 8 + 6) + 5040.0 * T1(i) * b.row(i * 8 + 7));
 
         // negative dd_crackle
         B1.row(2) = -5040.0 * b.row(i * 8 + 7);
 
-        gradByTimes(i) = B1.cwiseProduct(adjGrad.block<8, 3>(8 * i + 4, 0)).sum();
+        gradByTimes(i) =
+            B1.cwiseProduct(adjGrad.block<8, 3>(8 * i + 4, 0)).sum();
     }
 
     // negative velocity
-    B2.row(0) = -(b.row(8 * N - 7) +
-                  2.0 * T1(N - 1) * b.row(8 * N - 6) +
+    B2.row(0) = -(b.row(8 * N - 7) + 2.0 * T1(N - 1) * b.row(8 * N - 6) +
                   3.0 * T2(N - 1) * b.row(8 * N - 5) +
                   4.0 * T3(N - 1) * b.row(8 * N - 4) +
                   5.0 * T4(N - 1) * b.row(8 * N - 3) +
@@ -777,40 +745,36 @@ void MINCO_S4NU::propogateGrad(const Eigen::MatrixX3d &partialGradByCoeffs, cons
                   7.0 * T6(N - 1) * b.row(8 * N - 1));
 
     // negative acceleration
-    B2.row(1) = -(2.0 * b.row(8 * N - 6) +
-                  6.0 * T1(N - 1) * b.row(8 * N - 5) +
+    B2.row(1) = -(2.0 * b.row(8 * N - 6) + 6.0 * T1(N - 1) * b.row(8 * N - 5) +
                   12.0 * T2(N - 1) * b.row(8 * N - 4) +
                   20.0 * T3(N - 1) * b.row(8 * N - 3) +
                   30.0 * T4(N - 1) * b.row(8 * N - 2) +
                   42.0 * T5(N - 1) * b.row(8 * N - 1));
 
     // negative jerk
-    B2.row(2) = -(6.0 * b.row(8 * N - 5) +
-                  24.0 * T1(N - 1) * b.row(8 * N - 4) +
+    B2.row(2) = -(6.0 * b.row(8 * N - 5) + 24.0 * T1(N - 1) * b.row(8 * N - 4) +
                   60.0 * T2(N - 1) * b.row(8 * N - 3) +
                   120.0 * T3(N - 1) * b.row(8 * N - 2) +
                   210.0 * T4(N - 1) * b.row(8 * N - 1));
 
     // negative snap
-    B2.row(3) = -(24.0 * b.row(8 * N - 4) +
-                  120.0 * T1(N - 1) * b.row(8 * N - 3) +
-                  360.0 * T2(N - 1) * b.row(8 * N - 2) +
-                  840.0 * T3(N - 1) * b.row(8 * N - 1));
+    B2.row(3) =
+        -(24.0 * b.row(8 * N - 4) + 120.0 * T1(N - 1) * b.row(8 * N - 3) +
+          360.0 * T2(N - 1) * b.row(8 * N - 2) +
+          840.0 * T3(N - 1) * b.row(8 * N - 1));
 
-    gradByTimes(N - 1) = B2.cwiseProduct(adjGrad.block<4, 3>(8 * N - 4, 0)).sum();
+    gradByTimes(N - 1) =
+        B2.cwiseProduct(adjGrad.block<4, 3>(8 * N - 4, 0)).sum();
     gradByTimes += partialGradByTimes;
 }
 
-
-void MINCO_S4NU::propagateGradOfWayptsAndState(const Eigen::MatrixX3d &partialGradByCoeffs,
-                                               const Eigen::VectorXd &partialGradByTimes,
-                                               Eigen::VectorXd &gradByTimes,
-                                               StatePVAJ &gradByHeadState,
-                                               Eigen::Matrix3Xd &gradByPoints,
-                                               StatePVAJ &gradByTailState) {
-
-    Eigen::MatrixX3d adjGrad = partialGradByCoeffs; // [3] x [8 * N]
-    A.solveAdj(adjGrad); // [4] x [3 * (N + 1)]
+void MINCO_S4NU::propagateGradOfWayptsAndState(
+    const Eigen::MatrixX3d &partialGradByCoeffs,
+    const Eigen::VectorXd &partialGradByTimes, Eigen::VectorXd &gradByTimes,
+    StatePVAJ &gradByHeadState, Eigen::Matrix3Xd &gradByPoints,
+    StatePVAJ &gradByTailState) {
+    Eigen::MatrixX3d adjGrad = partialGradByCoeffs;  // [3] x [8 * N]
+    A.solveAdj(adjGrad);                             // [4] x [3 * (N + 1)]
 
     gradByHeadState = adjGrad.block<4, 3>(0, 0).transpose();
     gradByTailState = adjGrad.block<4, 3>(8 * N - 4, 0).transpose();
@@ -826,54 +790,49 @@ void MINCO_S4NU::propagateGradOfWayptsAndState(const Eigen::MatrixX3d &partialGr
     Eigen::Matrix<double, 4, 3> B2;
     for (int i = 0; i < N - 1; i++) {
         // negative velocity
-        B1.row(3) = -(b.row(i * 8 + 1) +
-                      2.0 * T1(i) * b.row(i * 8 + 2) +
-                      3.0 * T2(i) * b.row(i * 8 + 3) +
-                      4.0 * T3(i) * b.row(i * 8 + 4) +
-                      5.0 * T4(i) * b.row(i * 8 + 5) +
-                      6.0 * T5(i) * b.row(i * 8 + 6) +
-                      7.0 * T6(i) * b.row(i * 8 + 7));
+        B1.row(3) =
+            -(b.row(i * 8 + 1) + 2.0 * T1(i) * b.row(i * 8 + 2) +
+              3.0 * T2(i) * b.row(i * 8 + 3) + 4.0 * T3(i) * b.row(i * 8 + 4) +
+              5.0 * T4(i) * b.row(i * 8 + 5) + 6.0 * T5(i) * b.row(i * 8 + 6) +
+              7.0 * T6(i) * b.row(i * 8 + 7));
         B1.row(4) = B1.row(3);
 
         // negative acceleration
-        B1.row(5) = -(2.0 * b.row(i * 8 + 2) +
-                      6.0 * T1(i) * b.row(i * 8 + 3) +
-                      12.0 * T2(i) * b.row(i * 8 + 4) +
-                      20.0 * T3(i) * b.row(i * 8 + 5) +
-                      30.0 * T4(i) * b.row(i * 8 + 6) +
-                      42.0 * T5(i) * b.row(i * 8 + 7));
+        B1.row(5) = -(
+            2.0 * b.row(i * 8 + 2) + 6.0 * T1(i) * b.row(i * 8 + 3) +
+            12.0 * T2(i) * b.row(i * 8 + 4) + 20.0 * T3(i) * b.row(i * 8 + 5) +
+            30.0 * T4(i) * b.row(i * 8 + 6) + 42.0 * T5(i) * b.row(i * 8 + 7));
 
         // negative jerk
-        B1.row(6) = -(6.0 * b.row(i * 8 + 3) +
-                      24.0 * T1(i) * b.row(i * 8 + 4) +
+        B1.row(6) = -(6.0 * b.row(i * 8 + 3) + 24.0 * T1(i) * b.row(i * 8 + 4) +
                       60.0 * T2(i) * b.row(i * 8 + 5) +
                       120.0 * T3(i) * b.row(i * 8 + 6) +
                       210.0 * T4(i) * b.row(i * 8 + 7));
 
         // negative snap
-        B1.row(7) = -(24.0 * b.row(i * 8 + 4) +
-                      120.0 * T1(i) * b.row(i * 8 + 5) +
-                      360.0 * T2(i) * b.row(i * 8 + 6) +
-                      840.0 * T3(i) * b.row(i * 8 + 7));
+        B1.row(7) =
+            -(24.0 * b.row(i * 8 + 4) + 120.0 * T1(i) * b.row(i * 8 + 5) +
+              360.0 * T2(i) * b.row(i * 8 + 6) +
+              840.0 * T3(i) * b.row(i * 8 + 7));
 
         // negative crackle
-        B1.row(0) = -(120.0 * b.row(i * 8 + 5) +
-                      720.0 * T1(i) * b.row(i * 8 + 6) +
-                      2520.0 * T2(i) * b.row(i * 8 + 7));
+        B1.row(0) =
+            -(120.0 * b.row(i * 8 + 5) + 720.0 * T1(i) * b.row(i * 8 + 6) +
+              2520.0 * T2(i) * b.row(i * 8 + 7));
 
         // negative d_crackle
-        B1.row(1) = -(720.0 * b.row(i * 8 + 6) +
-                      5040.0 * T1(i) * b.row(i * 8 + 7));
+        B1.row(1) =
+            -(720.0 * b.row(i * 8 + 6) + 5040.0 * T1(i) * b.row(i * 8 + 7));
 
         // negative dd_crackle
         B1.row(2) = -5040.0 * b.row(i * 8 + 7);
 
-        gradByTimes(i) = B1.cwiseProduct(adjGrad.block<8, 3>(8 * i + 4, 0)).sum();
+        gradByTimes(i) =
+            B1.cwiseProduct(adjGrad.block<8, 3>(8 * i + 4, 0)).sum();
     }
 
     // negative velocity
-    B2.row(0) = -(b.row(8 * N - 7) +
-                  2.0 * T1(N - 1) * b.row(8 * N - 6) +
+    B2.row(0) = -(b.row(8 * N - 7) + 2.0 * T1(N - 1) * b.row(8 * N - 6) +
                   3.0 * T2(N - 1) * b.row(8 * N - 5) +
                   4.0 * T3(N - 1) * b.row(8 * N - 4) +
                   5.0 * T4(N - 1) * b.row(8 * N - 3) +
@@ -881,26 +840,25 @@ void MINCO_S4NU::propagateGradOfWayptsAndState(const Eigen::MatrixX3d &partialGr
                   7.0 * T6(N - 1) * b.row(8 * N - 1));
 
     // negative acceleration
-    B2.row(1) = -(2.0 * b.row(8 * N - 6) +
-                  6.0 * T1(N - 1) * b.row(8 * N - 5) +
+    B2.row(1) = -(2.0 * b.row(8 * N - 6) + 6.0 * T1(N - 1) * b.row(8 * N - 5) +
                   12.0 * T2(N - 1) * b.row(8 * N - 4) +
                   20.0 * T3(N - 1) * b.row(8 * N - 3) +
                   30.0 * T4(N - 1) * b.row(8 * N - 2) +
                   42.0 * T5(N - 1) * b.row(8 * N - 1));
 
     // negative jerk
-    B2.row(2) = -(6.0 * b.row(8 * N - 5) +
-                  24.0 * T1(N - 1) * b.row(8 * N - 4) +
+    B2.row(2) = -(6.0 * b.row(8 * N - 5) + 24.0 * T1(N - 1) * b.row(8 * N - 4) +
                   60.0 * T2(N - 1) * b.row(8 * N - 3) +
                   120.0 * T3(N - 1) * b.row(8 * N - 2) +
                   210.0 * T4(N - 1) * b.row(8 * N - 1));
 
     // negative snap
-    B2.row(3) = -(24.0 * b.row(8 * N - 4) +
-                  120.0 * T1(N - 1) * b.row(8 * N - 3) +
-                  360.0 * T2(N - 1) * b.row(8 * N - 2) +
-                  840.0 * T3(N - 1) * b.row(8 * N - 1));
+    B2.row(3) =
+        -(24.0 * b.row(8 * N - 4) + 120.0 * T1(N - 1) * b.row(8 * N - 3) +
+          360.0 * T2(N - 1) * b.row(8 * N - 2) +
+          840.0 * T3(N - 1) * b.row(8 * N - 1));
 
-    gradByTimes(N - 1) = B2.cwiseProduct(adjGrad.block<4, 3>(8 * N - 4, 0)).sum();
+    gradByTimes(N - 1) =
+        B2.cwiseProduct(adjGrad.block<4, 3>(8 * N - 4, 0)).sum();
     gradByTimes += partialGradByTimes;
 }

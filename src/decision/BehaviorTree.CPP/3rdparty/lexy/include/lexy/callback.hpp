@@ -19,5 +19,4 @@
 #include <lexy/callback/object.hpp>
 #include <lexy/callback/string.hpp>
 
-#endif // LEXY_CALLBACK_HPP_INCLUDED
-
+#endif  // LEXY_CALLBACK_HPP_INCLUDED

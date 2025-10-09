@@ -18,29 +18,29 @@ class any_holder;
 class any_base
 {
 public:
-    any_base(const any_base&)            = delete;
-    any_base& operator=(const any_base&) = delete;
+  any_base(const any_base&) = delete;
+  any_base& operator=(const any_base&) = delete;
 
-    template <typename T>
-    constexpr T& get() noexcept
-    {
-        return static_cast<any_holder<T>*>(this)->get();
-    }
-    template <typename T>
-    constexpr const T& get() const noexcept
-    {
-        return static_cast<const any_holder<T>*>(this)->get();
-    }
+  template <typename T>
+  constexpr T& get() noexcept
+  {
+    return static_cast<any_holder<T>*>(this)->get();
+  }
+  template <typename T>
+  constexpr const T& get() const noexcept
+  {
+    return static_cast<const any_holder<T>*>(this)->get();
+  }
 
 private:
-    constexpr any_base() = default;
-    ~any_base()          = default;
+  constexpr any_base() = default;
+  ~any_base() = default;
 
-    template <typename T>
-    friend class any_holder;
+  template <typename T>
+  friend class any_holder;
 };
 
-using any_ref  = any_base*;
+using any_ref = any_base*;
 using any_cref = const any_base*;
 
 // Need to store the object in here.
@@ -48,21 +48,21 @@ template <typename T>
 class any_holder : public any_base
 {
 public:
-    constexpr explicit any_holder(T&& obj) : _obj(LEXY_MOV(obj)) {}
+  constexpr explicit any_holder(T&& obj) : _obj(LEXY_MOV(obj))
+  {}
 
-    constexpr T& get() noexcept
-    {
-        return _obj;
-    }
-    constexpr const T& get() const noexcept
-    {
-        return _obj;
-    }
+  constexpr T& get() noexcept
+  {
+    return _obj;
+  }
+  constexpr const T& get() const noexcept
+  {
+    return _obj;
+  }
 
 private:
-    T _obj;
+  T _obj;
 };
-} // namespace lexy::_detail
+}  // namespace lexy::_detail
 
-#endif // LEXY_DETAIL_ANY_REF_HPP_INCLUDED
-
+#endif  // LEXY_DETAIL_ANY_REF_HPP_INCLUDED
