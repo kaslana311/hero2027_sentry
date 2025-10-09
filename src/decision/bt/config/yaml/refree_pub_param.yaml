@@ -1,0 +1,16 @@
+*-refree_pub:
+  ros__parameters:
+    competition_type: 1
+    competition_stage: 4 
+    stage_time: 100
+    current_hp: 400
+    is_reached: true
+    
+    red_outpost: 400
+
+    blue_hero: 300
+    blue_outpost: 400
+    bullet_17mm: 400
+
+    hero_x: 0.0
+    hero_y: 1.5

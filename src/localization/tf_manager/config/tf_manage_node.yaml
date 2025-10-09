@@ -1,0 +1,9 @@
+tf_manage_node:
+  ros__parameters:
+    odom_frame_id: "odom"
+    base_frame_id: "base_link"
+    lidar_frame_id: "livox_frame"
+    publish_frequency: 100.0
+    base_to_lidar:
+      translation.xyz: [0.0, -0.13, 0.0]  # 底盘原点在lidar x轴方向，负-0.15米处
+      rotation.rpy: [0.0, 0.0, 0.0]   # 无旋转
