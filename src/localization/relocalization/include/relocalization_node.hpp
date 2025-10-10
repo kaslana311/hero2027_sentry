@@ -146,11 +146,16 @@ class RelocalizationNode : public rclcpp::Node {
     }
     static inline double PitchDelta(const Eigen::Matrix4d &A,
                                     const Eigen::Matrix4d &B) {
-        return std::abs(NormalizeAngle(PitchFromMat(A) - PitchFromMat(B)));
+        double deg =
+            std::abs(NormalizeAngle(PitchFromMat(A) - PitchFromMat(B)));
+        if (deg > 175.0 * M_PI / 180.0) deg = std::abs(M_PI - deg);
+        return deg;
     }
     static inline double RollDelta(const Eigen::Matrix4d &A,
                                    const Eigen::Matrix4d &B) {
-        return std::abs(NormalizeAngle(RollFromMat(A) - RollFromMat(B)));
+        double deg = std::abs(NormalizeAngle(RollFromMat(A) - RollFromMat(B)));
+        if (deg > 175.0 * M_PI / 180.0) deg = std::abs(M_PI - deg);
+        return deg;
     }
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_ = nullptr;
