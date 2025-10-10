@@ -203,9 +203,14 @@ bool RelocalizationNode::GlobalLocalization() {
         const bool pitch_ok =
             PitchDelta(best_T, pose_estimation_) <= pitch_gate;
 
-        if (fitness_ok && trans_ok && yaw_ok && roll_ok && pitch_ok) {
-            RCLCPP_INFO(this->get_logger(), "registration can be trusted");
-            RCLCPP_INFO(this->get_logger(), "Fitness:%f", best_fitness);
+        if (fitness_ok && trans_ok && yaw_ok) {
+            RCLCPP_INFO(this->get_logger(),
+                        "registration can be trusted (fitness=%.5f, dtrans=%.3f, "
+                        "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
+                        best_fitness, TransDelta(best_T, pose_estimation_),
+                        RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
+                        PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
+                        YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
 
             nav_msgs::msg::Odometry map_to_odom;
             Eigen::Matrix4d T_pub = best_T;
