@@ -1,6 +1,6 @@
 /**:
     ros__parameters:
-        use_imu_as_input: true                      # Change to True to use IMU as input of Point-LIO
+        use_imu_as_input: false                      # Change to True to use IMU as input of Point-LIO
         prop_at_freq_of_imu: True
         check_satu: True
         init_map_size: 50
@@ -51,20 +51,19 @@
             plane_thr: 0.1                                  # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
             match_s: 81.0
             ivox_grid_resolution: 0.5       #2.0
-            # gravity: [ 0.0, 0.0, -9.810 ]
-            gravity: [ 3.3552, 0.0, -9.218 ]
-            # gravity: [ 0.0, 0.0, -9.810 ]
+            gravity: [ 0.0, 0.0, -9.810 ]
+            # gravity: [ 3.3552, 0.0, -9.218 ]
             # gravity: [3.031, 0.0, -9.329 ]
                                # [0.0, 9.810, 0.0] # gravity to be aligned
                                # [0.0, 9.810, 0.0] # gravity to be aligned
             gravity_init: [ 0.0, 0.0, -9.810 ]              # [0.0, 9.810, 0.0] # # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
             extrinsic_T: [ -0.011, -0.02329, 0.04412 ]
-            # extrinsic_R: [0.9397, 0.0, 0.3420,
-            #               0.0,   -1.0, 0.0,
-            #               0.3420, 0.0, -0.9397]
-            extrinsic_R: [1.0, 0.0, 0.0,
-                          0.0, 1.0, 0.0,
-                          0.0, 0.0, 1.0]
+            extrinsic_R: [0.9396926, 0.0,    -0.3420201,
+                          0.0,       1.0,     0.0,
+                          0.3420201, 0.0,     0.9396926]
+            # extrinsic_R: [1.0, 0.0, 0.0,
+            #               0.0, 1.0, 0.0,
+            #               0.0, 0.0, 1.0]
         odometry:
             publish_odometry_without_downsample: False
 
@@ -75,6 +74,6 @@
             tf_send_en: True                                # True: send transform from 'odom' to 'lidar_frame'
 
         pcd_save:
-            pcd_save_en: False                              
+            pcd_save_en: true                              
             interval: -1                                    # how many LiDAR frames saved in each pcd file;
                                                             # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.

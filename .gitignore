@@ -74,6 +74,4 @@ doc/_build/
 *.jpeg
 *.bin
 *.dat
-
-# PCD文件
-*.pcd
+*.pgm
