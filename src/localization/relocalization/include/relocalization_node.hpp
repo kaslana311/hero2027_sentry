@@ -173,20 +173,21 @@ class RelocalizationNode : public rclcpp::Node {
     double translation_epsilon_ = 1e-3;             // 平移收敛阈值
     int max_iterations_ = 20;                       // 最大迭代次数
     bool verbose_ = false;                          // 是否输出详细信息
-    double max_fitness_threshold_ = 0.1;            // 最大允许的fitness分数
+    double max_fitness_threshold_ = 0.1;  // 最大允许的fitness分数
 
     // Gates and policies (populated from ROS parameters at runtime)
-    double gate_yaw_deg_ = 5.0;                // yaw 门限（度）
-    double gate_trans_m_ = 0.05;               // 平移门限（米）
-    bool enforce_rp_zero_ = false;             // 默认不强制清零RP，改为门限约束
+    double gate_yaw_deg_ = 5.0;    // yaw 门限（度）
+    double gate_roll_deg_ = 5.0;   // roll 门限（度）
+    double gate_pitch_deg_ = 5.0;  // pitch 门限（度）
+    double gate_trans_m_ = 0.1;    // 平移门限（米）
+
+    bool enforce_rp_zero_ = false;  // 默认不强制清零RP，改为门限约束
     double yaw_search_step_deg_ = 2.0;         // 粗搜步长（度）
     int max_fail_before_fallback_ = 5;         // 失败次数后触发兜底
     std::string fallback_policy_ = "initial";  // initial | identity
     bool use_crop_map_ = true;                 // 使用裁剪地图
     double crop_radius_ = 30.0;                // 裁剪半径（米）
-    double fitness_threshold_ = 0.08;          // 接受阈值（与代码内一致）
-    double gate_roll_deg_ = 5.0;               // roll 门限（度）
-    double gate_pitch_deg_ = 5.0;              // pitch 门限（度）
+    double fitness_threshold_ = 0.08;  // 接受阈值（与代码内一致）
 
     // ...existing code...
     int registration_fail_count_ = 0;  // 配准失败计数

@@ -22,7 +22,10 @@ RelocalizationNode::RelocalizationNode()
 
     // New registration gating and policy parameters
     this->declare_parameter("gate_yaw_deg", gate_yaw_deg_);
+    this->declare_parameter("gate_roll_deg", gate_roll_deg_);
+    this->declare_parameter("gate_pitch_deg", gate_pitch_deg_);
     this->declare_parameter("gate_trans_m", gate_trans_m_);
+
     this->declare_parameter("enforce_rp_zero", enforce_rp_zero_);
     this->declare_parameter("yaw_search_step_deg", yaw_search_step_deg_);
     this->declare_parameter("max_fail_before_fallback",
@@ -31,8 +34,6 @@ RelocalizationNode::RelocalizationNode()
     this->declare_parameter("use_crop_map", use_crop_map_);
     this->declare_parameter("crop_radius", crop_radius_);
     this->declare_parameter("fitness_threshold", fitness_threshold_);
-    this->declare_parameter("gate_roll_deg", gate_roll_deg_);
-    this->declare_parameter("gate_pitch_deg", gate_pitch_deg_);
 
     init_x_ = this->get_parameter("init_x").as_double();
     init_y_ = this->get_parameter("init_y").as_double();
