@@ -17,7 +17,6 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
-#include <limits>
 #include <memory>
 #include <mutex>
 #include <nav_msgs/msg/odometry.hpp>
@@ -107,20 +106,22 @@ class RelocalizationNode : public rclcpp::Node {
     bool has_odom_ = false;
     bool has_scan_ = false;
 
-    //   bool first_registration_ = false;
-    //   bool only_one_ = false;
+    bool first_registration_ = false;
+    bool only_one_ = false;
+    bool registration_success_ = false;
 
-    // 新增：fitness相关参数和变量
-    double last_fitness_ =
-        std::numeric_limits<double>::max();  // 上一次的fitness值
-    double fitness_threshold_ = 0.12;        // fitness阈值
-    bool should_publish_ = false;            // 是否应该发布位姿
+    // 配准参数
+    int num_threads_ = 4;                           // 线程数
+    double downsampling_resolution_ = 0.25;         // 降采样分辨率
+    int num_neighbors_ = 10;                        // 邻居点数量
+    double max_correspondence_distance_ = 1.0;      // 最大对应点距离
+    double rotation_epsilon_ = 0.1 * M_PI / 180.0;  // 旋转收敛阈值
+    double translation_epsilon_ = 1e-3;             // 平移收敛阈值
+    int max_iterations_ = 20;                       // 最大迭代次数
+    bool verbose_ = false;                          // 是否输出详细信息
+    double max_fitness_threshold_ = 0.1;            // 最大允许的fitness分数
 
-    // 新增：fitness比较和发布控制函数
-    bool isFitnessImproved(double current_fitness);
-    void updateFitnessHistory(double current_fitness);
-    void publishTransformIfImproved();
-
-    // 新增：发布控制参数
-    bool enable_fitness_check_ = true;  // 是否启用fitness检查
+    // ...existing code...
+    int registration_fail_count_ = 0;  // 配准失败计数
+                                       // ...existing code...
 };
