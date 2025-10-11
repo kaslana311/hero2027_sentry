@@ -18,8 +18,8 @@
       # 其他配准相关参数
       enforce_rp_zero: false  # 是否强制pitch和roll为0
       yaw_search_step_deg: 2.0         # 粗搜步长（度）
-      max_fail_before_fallback_: 10  # 在启用回退机制前允许的最大连续失败次数
+      max_fail_before_fallback: 15  # 在启用回退机制前允许的最大连续失败次数
       fallback_policy: "initial"
       use_crop_map: true      # 是否使用裁剪地图
       crop_radius: 30.0       # 裁剪半径（米）
-      fitness_threshold: 0.10 # 配准适应度阈值
+      fitness_threshold: 0.09 # 配准适应度阈值

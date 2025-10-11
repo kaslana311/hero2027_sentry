@@ -5,5 +5,5 @@ tf_manage_node:
     lidar_frame_id: "livox_frame"
     publish_frequency: 100.0
     base_to_lidar:
-      translation.xyz: [0.0, -0.13, 0.0]  # 底盘原点在lidar x轴方向，负-0.15米处
-      rotation.rpy: [0.0, 0.0, 0.0]   # 无旋转
+      translation.xyz: [-0.13, 0.0, 0.0]  # 底盘原点在lidar x轴方向，负-0.15米处
+      rotation.rpy: [0.0, 0.0, -1.57]   # 无旋转
