@@ -106,22 +106,6 @@ class RelocalizationNode : public rclcpp::Node {
         while (a < -M_PI) a += 2 * M_PI;
         return a;
     }
-    // 从相对旋转中提取 [roll, pitch, yaw]（ZYX顺序）差值，避免直接相减带来的±180°跳变
-    static inline Eigen::Vector3d RpyDeltaFromRelativeZYX(
-        const Eigen::Matrix4d &A, const Eigen::Matrix4d &B) {
-        // R_rel = R_A ∘ R_B^{-1} 或 R_B ∘ R_A^{-1} 都可，只要全局一致。
-        // 为与原先 Delta(A,B)=A-B 的直觉一致，这里使用 A 相对 B：R_rel = R_A * R_B^T
-        const Eigen::Matrix3d RA = A.block<3, 3>(0, 0);
-        const Eigen::Matrix3d RB = B.block<3, 3>(0, 0);
-        const Eigen::Matrix3d R_rel = RA * RB.transpose();
-        // Eigen 的 eulerAngles(2,1,0) 返回 [yaw, pitch, roll]
-        Eigen::Vector3d zyx = R_rel.eulerAngles(2, 1, 0);
-        const double yaw_rel = NormalizeAngle(zyx[0]);
-        const double pitch_rel = NormalizeAngle(zyx[1]);
-        const double roll_rel = NormalizeAngle(zyx[2]);
-        // 返回 [roll, pitch, yaw]
-        return Eigen::Vector3d(roll_rel, pitch_rel, yaw_rel);
-    }
     static inline double YawFromMat(const Eigen::Matrix4d &T) {
         const auto &R = T.block<3, 3>(0, 0);
         return std::atan2(R(1, 0), R(0, 0));
@@ -158,18 +142,20 @@ class RelocalizationNode : public rclcpp::Node {
     }
     static inline double YawDelta(const Eigen::Matrix4d &A,
                                   const Eigen::Matrix4d &B) {
-        // 使用相对旋转提取 yaw 差，避免跨越±pi导致的跳变
-        return std::abs(RpyDeltaFromRelativeZYX(A, B)[2]);
+        return std::abs(NormalizeAngle(YawFromMat(A) - YawFromMat(B)));
     }
     static inline double PitchDelta(const Eigen::Matrix4d &A,
                                     const Eigen::Matrix4d &B) {
-        // 使用相对旋转提取 pitch 差，避免在0/180附近反复跳变
-        return std::abs(RpyDeltaFromRelativeZYX(A, B)[1]);
+        double deg =
+            std::abs(NormalizeAngle(PitchFromMat(A) - PitchFromMat(B)));
+        if (deg > 175.0 * M_PI / 180.0) deg = std::abs(M_PI - deg);
+        return deg;
     }
     static inline double RollDelta(const Eigen::Matrix4d &A,
                                    const Eigen::Matrix4d &B) {
-        // 使用相对旋转提取 roll 差，避免在0/180附近反复跳变
-        return std::abs(RpyDeltaFromRelativeZYX(A, B)[0]);
+        double deg = std::abs(NormalizeAngle(RollFromMat(A) - RollFromMat(B)));
+        if (deg > 175.0 * M_PI / 180.0) deg = std::abs(M_PI - deg);
+        return deg;
     }
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_ = nullptr;
