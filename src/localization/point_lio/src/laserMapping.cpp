@@ -255,7 +255,7 @@ void set_posestamp(T& out) {
     };
 
     if (!use_imu_as_input) {
-        if (enable_prior_pcd && is_first_kf) {
+        if (is_first_kf) {
             // Execute only on the first call
             kf_output.x_.pos(0) = init_pose[0];
             kf_output.x_.pos(1) = init_pose[1];
@@ -281,58 +281,7 @@ void publish_odometry(const rclcpp::Publisher<
     } else {
         odomAftMapped.header.stamp = get_ros_time(lidar_end_time);
     }
-    // 如果 IMU 仍在初始化，暂不发布，避免初始抖动/漂移导致的错误姿态
-    if (p_imu && !p_imu->after_imu_init_) {
-        return;
-    }
-
-    // 1) 取当前 IMU(机体)位姿（kf_output/kf_input 与 set_posestamp 一致）
-    const auto& kf = (!use_imu_as_input ? kf_output : kf_input);
-    Eigen::Matrix3d R_odom_imu = kf.x_.rot.matrix();
-    Eigen::Vector3d t_odom_imu = kf.x_.pos;
-
-    // 2) 获取 LiDAR->IMU 外参，并转为 IMU->LiDAR
-    Eigen::Matrix3d R_LI;  // LiDAR -> IMU
-    Eigen::Vector3d t_LI;
-    if (extrinsic_est_en) {
-        R_LI = (!use_imu_as_input ? kf_output.x_.offset_R_L_I.matrix()
-                                  : kf_input.x_.offset_R_L_I.matrix());
-        t_LI = (!use_imu_as_input ? kf_output.x_.offset_T_L_I
-                                  : kf_input.x_.offset_T_L_I);
-    } else {
-        R_LI = Lidar_R_wrt_IMU;
-        t_LI = Lidar_T_wrt_IMU;
-    }
-    Eigen::Matrix3d R_IL = R_LI.transpose();
-    Eigen::Vector3d t_IL = -R_IL * t_LI;
-
-    // 3) 组合得到 LiDAR 在 odom 下的位姿
-    Eigen::Matrix3d R_odom_lidar = R_odom_imu * R_IL;
-    Eigen::Vector3d t_odom_lidar = t_odom_imu + R_odom_imu * t_IL;
-
-    // 4) 首帧归一（确保启动静止时 odom 与 livox_frame 重合）
-    static bool has_init_lidar_pose = false;
-    static Eigen::Matrix3d R0_odom_lidar = Eigen::Matrix3d::Identity();
-    static Eigen::Vector3d t0_odom_lidar = Eigen::Vector3d::Zero();
-    if (!has_init_lidar_pose) {
-        R0_odom_lidar = R_odom_lidar;
-        t0_odom_lidar = t_odom_lidar;
-        has_init_lidar_pose = true;
-    }
-    Eigen::Matrix3d R_rel = R0_odom_lidar.transpose() * R_odom_lidar;
-    Eigen::Vector3d t_rel =
-        R0_odom_lidar.transpose() * (t_odom_lidar - t0_odom_lidar);
-
-    // 5) 写入里程计消息（发布 LiDAR 位姿，非 IMU 位姿）
-    Eigen::Quaterniond q_rel(R_rel);
-    q_rel.normalize();
-    odomAftMapped.pose.pose.position.x = t_rel.x();
-    odomAftMapped.pose.pose.position.y = t_rel.y();
-    odomAftMapped.pose.pose.position.z = t_rel.z();
-    odomAftMapped.pose.pose.orientation.x = q_rel.x();
-    odomAftMapped.pose.pose.orientation.y = q_rel.y();
-    odomAftMapped.pose.pose.orientation.z = q_rel.z();
-    odomAftMapped.pose.pose.orientation.w = q_rel.w();
+    set_posestamp(odomAftMapped.pose.pose);
 
     pubOdomAftMapped->publish(odomAftMapped);
 
@@ -491,7 +440,9 @@ int main(int argc, char** argv) {
                 flg_reset = false;
                 init_map = false;
 
-                { ivox_.reset(new IVoxType(ivox_options_)); }
+                {
+                    ivox_.reset(new IVoxType(ivox_options_));
+                }
             }
 
             if (flg_first_scan) {
