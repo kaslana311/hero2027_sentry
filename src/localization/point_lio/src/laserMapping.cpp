@@ -1,10 +1,10 @@
 // #include <so3_math.h>
 #include <malloc.h>
+#include <pcl/common/common.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl/common/common.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
@@ -30,10 +30,6 @@ int time_log_counter = 0;
 
 bool init_map = false, flg_first_scan = true;
 
-// 全局地图发布参数
-bool global_map_pub_en = true;  // 是否启用全局地图发布
-int global_map_pub_skip = 5;    // 全局地图发布间隔（每隔N次迭代发布一次）
-
 // Time Log Variables
 double match_time = 0, solve_time = 0, propag_time = 0, update_time = 0;
 
@@ -45,6 +41,8 @@ PointCloudXYZI::Ptr feats_down_body_space(new PointCloudXYZI());
 PointCloudXYZI::Ptr init_feats_world(new PointCloudXYZI());
 // 用于全局地图发布的点云
 PointCloudXYZRGB::Ptr global_map(new PointCloudXYZRGB());
+// 全局地图（XYZI）累积，用于发布
+PointCloudXYZI::Ptr global_map_cloud(new PointCloudXYZI());
 std::deque<PointCloudXYZI::Ptr> depth_feats_world;
 pcl::VoxelGrid<PointType> downSizeFilterSurf;
 pcl::VoxelGrid<PointType> downSizeFilterMap;
@@ -179,6 +177,13 @@ void MapIncremental() {
         }
     }
     ivox_->AddPoints(points_to_add);
+    // 同步累计到全局地图缓存，便于发布整图
+    if (pcd_save_en && !points_to_add.empty()) {
+        // 直接追加（如需控内存，可考虑体素过滤或限量）
+        global_map_cloud->points.insert(global_map_cloud->points.end(),
+                                        points_to_add.begin(),
+                                        points_to_add.end());
+    }
 }
 
 void publish_init_map(
@@ -196,32 +201,33 @@ void publish_init_map(
 }
 
 // 点云着色函数：按高度为点云着色
-void colorizePointCloud(PointCloudXYZI::Ptr cloud_in, PointCloudXYZRGB::Ptr cloud_out) {
+void colorizePointCloud(PointCloudXYZI::Ptr cloud_in,
+                        PointCloudXYZRGB::Ptr cloud_out) {
     // 查找点云高度范围
     float min_z = std::numeric_limits<float>::max();
     float max_z = -std::numeric_limits<float>::max();
-    
+
     for (size_t i = 0; i < cloud_in->points.size(); ++i) {
         const auto& point = cloud_in->points[i];
         if (point.z < min_z) min_z = point.z;
         if (point.z > max_z) max_z = point.z;
     }
-    
+
     // 高度范围
     float range = max_z - min_z;
-    if (range < 0.1) range = 0.1; // 避免除零
-    
+    if (range < 0.1) range = 0.1;  // 避免除零
+
     // 着色并添加到输出点云
     cloud_out->points.resize(cloud_in->points.size());
     for (size_t i = 0; i < cloud_in->points.size(); ++i) {
         const auto& point = cloud_in->points[i];
-        
+
         // 归一化高度为 [0, 1]
         float height_normalized = (point.z - min_z) / range;
-        
+
         // 将高度映射到颜色 - 使用 jet 色彩方案 (蓝 -> 青 -> 绿 -> 黄 -> 红)
         uint8_t r, g, b;
-        
+
         if (height_normalized < 0.25) {
             // 蓝到青 [0, 0.25)
             r = 0;
@@ -231,7 +237,8 @@ void colorizePointCloud(PointCloudXYZI::Ptr cloud_in, PointCloudXYZRGB::Ptr clou
             // 青到绿 [0.25, 0.5)
             r = 0;
             g = 255;
-            b = static_cast<uint8_t>(255 * (1.0 - (height_normalized - 0.25) / 0.25));
+            b = static_cast<uint8_t>(255 *
+                                     (1.0 - (height_normalized - 0.25) / 0.25));
         } else if (height_normalized < 0.75) {
             // 绿到黄 [0.5, 0.75)
             r = static_cast<uint8_t>(255 * ((height_normalized - 0.5) / 0.25));
@@ -240,10 +247,11 @@ void colorizePointCloud(PointCloudXYZI::Ptr cloud_in, PointCloudXYZRGB::Ptr clou
         } else {
             // 黄到红 [0.75, 1.0]
             r = 255;
-            g = static_cast<uint8_t>(255 * (1.0 - (height_normalized - 0.75) / 0.25));
+            g = static_cast<uint8_t>(255 *
+                                     (1.0 - (height_normalized - 0.75) / 0.25));
             b = 0;
         }
-        
+
         // 创建RGB点
         auto& rgb_point = cloud_out->points[i];
         rgb_point.x = point.x;
@@ -255,91 +263,63 @@ void colorizePointCloud(PointCloudXYZI::Ptr cloud_in, PointCloudXYZRGB::Ptr clou
     }
 }
 
-// 发布全局地图
-void publish_global_map(
-    const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr&
-        pubGlobalMap) {
-    if (!global_map_pub_en) return;
-    
-    // 为避免发布频率过高影响性能，采用间隔发布策略
-    static int skip_counter = 0;
-    if (++skip_counter < global_map_pub_skip) return;
-    skip_counter = 0;
-    
-    // 提取 ivox 中的全部点云
-    std::vector<PointType> point_vector;
-    ivox_->GetAllPoints(point_vector);
-    
-    if (point_vector.empty()) {
-        RCLCPP_WARN_THROTTLE(LOGGER, *rclcpp::Clock().get(), 2000,
-                            "Global map is empty, skip publishing");
-        return;
-    }
-    
-    // 转换为 XYZI 点云以便进行着色
-    PointCloudXYZI::Ptr map_cloud_xyzi(new PointCloudXYZI());
-    map_cloud_xyzi->points.resize(point_vector.size());
-    for (size_t i = 0; i < point_vector.size(); ++i) {
-        map_cloud_xyzi->points[i].x = point_vector[i].x;
-        map_cloud_xyzi->points[i].y = point_vector[i].y;
-        map_cloud_xyzi->points[i].z = point_vector[i].z;
-        map_cloud_xyzi->points[i].intensity = point_vector[i].intensity;
-    }
-    
-    // 体素下采样，减小点云大小，提高发布效率
-    PointCloudXYZI::Ptr down_sampled_map(new PointCloudXYZI());
-    downSizeFilterGlobalMap.setLeafSize(filter_size_map_min * 2, filter_size_map_min * 2, filter_size_map_min * 2);
-    downSizeFilterGlobalMap.setInputCloud(map_cloud_xyzi);
-    downSizeFilterGlobalMap.filter(*down_sampled_map);
-    
-    // 对点云进行着色
-    global_map->clear();
-    colorizePointCloud(down_sampled_map, global_map);
-    
-    // 发布点云
-    sensor_msgs::msg::PointCloud2 global_map_msg;
-    pcl::toROSMsg(*global_map, global_map_msg);
-    global_map_msg.header.stamp = get_ros_time(lidar_end_time);
-    global_map_msg.header.frame_id = "odom";
-    pubGlobalMap->publish(global_map_msg);
-    
-    RCLCPP_INFO_THROTTLE(LOGGER, *rclcpp::Clock().get(), 2000,
-                        "Published global map with %zu points", global_map->size());
-}
-
 PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI(500000, 1));
 PointCloudXYZI::Ptr pcl_wait_save(new PointCloudXYZI());
 void publish_frame_world(
     const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr&
-        pubLaserCloudFullRes) {
+        pubLaserCloudFullRes,
+    const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr&
+        pubGlobalMap) {
+    // 1) 按需发布当前帧下采样到世界坐标系的点云
     if (scan_pub_en) {
         sensor_msgs::msg::PointCloud2 laserCloudmsg;
         pcl::toROSMsg(*feats_down_world, laserCloudmsg);
-
         laserCloudmsg.header.stamp = get_ros_time(lidar_end_time);
         laserCloudmsg.header.frame_id = "odom";
         pubLaserCloudFullRes->publish(laserCloudmsg);
+    }
 
-        //--------------------------save map-----------------------------------
-        // 1. make sure you have enough memories
-        // 2. noted that pcd save will influence the real-time performances
-        if (pcd_save_en) {
-            *pcl_wait_save += *feats_down_world;
+    // 2) 仅在保存 PCD 的同一时刻发布一次全局地图（绑定保存事件）
+    //    注意：这里不受 scan_pub_en 开关影响
+    if (pcd_save_en) {
+        *pcl_wait_save += *feats_down_world;
 
-            static int scan_wait_num = 0;
-            scan_wait_num++;
-            if (!pcl_wait_save->empty() && pcd_save_interval > 0 &&
-                scan_wait_num >= pcd_save_interval) {
-                pcd_index++;
-                string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") +
-                                      to_string(pcd_index) + string(".pcd"));
-                pcl::PCDWriter pcd_writer;
-                std::cout << "current scan saved to /PCD/" << all_points_dir
-                          << '\n';
-                pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
-                pcl_wait_save->clear();
-                scan_wait_num = 0;
+        static int scan_wait_num = 0;
+        scan_wait_num++;
+        if (!pcl_wait_save->empty() && pcd_save_interval > 0 &&
+            scan_wait_num >= pcd_save_interval) {
+            if (!global_map_cloud->empty()) {
+                // 对整图做一次体素下采样，降低发布点数
+                PointCloudXYZI::Ptr down_map(new PointCloudXYZI());
+                pcl::VoxelGrid<PointType> vg;
+                vg.setLeafSize(filter_size_map_min * 2,
+                               filter_size_map_min * 2,
+                               filter_size_map_min * 2);
+                vg.setInputCloud(global_map_cloud);
+                vg.filter(*down_map);
+
+                // 按高程着色
+                PointCloudXYZRGB::Ptr colored(new PointCloudXYZRGB());
+                colorizePointCloud(down_map, colored);
+
+                sensor_msgs::msg::PointCloud2 map_msg;
+                pcl::toROSMsg(*colored, map_msg);
+                map_msg.header.stamp = get_ros_time(lidar_end_time);
+                map_msg.header.frame_id = "odom";
+                pubGlobalMap->publish(map_msg);
             }
+
+            // 保存这一段累计的扫描到 PCD
+            pcd_index++;
+            string all_points_dir(
+                string(string(ROOT_DIR) + "PCD/scans_") +
+                to_string(pcd_index) + string(".pcd"));
+            pcl::PCDWriter pcd_writer;
+            std::cout << "current scan saved to /PCD/" << all_points_dir
+                      << '\n';
+            pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+            pcl_wait_save->clear();
+            scan_wait_num = 0;
         }
     }
 }
@@ -566,9 +546,7 @@ int main(int argc, char** argv) {
                 flg_reset = false;
                 init_map = false;
 
-                {
-                    ivox_.reset(new IVoxType(ivox_options_));
-                }
+                { ivox_.reset(new IVoxType(ivox_options_)); }
             }
 
             if (flg_first_scan) {
@@ -1232,10 +1210,8 @@ int main(int argc, char** argv) {
             t5 = omp_get_wtime();
             /******* Publish points *******/
             if (path_en) publish_path(pub_path);
-            // 发布全局地图
-            publish_global_map(pub_global_map);
             if (scan_pub_en || pcd_save_en)
-                publish_frame_world(pub_laser_cloud_full_res);
+                publish_frame_world(pub_laser_cloud_full_res, pub_global_map);
             if (scan_pub_en && scan_body_pub_en)
                 publish_frame_body(pub_laser_cloud_full_res_body);
 
