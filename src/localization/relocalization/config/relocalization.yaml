@@ -11,8 +11,8 @@
       
       # 添加角度约束参数
       gate_yaw_deg: 2.5     # 偏航角约束范围（正负2度）
-      gate_pitch_deg: 5.0   # 俯仰角约束范围（正负5度）
-      gate_roll_deg: 5.0    # 横滚角约束范围（正负5度）
+      gate_pitch_deg: 2.5   # 俯仰角约束范围（正负5度）
+      gate_roll_deg: 2.5    # 横滚角约束范围（正负5度）
       gate_trans_m: 0.2       # 平移约束范围（米）
       
       # 其他配准相关参数
@@ -20,6 +20,6 @@
       yaw_search_step_deg: 2.0         # 粗搜步长（度）
       max_fail_before_fallback: 15  # 在启用回退机制前允许的最大连续失败次数
       fallback_policy: "initial"
-      use_crop_map: true      # 是否使用裁剪地图
+      use_crop_map: false      # 是否使用裁剪地图
       crop_radius: 30.0       # 裁剪半径（米）
       fitness_threshold: 0.09 # 配准适应度阈值

@@ -35,7 +35,7 @@
             imu_en: true
             extrinsic_est_en: False                         # for aggressive motion, set this variable False
             imu_time_inte: 0.005                            # = 1 / frequency of IMU
-            lidar_time_inte: 0.1
+            lidar_time_inte: 0.05
             satu_acc: 5.0                                   # the saturation value  of IMU's acceleration. not related to the units
             satu_gyro: 35.0                                 # the saturation value of IMU's angular velocity. not related to the units
             acc_norm: 1.0                                   # 1.0 for g as unit, 9.81 for m/s^2 as unit of the IMU's acceleration
@@ -67,6 +67,6 @@
             tf_send_en: True                                # True: send transform from 'odom' to 'lidar_frame'
 
         pcd_save:
-            pcd_save_en: false                              
+            pcd_save_en: true                              
             interval: -1                                    # how many LiDAR frames saved in each pcd file;
                                                             # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.

@@ -203,7 +203,7 @@ bool RelocalizationNode::GlobalLocalization() {
         const bool pitch_ok =
             PitchDelta(best_T, pose_estimation_) <= pitch_gate;
 
-        if (fitness_ok && trans_ok && yaw_ok) {
+        if (fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok) {
             RCLCPP_INFO(this->get_logger(),
                         "registration can be trusted (fitness=%.5f, dtrans=%.3f, "
                         "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
