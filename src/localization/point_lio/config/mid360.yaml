@@ -10,6 +10,8 @@
         filter_size_map: 0.3                                # Options: 0.5, 0.3, 0.15, 0.1
         ivox_nearby_type: 18                                 # Options: 0, 6, 18, 26
         runtime_pos_log_enable: False                       # Option: True
+        global_map_pub_en: True                             # 是否发布彩色全局地图
+        global_map_pub_skip: 5                              # 全局地图发布间隔（每隔N次迭代发布一次）
 
         common:
             lid_topic: "livox/lidar"
