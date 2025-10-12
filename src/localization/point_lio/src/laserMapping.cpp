@@ -8,11 +8,6 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
-
-// 添加带颜色点云类型定义
-typedef pcl::PointXYZRGB PointTypeRGB;
-typedef pcl::PointCloud<PointTypeRGB> PointCloudXYZRGB;
-
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
 
@@ -39,10 +34,8 @@ bool flg_reset = false, flg_exit = false;
 PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());
 PointCloudXYZI::Ptr feats_down_body_space(new PointCloudXYZI());
 PointCloudXYZI::Ptr init_feats_world(new PointCloudXYZI());
-// 用于全局地图发布的点云
-PointCloudXYZRGB::Ptr global_map(new PointCloudXYZRGB());
-// 全局地图（XYZI）累积，用于发布
-PointCloudXYZI::Ptr global_map_cloud(new PointCloudXYZI());
+PointCloudXYZI::Ptr global_map_cloud(new PointCloudXYZI());  // 全局地图（XYZI）累积，用于发布
+
 std::deque<PointCloudXYZI::Ptr> depth_feats_world;
 pcl::VoxelGrid<PointType> downSizeFilterSurf;
 pcl::VoxelGrid<PointType> downSizeFilterMap;
@@ -65,7 +58,6 @@ void SigHandle(int sig) {
 }
 
 PointCloudXYZI::Ptr loadPointcloudFromPcd(const std::string& file_path) {
-    // auto pcd_ptr = std::make_shared<PointCloudXYZI>();
     auto pcd_ptr = PointCloudXYZI::Ptr(new PointCloudXYZI());
 
     if (pcl::io::loadPCDFile(file_path, *pcd_ptr) == -1) {
@@ -177,13 +169,6 @@ void MapIncremental() {
         }
     }
     ivox_->AddPoints(points_to_add);
-    // 同步累计到全局地图缓存，便于发布整图
-    if (pcd_save_en && !points_to_add.empty()) {
-        // 直接追加（如需控内存，可考虑体素过滤或限量）
-        global_map_cloud->points.insert(global_map_cloud->points.end(),
-                                        points_to_add.begin(),
-                                        points_to_add.end());
-    }
 }
 
 void publish_init_map(
@@ -198,69 +183,6 @@ void publish_init_map(
     laserCloudmsg.header.stamp = get_ros_time(lidar_end_time);
     laserCloudmsg.header.frame_id = "odom";
     pubLaserCloudFullRes->publish(laserCloudmsg);
-}
-
-// 点云着色函数：按高度为点云着色
-void colorizePointCloud(PointCloudXYZI::Ptr cloud_in,
-                        PointCloudXYZRGB::Ptr cloud_out) {
-    // 查找点云高度范围
-    float min_z = std::numeric_limits<float>::max();
-    float max_z = -std::numeric_limits<float>::max();
-
-    for (size_t i = 0; i < cloud_in->points.size(); ++i) {
-        const auto& point = cloud_in->points[i];
-        if (point.z < min_z) min_z = point.z;
-        if (point.z > max_z) max_z = point.z;
-    }
-
-    // 高度范围
-    float range = max_z - min_z;
-    if (range < 0.1) range = 0.1;  // 避免除零
-
-    // 着色并添加到输出点云
-    cloud_out->points.resize(cloud_in->points.size());
-    for (size_t i = 0; i < cloud_in->points.size(); ++i) {
-        const auto& point = cloud_in->points[i];
-
-        // 归一化高度为 [0, 1]
-        float height_normalized = (point.z - min_z) / range;
-
-        // 将高度映射到颜色 - 使用 jet 色彩方案 (蓝 -> 青 -> 绿 -> 黄 -> 红)
-        uint8_t r, g, b;
-
-        if (height_normalized < 0.25) {
-            // 蓝到青 [0, 0.25)
-            r = 0;
-            g = static_cast<uint8_t>(255 * (height_normalized / 0.25));
-            b = 255;
-        } else if (height_normalized < 0.5) {
-            // 青到绿 [0.25, 0.5)
-            r = 0;
-            g = 255;
-            b = static_cast<uint8_t>(255 *
-                                     (1.0 - (height_normalized - 0.25) / 0.25));
-        } else if (height_normalized < 0.75) {
-            // 绿到黄 [0.5, 0.75)
-            r = static_cast<uint8_t>(255 * ((height_normalized - 0.5) / 0.25));
-            g = 255;
-            b = 0;
-        } else {
-            // 黄到红 [0.75, 1.0]
-            r = 255;
-            g = static_cast<uint8_t>(255 *
-                                     (1.0 - (height_normalized - 0.75) / 0.25));
-            b = 0;
-        }
-
-        // 创建RGB点
-        auto& rgb_point = cloud_out->points[i];
-        rgb_point.x = point.x;
-        rgb_point.y = point.y;
-        rgb_point.z = point.z;
-        rgb_point.r = r;
-        rgb_point.g = g;
-        rgb_point.b = b;
-    }
 }
 
 PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI(500000, 1));
@@ -279,36 +201,26 @@ void publish_frame_world(
         pubLaserCloudFullRes->publish(laserCloudmsg);
     }
 
-    // 2) 仅在保存 PCD 的同一时刻发布一次全局地图（绑定保存事件）
-    //    注意：这里不受 scan_pub_en 开关影响
     if (pcd_save_en) {
         *pcl_wait_save += *feats_down_world;
+        // *global_map_cloud += *feats_down_world;
+
+        // PointCloudXYZI::Ptr down_map(new PointCloudXYZI());
+        // pcl::VoxelGrid<PointType> vg;
+        // vg.setLeafSize(0.05, 0.05, 0.05);
+        // vg.setInputCloud(global_map_cloud);
+        // vg.filter(*down_map);
+
+        // sensor_msgs::msg::PointCloud2 map_msg;
+        // pcl::toROSMsg(*down_map, map_msg);
+        // map_msg.header.stamp = get_ros_time(lidar_end_time);
+        // map_msg.header.frame_id = "odom";
+        // pubGlobalMap->publish(map_msg);
 
         static int scan_wait_num = 0;
         scan_wait_num++;
         if (!pcl_wait_save->empty() && pcd_save_interval > 0 &&
             scan_wait_num >= pcd_save_interval) {
-            if (!global_map_cloud->empty()) {
-                // 对整图做一次体素下采样，降低发布点数
-                PointCloudXYZI::Ptr down_map(new PointCloudXYZI());
-                pcl::VoxelGrid<PointType> vg;
-                vg.setLeafSize(filter_size_map_min * 2,
-                               filter_size_map_min * 2,
-                               filter_size_map_min * 2);
-                vg.setInputCloud(global_map_cloud);
-                vg.filter(*down_map);
-
-                // 按高程着色
-                PointCloudXYZRGB::Ptr colored(new PointCloudXYZRGB());
-                colorizePointCloud(down_map, colored);
-
-                sensor_msgs::msg::PointCloud2 map_msg;
-                pcl::toROSMsg(*colored, map_msg);
-                map_msg.header.stamp = get_ros_time(lidar_end_time);
-                map_msg.header.frame_id = "odom";
-                pubGlobalMap->publish(map_msg);
-            }
-
             // 保存这一段累计的扫描到 PCD
             pcd_index++;
             string all_points_dir(
