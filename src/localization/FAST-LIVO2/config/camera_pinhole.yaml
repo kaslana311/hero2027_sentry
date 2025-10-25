@@ -1,0 +1,15 @@
+/laserMapping:
+  ros__parameters:
+    camera:
+      cam_model: Pinhole
+      cam_width: 1440
+      cam_height: 1080
+      scale: 1.0
+      cam_fx: 401.74007
+      cam_fy: 536.59449
+      cam_cx: 315.97372
+      cam_cy: 226.14287
+      cam_d0: -0.356217
+      cam_d1: 0.108598
+      cam_d2: -0.000379
+      cam_d3: 0.00208
