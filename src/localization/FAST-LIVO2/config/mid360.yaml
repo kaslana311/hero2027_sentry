@@ -55,6 +55,8 @@
       gyr_cov: 0.3 # 0.5
       b_acc_cov: 0.0001 # 0.1
       b_gyr_cov: 0.0001 # 0.1
+      gravity_est_en: true
+      ba_bg_est_en: true
 
     lio:
       max_iterations: 5
