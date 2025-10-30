@@ -276,9 +276,19 @@ void LIVMapper::handleFirstFrame() {
 void LIVMapper::gravityAlignment() {
     if (!p_imu->imu_need_init && !gravity_align_finished) {
         std::cout << "Gravity Alignment Starts" << std::endl;
+        // V3D ez(0, 0, -1): 定义了世界坐标系 W 下的重力方向。这里 ez 代表
+        // "Z-axis of Earth"，
+        //                   它是一个单位矢量 [0, 0,
+        //                   -1]。这表明该方案定义的世界坐标系是 Z轴朝上
+        //                   的（因此重力指向-Z方向）。
+        // gz(_state.gravity): 获取在 IMU初始机体坐标系 B0 中测得的重力矢量。
+        //                   这个 _state.gravity
+        //                   应该是通过对静止时的加速度计读数求平均值得到的，即
+        //                   mean_acc。
         V3D ez(0, 0, -1), gz(_state.gravity);
-        Quaterniond G_q_I0 = Quaterniond::FromTwoVectors(gz, ez);
-        M3D G_R_I0 = G_q_I0.toRotationMatrix();
+        Quaterniond G_q_I0 = Quaterniond::FromTwoVectors(
+            gz, ez);  // 计算将矢量 gz 旋转到 ez 所需的四元数
+        M3D G_R_I0 = G_q_I0.toRotationMatrix();  // 将四元数转换为旋转矩阵
 
         _state.pos_end = G_R_I0 * _state.pos_end;
         _state.rot_end = G_R_I0 * _state.rot_end;
@@ -294,7 +304,7 @@ void LIVMapper::processImu() {
 
     p_imu->Process2(LidarMeasures, _state, feats_undistort);
 
-    if (gravity_align_en) gravityAlignment();
+    // if (gravity_align_en) gravityAlignment();
 
     state_propagat = _state;
     voxelmap_manager->state_ = _state;
