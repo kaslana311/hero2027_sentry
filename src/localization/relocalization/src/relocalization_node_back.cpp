@@ -105,6 +105,7 @@ bool RelocalizationNode::GlobalLocalization() {
             return false;
         }
     }
+    //接收到odomertry话题数据,这个是在odom下 base的odomtry
     if (has_odom_) {
         // 返回一个智能指针，指向crop后的点云地图
         // Crop细节没写呢
@@ -347,7 +348,7 @@ void RelocalizationNode::PublishCropMap(
     msg.header.stamp = this->now();
     pub_crop_map_->publish(msg);
 }
-
+//下载全局地图
 bool RelocalizationNode::InitGlobalMap(std::string map_path) {
     // 耗时
     if (pcl::io::loadPCDFile<pcl::PointXYZ>(map_path, *global_map_) == -1) {
