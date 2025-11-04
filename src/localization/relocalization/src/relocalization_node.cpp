@@ -6,7 +6,8 @@ using namespace small_gicp;
 RelocalizationNode::RelocalizationNode()
     : Node("relocalization_node"),
       global_map_(new pcl::PointCloud<pcl::PointXYZ>),
-      cur_scan_(new pcl::PointCloud<pcl::PointXYZ>) {
+      cur_scan_(new pcl::PointCloud<pcl::PointXYZ>),
+      accumulated_cloud(new pcl::PointCloud<pcl::PointXYZ>) {
     RCLCPP_INFO(this->get_logger(), "RelocalizationNode init");
 
     this->declare_parameter("init_x", 0.0);
@@ -104,6 +105,7 @@ void RelocalizationNode::SaveCurScanCallback(
     //
     std::lock_guard<std::mutex> lock(mtx);
     pcl::fromROSMsg(*msg, *cur_scan_);
+    *accumulated_cloud += *cur_scan_;
     // msg->header.frame_id = "odom";
     // msg->header.stamp = this->now();
     // pub_cur_scan_->publish(*msg);
@@ -158,9 +160,10 @@ bool RelocalizationNode::GlobalLocalization() {
 
         // 赋值给
         std::lock_guard<std::mutex> lock(mtx);
+        //
         // 拷贝构造函数
-        pcl::PointCloud<pcl::PointXYZ>::Ptr scan_tobe_mapped(
-            new pcl::PointCloud<pcl::PointXYZ>(*cur_scan_));
+        // pcl::PointCloud<pcl::PointXYZ>::Ptr scan_tobe_mapped(
+        //     new pcl::PointCloud<pcl::PointXYZ>(*cur_scan_));
 
         rclcpp::Time begin_icp_time = this->now();
 
@@ -181,7 +184,7 @@ bool RelocalizationNode::GlobalLocalization() {
             Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
             double f = 1e9;
             Eigen::Isometry3d res =
-                SmallIcpRegistration(scan_tobe_mapped, map_for_reg, seed, f);
+                SmallIcpRegistration(accumulated_cloud, map_for_reg, seed, f);
             if (f < best_fitness) {
                 best_fitness = f;
                 best_T = res.matrix();
@@ -204,13 +207,14 @@ bool RelocalizationNode::GlobalLocalization() {
             PitchDelta(best_T, pose_estimation_) <= pitch_gate;
 
         if (fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok) {
-            RCLCPP_INFO(this->get_logger(),
-                        "registration can be trusted (fitness=%.5f, dtrans=%.3f, "
-                        "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
-                        best_fitness, TransDelta(best_T, pose_estimation_),
-                        RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                        PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                        YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
+            RCLCPP_INFO(
+                this->get_logger(),
+                "registration can be trusted (fitness=%.5f, dtrans=%.3f, "
+                "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
+                best_fitness, TransDelta(best_T, pose_estimation_),
+                RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
+                PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
+                YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
 
             nav_msgs::msg::Odometry map_to_odom;
             Eigen::Matrix4d T_pub = best_T;
@@ -258,6 +262,7 @@ bool RelocalizationNode::GlobalLocalization() {
             }
             return false;
         }
+        accumulated_cloud->clear();
     } else {
         RCLCPP_WARN(this->get_logger(), "no odom msg");
         return false;
