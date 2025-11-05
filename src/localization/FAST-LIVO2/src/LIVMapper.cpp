@@ -304,7 +304,7 @@ void LIVMapper::processImu() {
 
     p_imu->Process2(LidarMeasures, _state, feats_undistort);
 
-    // if (gravity_align_en) gravityAlignment();
+    if (gravity_align_en) gravityAlignment();
 
     state_propagat = _state;
     voxelmap_manager->state_ = _state;
