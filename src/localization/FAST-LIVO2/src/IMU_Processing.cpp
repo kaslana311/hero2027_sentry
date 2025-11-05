@@ -629,21 +629,21 @@ void ImuProcess::Process2(LidarMeasureGroup &lidar_meas, StatesGroup &stat,
     UndistortPcl(lidar_meas, stat, *cur_pcl_un_);
     // cout << "[ IMU ] undistorted point num: " << cur_pcl_un_->size() << endl;
 
-    if (gravity_align_en) {
-        Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(
-            mean_acc.normalized(), Eigen::Vector3d::UnitZ());
-        double yaw = std::atan2(
-            2 * (q.x() * q.y() + q.w() * q.z()),
-            q.w() * q.w() + q.x() * q.x() - q.y() * q.y() - q.z() * q.z());
-        Eigen::Quaterniond q_yaw =
-            Eigen::AngleAxisd(-yaw, Eigen::Vector3d::UnitZ()) *
-            Eigen::AngleAxisd(0, Eigen::Vector3d::UnitY()) *
-            Eigen::AngleAxisd(0, Eigen::Vector3d::UnitX());
-        stat.rot_end = q_yaw.toRotationMatrix() * q.toRotationMatrix();
-        mean_acc = stat.rot_end * mean_acc;
-        mean_gyr = stat.rot_end * mean_gyr;
-        stat.gravity = -mean_acc / mean_acc.norm() * G_m_s2;
-        stat.bias_g = mean_gyr;
-        gravity_align_en = false;
-    }
+    // if (gravity_align_en) {
+    //     Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(
+    //         mean_acc.normalized(), Eigen::Vector3d::UnitZ());
+    //     double yaw = std::atan2(
+    //         2 * (q.x() * q.y() + q.w() * q.z()),
+    //         q.w() * q.w() + q.x() * q.x() - q.y() * q.y() - q.z() * q.z());
+    //     Eigen::Quaterniond q_yaw =
+    //         Eigen::AngleAxisd(-yaw, Eigen::Vector3d::UnitZ()) *
+    //         Eigen::AngleAxisd(0, Eigen::Vector3d::UnitY()) *
+    //         Eigen::AngleAxisd(0, Eigen::Vector3d::UnitX());
+    //     stat.rot_end = q_yaw.toRotationMatrix() * q.toRotationMatrix();
+    //     mean_acc = stat.rot_end * mean_acc;
+    //     mean_gyr = stat.rot_end * mean_gyr;
+    //     stat.gravity = -mean_acc / mean_acc.norm() * G_m_s2;
+    //     stat.bias_g = mean_gyr;
+    //     gravity_align_en = false;
+    // }
 }
