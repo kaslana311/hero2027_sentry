@@ -40,7 +40,7 @@ LIVMapper::LIVMapper(rclcpp::Node::SharedPtr &nh)
     initializeFiles();
     initializeComponents();
     path.header.stamp = nh->now();
-    path.header.frame_id = "camera_init";
+    path.header.frame_id = "odom";
 }
 
 LIVMapper::~LIVMapper() {}
@@ -1280,7 +1280,7 @@ void LIVMapper::publish_img_rgb(const image_transport::Publisher &pubImage,
     cv::Mat img_rgb = vio_manager->img_cp;
     cv_bridge::CvImage out_msg;
     out_msg.header.stamp = nh_->now();
-    // out_msg.header.frame_id = "camera_init";
+    // out_msg.header.frame_id = "odom";
     out_msg.encoding = sensor_msgs::image_encodings::BGR8;
     out_msg.image = img_rgb;
     pubImage.publish(out_msg.toImageMsg());
@@ -1346,7 +1346,7 @@ void LIVMapper::publish_frame_world(
         pcl::toROSMsg(*pcl_w_wait_pub, laserCloudmsg);
     }
     laserCloudmsg.header.stamp = nh_->now();  //.fromSec(last_timestamp_lidar);
-    laserCloudmsg.header.frame_id = "camera_init";
+    laserCloudmsg.header.frame_id = "odom";
     pubLaserCloudFullRes->publish(laserCloudmsg);
 
     /**************** save map ****************/
@@ -1409,7 +1409,7 @@ void LIVMapper::publish_visual_sub_map(
         sensor_msgs::msg::PointCloud2 laserCloudmsg;
         pcl::toROSMsg(*sub_pcl_visual_map_pub, laserCloudmsg);
         laserCloudmsg.header.stamp = nh_->now();
-        laserCloudmsg.header.frame_id = "camera_init";
+        laserCloudmsg.header.frame_id = "odom";
         pubSubVisualMap->publish(laserCloudmsg);
     }
 }
@@ -1428,7 +1428,7 @@ void LIVMapper::publish_effect_world(
     sensor_msgs::msg::PointCloud2 laserCloudFullRes3;
     pcl::toROSMsg(*laserCloudWorld, laserCloudFullRes3);
     laserCloudFullRes3.header.stamp = nh_->now();
-    laserCloudFullRes3.header.frame_id = "camera_init";
+    laserCloudFullRes3.header.frame_id = "odom";
     pubLaserCloudEffect->publish(laserCloudFullRes3);
 }
 
@@ -1446,8 +1446,8 @@ void LIVMapper::set_posestamp(T &out) {
 void LIVMapper::publish_odometry(
     const rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr
         &pubOdomAftMapped) {
-    odomAftMapped.header.frame_id = "camera_init";
-    odomAftMapped.child_frame_id = "aft_mapped";
+    odomAftMapped.header.frame_id = "odom";
+    odomAftMapped.child_frame_id = "lidar_link";
     odomAftMapped.header.stamp =
         nh_->now();  //.ros::Time()fromSec(last_timestamp_lidar);
     set_posestamp(odomAftMapped.pose.pose);
@@ -1464,13 +1464,13 @@ void LIVMapper::publish_odometry(
     transform.setRotation(q);
     geometry_msgs::msg::TransformStamped t;
     t.header.stamp = odomAftMapped.header.stamp;
-    t.header.frame_id = "camera_init";
-    t.child_frame_id = "aft_mapped";
+    t.header.frame_id = "odom";
+    t.child_frame_id = "lidar_link";
     tf2::toMsg(transform, t.transform);
-    br.sendTransform(t);
+    // br.sendTransform(t);
 
     // br.sendTransform(tf2::toMsg(transform, odomAftMapped.header.stamp,
-    // "camera_init", "aft_mapped"));
+    // "odom", "lidar_link"));
     pubOdomAftMapped->publish(odomAftMapped);
 }
 
@@ -1478,7 +1478,7 @@ void LIVMapper::publish_mavros(
     const rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr
         &mavros_pose_publisher) {
     msg_body_pose.header.stamp = nh_->now();
-    msg_body_pose.header.frame_id = "camera_init";
+    msg_body_pose.header.frame_id = "odom";
     set_posestamp(msg_body_pose.pose);
     mavros_pose_publisher->publish(msg_body_pose);
 }
@@ -1487,7 +1487,7 @@ void LIVMapper::publish_path(
     const rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubPath) {
     set_posestamp(msg_body_pose.pose);
     msg_body_pose.header.stamp = nh_->now();
-    msg_body_pose.header.frame_id = "camera_init";
+    msg_body_pose.header.frame_id = "odom";
     path.poses.push_back(msg_body_pose);
     pubPath->publish(path);
 }
