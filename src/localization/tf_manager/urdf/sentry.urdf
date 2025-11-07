@@ -1,0 +1,94 @@
+<?xml version="1.0"?>
+<robot name="sentry">
+
+  <!-- 
+    基础连杆 (base_link)
+    这是机器人的中心参考坐标系。
+  -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.2 0.2 0.1"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="grey">
+        <color rgba="0.5 0.5 0.5 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- 
+    IMU 连杆 (imu_link)
+    代表 IMU 传感器的位置和姿态。
+  -->
+  <link name="imu_link">
+    <visual>
+      <geometry>
+        <box size="0.02 0.02 0.02"/>
+      </geometry>
+      <material name="red">
+        <color rgba="1.0 0.0 0.0 1.0"/>
+      </material>
+    </visual>
+  </link>
+  
+  <!-- 
+    激光雷达旋转接头连杆 (joint_link)
+    这是一个辅助连杆，用于实现激光雷达的倾斜安装。
+  -->
+  <link name="joint_link"/>
+
+  <!-- 
+    激光雷达连杆 (lidar_link)
+    代表激光雷达传感器的最终位置和姿态。
+  -->
+  <link name="lidar_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.05" length="0.04"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="blue">
+        <color rgba="0.0 0.0 1.0 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+
+  <!-- ================== 关节定义 ================== -->
+
+  <!-- 
+    关节 1: 连接 base_link 和 imu_link
+    来源: static_tf_imu_node
+    参数: [-0.08, 0.02, 0.165, 0, 0, 0, base_link, imu_link]
+  -->
+  <joint name="base_to_imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="-0.08 0.02 0.165" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 
+    关节 2: 连接 base_link 和 joint_link (实现雷达俯仰角)
+    来源: static_tf_joint_node
+    参数: [0, 0, 0, 0, 0.349066, 0, base_link, joint_link]
+    注意: 0.349066 弧度约等于 20 度。
+  -->
+  <joint name="base_to_joint_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="joint_link"/>
+    <origin xyz="0 0 0" rpy="0 0.349066 0"/>
+  </joint>
+
+  <!-- 
+    关节 3: 连接 joint_link 和 lidar_link (实现雷达前向偏移)
+    来源: static_tf_lidar_node
+    参数: [0.15, 0, 0, 0, 0, 0, joint_link, lidar_link]
+  -->
+  <joint name="joint_link_to_lidar_joint" type="fixed">
+    <parent link="joint_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="0.15 0 0" rpy="0 0 0"/>
+  </joint>
+
+</robot>
