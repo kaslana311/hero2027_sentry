@@ -1446,32 +1446,86 @@ void LIVMapper::set_posestamp(T &out) {
 void LIVMapper::publish_odometry(
     const rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr
         &pubOdomAftMapped) {
+    // ========== 步骤1: 获取 lidar_link 在 odom 下的原始位姿 ==========
+    Eigen::Vector3d pos_lidar_in_odom = _state.pos_end;
+    Eigen::Quaterniond q_lidar_in_odom(geoQuat.w, geoQuat.x, geoQuat.y,
+                                       geoQuat.z);
+    Eigen::Matrix3d rot_lidar_in_odom = q_lidar_in_odom.toRotationMatrix();
+
+    // ========== 步骤2: 定义 base_link → lidar_link 的静态变换 ==========
+    // base_link → joint_link: 绕Y轴转20° (0.349066 rad), 无平移
+    // joint_link → lidar_link: x方向平移0.15m, 无旋转
+    // 2.1 base_link → joint_link
+    double angle_y = 0.349066;  // 20度转弧度
+    Eigen::Matrix3d R_joint_base;
+    R_joint_base = Eigen::AngleAxisd(angle_y, Eigen::Vector3d::UnitY());
+    Eigen::Vector3d t_joint_base(0.0, 0.0, 0.0);
+
+    // 2.2 joint_link → lidar_link
+    Eigen::Matrix3d R_lidar_joint = Eigen::Matrix3d::Identity();
+    Eigen::Vector3d t_lidar_joint(0.15, 0.0, 0.0);
+
+    // 2.3 组合得到 base_link → lidar_link 的总变换 (T_lidar_base)
+    // T_lidar_base = T_lidar_joint * T_joint_base
+    Eigen::Matrix3d R_lidar_base = R_lidar_joint * R_joint_base;
+    Eigen::Vector3d t_lidar_base = R_lidar_joint * t_joint_base + t_lidar_joint;
+
+    // ========== 步骤3: 计算逆变换 lidar_link → base_link ==========
+    Eigen::Matrix3d R_base_lidar = R_lidar_base.transpose();
+    Eigen::Vector3d t_base_lidar = -R_base_lidar * t_lidar_base;
+
+    // ========== 步骤4: 将 lidar 位姿转换到 base 位姿 ==========
+    // T_odom_base = T_odom_lidar * T_lidar_base^(-1)
+    // 即: T_odom_base = T_odom_lidar * T_base_lidar
+    Eigen::Matrix3d rot_base_in_odom = rot_lidar_in_odom * R_base_lidar;
+    Eigen::Vector3d pos_base_in_odom =
+        rot_lidar_in_odom * t_base_lidar + pos_lidar_in_odom;
+    Eigen::Quaterniond q_base_in_odom(rot_base_in_odom);
+
+    // ========== 步骤5: 填充 Odometry 消息 ==========
     odomAftMapped.header.frame_id = "odom";
-    odomAftMapped.child_frame_id = "lidar_link";
-    odomAftMapped.header.stamp =
-        nh_->now();  //.ros::Time()fromSec(last_timestamp_lidar);
-    set_posestamp(odomAftMapped.pose.pose);
+    odomAftMapped.child_frame_id = "base_link";  // 关键修改!!!
+    odomAftMapped.header.stamp = nh_->now();
 
-    static tf2_ros::TransformBroadcaster br(*nh_);
-    tf2::Transform transform;
-    tf2::Quaternion q;
-    transform.setOrigin(
-        tf2::Vector3(_state.pos_end(0), _state.pos_end(1), _state.pos_end(2)));
-    q.setW(geoQuat.w);
-    q.setX(geoQuat.x);
-    q.setY(geoQuat.y);
-    q.setZ(geoQuat.z);
-    transform.setRotation(q);
-    geometry_msgs::msg::TransformStamped t;
-    t.header.stamp = odomAftMapped.header.stamp;
-    t.header.frame_id = "odom";
-    t.child_frame_id = "lidar_link";
-    tf2::toMsg(transform, t.transform);
-    // br.sendTransform(t);
+    // 位置
+    odomAftMapped.pose.pose.position.x = pos_base_in_odom.x();
+    odomAftMapped.pose.pose.position.y = pos_base_in_odom.y();
+    odomAftMapped.pose.pose.position.z = pos_base_in_odom.z();
 
-    // br.sendTransform(tf2::toMsg(transform, odomAftMapped.header.stamp,
-    // "odom", "lidar_link"));
+    // 姿态
+    odomAftMapped.pose.pose.orientation.x = q_base_in_odom.x();
+    odomAftMapped.pose.pose.orientation.y = q_base_in_odom.y();
+    odomAftMapped.pose.pose.orientation.z = q_base_in_odom.z();
+    odomAftMapped.pose.pose.orientation.w = q_base_in_odom.w();
+
     pubOdomAftMapped->publish(odomAftMapped);
+    // odomAftMapped.header.frame_id = "odom";
+    // odomAftMapped.child_frame_id = "lidar_link";
+    // odomAftMapped.header.stamp =
+    //     nh_->now();  //.ros::Time()fromSec(last_timestamp_lidar);
+    // set_posestamp(odomAftMapped.pose.pose);
+
+    // static tf2_ros::TransformBroadcaster br(*nh_);
+    // tf2::Transform transform;
+    // tf2::Quaternion q;
+    // transform.setOrigin(
+    //     tf2::Vector3(_state.pos_end(0), _state.pos_end(1),
+    //     _state.pos_end(2)));
+    // q.setW(geoQuat.w);
+    // q.setX(geoQuat.x);
+    // q.setY(geoQuat.y);
+    // q.setZ(geoQuat.z);
+    // transform.setRotation(q);
+    // geometry_msgs::msg::TransformStamped t;
+    // t.header.stamp = odomAftMapped.header.stamp;
+    // t.header.frame_id = "odom";
+    // t.child_frame_id = "lidar_link";
+    // tf2::toMsg(transform, t.transform);
+    // // br.sendTransform(t);
+
+    // // br.sendTransform(tf2::toMsg(transform, odomAftMapped.header.stamp,
+    // // "odom", "lidar_link"));
+    // pubOdomAftMapped->publish(odomAftMapped);
 }
 
 void LIVMapper::publish_mavros(
