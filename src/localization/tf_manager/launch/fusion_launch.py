@@ -25,14 +25,14 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_tf_base_to_lidar',
-        arguments=['0', '0', '0', '0', '0.349066', '0', 'base_link', 'joint_link']
+        arguments=['0', '0', '0', '0', '0.349066', '0', 'joint_link', 'lidar_link']
     )
 
     static_tf_lidar_node = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_tf_base_to_lidar',
-        arguments=['0.15', '0', '0', '0', '0', '0', 'joint_link', 'lidar_link']
+        arguments=['0.15', '0', '0', '0', '0', '0', 'base_link', 'joint_link']
     )
 
     # --- 启动 robot_localization EKF 节点 ---
@@ -48,5 +48,5 @@ def generate_launch_description():
         static_tf_imu_node,
         static_tf_lidar_node,
         static_tf_joint_node,
-        ekf_node,
+        ekf_node
     ])

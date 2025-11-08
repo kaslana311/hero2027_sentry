@@ -34,9 +34,23 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        body:
+        base_link:
           Value: true
-        camera_init:
+        base_link_frd:
+          Value: true
+        imu_link:
+          Value: true
+        joint_link:
+          Value: true
+        lidar_link:
+          Value: true
+        map:
+          Value: true
+        map_ned:
+          Value: true
+        odom:
+          Value: true
+        odom_ned:
           Value: true
       Marker Scale: 1
       Name: TF
@@ -44,8 +58,16 @@ Visualization Manager:
       Show Axes: true
       Show Names: false
       Tree:
-        camera_init:
-          body:
+        odom:
+          base_link:
+            base_link_frd:
+              {}
+            imu_link:
+              {}
+            joint_link:
+              lidar_link:
+                {}
+          odom_ned:
             {}
       Update Interval: 0
       Value: true
@@ -119,8 +141,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 11.062739372253418
-        Min Value: -13.864188194274902
+        Max Value: 8.516817092895508
+        Min Value: -0.1386806219816208
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -187,8 +209,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: -9999
-        Min Value: 9999
+        Max Value: 9.59715747833252
+        Min Value: -2.409604549407959
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -221,7 +243,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
-    Fixed Frame: camera_init
+    Fixed Frame: odom
     Frame Rate: 30
   Name: root
   Tools:
@@ -264,7 +286,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 216.99887084960938
+      Distance: 1.1730494499206543
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -279,10 +301,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5697963237762451
+      Pitch: 0.6147971153259277
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 4.88355827331543
+      Yaw: 1.1585545539855957
     Saved: ~
 Window Geometry:
   Displays:
