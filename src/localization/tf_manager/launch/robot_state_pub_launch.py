@@ -10,7 +10,7 @@ def generate_launch_description():
     share_dir = get_package_share_directory(pkg_name)
     
     # URDF 文件路径
-    urdf_file_path = os.path.join(share_dir, 'urdf', 'my_robot.urdf')
+    urdf_file_path = os.path.join(share_dir, 'urdf', 'sentry.urdf')
     with open(urdf_file_path, 'r') as infp:
         robot_desc = infp.read()
 
@@ -37,5 +37,5 @@ def generate_launch_description():
 
     return LaunchDescription([
         robot_state_publisher_node,
-        ekf_node,
+        ekf_node
     ])

@@ -77,7 +77,7 @@
   <joint name="base_to_joint_link_joint" type="fixed">
     <parent link="base_link"/>
     <child link="joint_link"/>
-    <origin xyz="0 0 0" rpy="0 0.349066 0"/>
+    <origin xyz="0.15 0 0" rpy="0 0 0"/>
   </joint>
 
   <!-- 
@@ -88,7 +88,7 @@
   <joint name="joint_link_to_lidar_joint" type="fixed">
     <parent link="joint_link"/>
     <child link="lidar_link"/>
-    <origin xyz="0.15 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0.349066 0"/>
   </joint>
 
 </robot>
