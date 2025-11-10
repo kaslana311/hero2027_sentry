@@ -1,1 +1,1 @@
-ros2 run mavros mavros_node --ros-args -p fcu_url:='serial:///dev/ttyACM2:921600' -p target_system:=1 -p target_component:=1
+ros2 run mavros mavros_node --ros-args -p fcu_url:='serial:///dev/px4:921600' -p target_system:=1 -p target_component:=1
