@@ -116,7 +116,6 @@ RelocalizationNode::RelocalizationNode()
         std::chrono::milliseconds(20),
         std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
 }
-
 void RelocalizationNode::SaveCurScanCallback(
     const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     //累计10帧
