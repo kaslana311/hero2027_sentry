@@ -9,7 +9,6 @@ RelocalizationNode::RelocalizationNode()
       cur_scan_(new pcl::PointCloud<pcl::PointXYZ>),
       accumulated_cloud(new pcl::PointCloud<pcl::PointXYZ>) {
     RCLCPP_INFO(this->get_logger(), "RelocalizationNode init");
-
     this->declare_parameter("init_x", 0.0);
     this->declare_parameter("init_y", 0.0);
     this->declare_parameter("init_z", 0.0);
@@ -34,14 +33,23 @@ RelocalizationNode::RelocalizationNode()
     this->declare_parameter("fallback_policy", fallback_policy_);
     this->declare_parameter("use_crop_map", use_crop_map_);
     this->declare_parameter("crop_radius", crop_radius_);
+    //------------
     this->declare_parameter("fitness_threshold", fitness_threshold_);
-
+    this->declare_parameter("num_neighbors", 20);
+    this->declare_parameter("smgicp_global_leaf_size", 0.01);
+    this->declare_parameter("smgicp_local_leaf_size", 0.05);
+    this->declare_parameter("smgicp_max_iterations", 50);
+    this->declare_parameter("smgicp_num_threads", 5);
+    this->declare_parameter("smgicp_max_dist_sq", 3.0);
+    //初始位姿设定
     init_x_ = this->get_parameter("init_x").as_double();
     init_y_ = this->get_parameter("init_y").as_double();
     init_z_ = this->get_parameter("init_z").as_double();
     init_yaw_ = this->get_parameter("init_yaw").as_double();
     init_pitch_ = this->get_parameter("init_pitch").as_double();
     init_roll_ = this->get_parameter("init_roll").as_double();
+    // this->get_parameter("init_pose", init_poses);
+    //先验地图路径
     pcd_path_ = this->get_parameter("pcd_path").as_string();
 
     // Load runtime-configurable params into member variables
@@ -58,12 +66,40 @@ RelocalizationNode::RelocalizationNode()
     fitness_threshold_ = this->get_parameter("fitness_threshold").as_double();
     gate_roll_deg_ = this->get_parameter("gate_roll_deg").as_double();
     gate_pitch_deg_ = this->get_parameter("gate_pitch_deg").as_double();
-
+    // small-gicp配置
+    smgicp_max_dist_sq_ = this->get_parameter("smgicp_max_dist_sq").as_double();
+    smgicp_max_iterations_ =
+        this->get_parameter("smgicp_max_iterations").as_int();
+    smgicp_num_threads_ = this->get_parameter("smgicp_num_threads").as_int();
+    smgicp_global_leaf_size_ =
+        this->get_parameter("smgicp_global_leaf_size").as_double();
+    smgicp_local_leaf_size_ =
+        this->get_parameter("smgicp_local_leaf_size").as_double();
+    nebhor_num = this->get_parameter("num_neighbors").as_int();
+    //-----------------
     pose_estimation_ = CreateTfMatrix(init_x_, init_y_, init_z_, init_yaw_,
                                       init_pitch_, init_roll_);
-
     std::cout << "pose_estimation:\n" << pose_estimation_ << std::endl;
     std::cout << "pcd_path:" << pcd_path_ << std::endl;
+    InitGlobalMap(pcd_path_);  //加载地图
+    //先验地图处理
+    target_ = small_gicp::voxelgrid_sampling_omp<
+        pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
+        *global_map_, smgicp_global_leaf_size_);
+    // Estimate covariances of points
+
+    small_gicp::estimate_covariances_omp(*target_, nebhor_num,
+                                         smgicp_num_threads_);
+    // Create KdTree for target
+    target_tree_ = std::make_shared<
+        small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
+        target_, small_gicp::KdTreeBuilderOMP(smgicp_num_threads_));
+    //匹配器初始化
+    register_ = std::make_shared<small_gicp::Registration<
+        small_gicp::GICPFactor, small_gicp::ParallelReductionOMP>>();
+    register_->reduction.num_threads = smgicp_num_threads_;
+    register_->rejector.max_dist_sq = smgicp_max_dist_sq_;
+    register_->optimizer.max_iterations = smgicp_max_iterations_;
 
     sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "/Odometry", 1,
@@ -88,7 +124,7 @@ RelocalizationNode::RelocalizationNode()
     pub_cur_scan_ =
         this->create_publisher<sensor_msgs::msg::PointCloud2>("/cur_scan", 1);
     timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(1000),
+        std::chrono::milliseconds(500),
         std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
 
     std::cout << "new" << std::endl;
@@ -99,17 +135,17 @@ void RelocalizationNode::SaveCurOdomCallback(
     cur_odom_ = *msg;
     has_odom_ = true;
 }
-
 void RelocalizationNode::SaveCurScanCallback(
     const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-    //
+    //累计10帧
+    if (registration_success_) return;
     std::lock_guard<std::mutex> lock(mtx);
     pcl::fromROSMsg(*msg, *cur_scan_);
     *accumulated_cloud += *cur_scan_;
-    // msg->header.frame_id = "odom";
-    // msg->header.stamp = this->now();
-    // pub_cur_scan_->publish(*msg);
-    has_scan_ = true;
+    this->scan_count++;
+    *accumulated_cloud += *cur_scan_;
+    //至少积累10帧才进行匹配
+    if (this->scan_count == 10) has_scan_ = true;
 }
 
 void RelocalizationNode::InitPoseCallback(
@@ -126,147 +162,104 @@ void RelocalizationNode::InitPoseCallback(
 }
 
 bool RelocalizationNode::GlobalLocalization() {
-    // 加载全局地图
-    // 没有地图，记载地图
-    if (!has_global_map_) {
-        rclcpp::Time begin_load_map_time = this->now();
-        if (InitGlobalMap(pcd_path_)) {
-            has_global_map_ = true;
-            RCLCPP_INFO(this->get_logger(), "Successfully init global map");
-            rclcpp::Time end_load_map_time = this->now();
-            RCLCPP_INFO(this->get_logger(), "Load map time: %f",
-                        (end_load_map_time - begin_load_map_time).seconds());
-        } else {
-            RCLCPP_WARN(this->get_logger(), "Failed to init global map");
-            return false;
-        }
-    }
-    if (has_odom_) {
-        if (!has_scan_) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                                 "no scan msg");
-            return false;
-        }
-        // 返回一个智能指针，指向crop后的点云地图
-        rclcpp::Time begin_crop_map_time = this->now();
-        pcl::PointCloud<pcl::PointXYZ>::Ptr map_for_reg = global_map_;
-        if (use_crop_map_) {
-            crop_global_map_ = CropMapInFov(global_map_, pose_estimation_,
-                                            cur_odom_, 6.28, crop_radius_);
-            map_for_reg = crop_global_map_;
-        } else {
-            PublishCropMap(global_map_);
-        }
-
-        // 赋值给
-        std::lock_guard<std::mutex> lock(mtx);
-        //
-        // 拷贝构造函数
-        // pcl::PointCloud<pcl::PointXYZ>::Ptr scan_tobe_mapped(
-        //     new pcl::PointCloud<pcl::PointXYZ>(*cur_scan_));
-
-        rclcpp::Time begin_icp_time = this->now();
-
-        // 小范围多 yaw 初始值搜索
-        const double yaw_gate = gate_yaw_deg_ * M_PI / 180.0;
-        const double yaw_step =
-            std::max(0.5, yaw_search_step_deg_) * M_PI / 180.0;
-        std::vector<double> yaw_seeds;
-        yaw_seeds.push_back(0.0);
-        for (double a = yaw_step; a <= yaw_gate + 1e-6; a += yaw_step) {
-            yaw_seeds.push_back(+a);
-            yaw_seeds.push_back(-a);
-        }
-
-        double best_fitness = std::numeric_limits<double>::infinity();
-        Eigen::Matrix4d best_T = pose_estimation_;
-        for (double dyaw : yaw_seeds) {
-            Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
-            double f = 1e9;
-            Eigen::Isometry3d res =
-                SmallIcpRegistration(accumulated_cloud, map_for_reg, seed, f);
-            if (f < best_fitness) {
-                best_fitness = f;
-                best_T = res.matrix();
-            }
-        }
-
-        rclcpp::Time end_icp_time = this->now();
-        RCLCPP_INFO(this->get_logger(),
-                    "Registration time: %f, best fitness: %f",
-                    (end_icp_time - begin_icp_time).seconds(), best_fitness);
-
-        const bool fitness_ok = best_fitness < fitness_threshold_;
-        const bool trans_ok =
-            TransDelta(best_T, pose_estimation_) <= gate_trans_m_;
-        const bool yaw_ok = YawDelta(best_T, pose_estimation_) <= yaw_gate;
-        const double roll_gate = gate_roll_deg_ * M_PI / 180.0;
-        const double pitch_gate = gate_pitch_deg_ * M_PI / 180.0;
-        const bool roll_ok = RollDelta(best_T, pose_estimation_) <= roll_gate;
-        const bool pitch_ok =
-            PitchDelta(best_T, pose_estimation_) <= pitch_gate;
-
-        if (fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok) {
-            RCLCPP_INFO(
-                this->get_logger(),
-                "registration can be trusted (fitness=%.5f, dtrans=%.3f, "
-                "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
-                best_fitness, TransDelta(best_T, pose_estimation_),
-                RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
-
-            nav_msgs::msg::Odometry map_to_odom;
-            Eigen::Matrix4d T_pub = best_T;
-            if (enforce_rp_zero_) {
-                ZeroRollPitchKeepYaw(T_pub);
-            }
-            map_to_odom.pose.pose = MatToPose(T_pub);
-            map_to_odom.header.stamp = this->now();
-            map_to_odom.header.frame_id = "map";
-
-            pub_map_to_odom_->publish(map_to_odom);
-            pose_estimation_ = T_pub;
-            registration_success_ = true;  // 设置配准成功标志
-            registration_fail_count_ = 0;  // 成功后清零
-            return true;
-        } else {
-            RCLCPP_WARN(this->get_logger(),
-                        "registration rejected (fitness=%.5f, dtrans=%.3f, "
-                        "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
-                        best_fitness, TransDelta(best_T, pose_estimation_),
-                        RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                        PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                        YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
-            registration_fail_count_++;
-            if (registration_fail_count_ >= max_fail_before_fallback_) {
-                RCLCPP_WARN(this->get_logger(),
-                            "Registration failed over %d times, publishing "
-                            "fallback (%s)!",
-                            max_fail_before_fallback_,
-                            fallback_policy_.c_str());
-                nav_msgs::msg::Odometry map_to_odom;
-                if (fallback_policy_ == "identity") {
-                    map_to_odom.pose.pose =
-                        MatToPose(Eigen::Matrix4d::Identity());
-                } else {
-                    map_to_odom.pose.pose = MatToPose(
-                        CreateTfMatrix(init_x_, init_y_, init_z_, init_yaw_,
-                                       init_pitch_, init_roll_));
-                }
-                map_to_odom.header.stamp = this->now();
-                map_to_odom.header.frame_id = "map";
-                pub_map_to_odom_->publish(map_to_odom);
-                registration_success_ = true;
-                registration_fail_count_ = 0;  // 重置计数
-            }
-            return false;
-        }
-        accumulated_cloud->clear();
-    } else {
-        RCLCPP_WARN(this->get_logger(), "no odom msg");
+    if (!has_scan_) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                             "no scan msg");
         return false;
     }
+    rclcpp::Time begin_icp_time = this->now();
+
+    // 小范围多 yaw 初始值搜索
+    const double yaw_gate = gate_yaw_deg_ * M_PI / 180.0;
+    const double yaw_step = std::max(0.5, yaw_search_step_deg_) * M_PI / 180.0;
+    std::vector<double> yaw_seeds;
+    yaw_seeds.push_back(0.0);
+    for (double a = yaw_step; a <= yaw_gate + 1e-6; a += yaw_step) {
+        yaw_seeds.push_back(+a);
+        yaw_seeds.push_back(-a);
+    }
+
+    double best_fitness = std::numeric_limits<double>::infinity();
+    Eigen::Matrix4d best_T = pose_estimation_;
+    for (double dyaw : yaw_seeds) {
+        Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
+        double f = 1e9;
+        Eigen::Isometry3d res =
+            SmallIcpRegistration(accumulated_cloud, pose_estimation_, f);
+        if (f < best_fitness) {
+            best_fitness = f;
+            best_T = res.matrix();
+        }
+    }
+    //此时得到了最好的变幻关系
+    rclcpp::Time end_icp_time = this->now();
+    RCLCPP_INFO(this->get_logger(), "Registration time: %f, best fitness: %f",
+                (end_icp_time - begin_icp_time).seconds(), best_fitness);
+    //评价可行性
+    const bool fitness_ok = best_fitness < fitness_threshold_;
+    const bool trans_ok = TransDelta(best_T, pose_estimation_) <= gate_trans_m_;
+    const bool yaw_ok = YawDelta(best_T, pose_estimation_) <= yaw_gate;
+    const double roll_gate = gate_roll_deg_ * M_PI / 180.0;
+    const double pitch_gate = gate_pitch_deg_ * M_PI / 180.0;
+    const bool roll_ok = RollDelta(best_T, pose_estimation_) <= roll_gate;
+    const bool pitch_ok = PitchDelta(best_T, pose_estimation_) <= pitch_gate;
+
+    if (fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok) {
+        RCLCPP_INFO(this->get_logger(),
+                    "registration can be trusted (fitness=%.5f, dtrans=%.3f, "
+                    "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
+                    best_fitness, TransDelta(best_T, pose_estimation_),
+                    RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
+                    PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
+                    YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
+        nav_msgs::msg::Odometry map_to_odom;
+        Eigen::Matrix4d T_pub = best_T;
+        if (enforce_rp_zero_) {
+            ZeroRollPitchKeepYaw(T_pub);
+        }
+        map_to_odom.pose.pose = MatToPose(T_pub);
+        map_to_odom.header.stamp = this->now();
+        map_to_odom.header.frame_id = "map";
+
+        pub_map_to_odom_->publish(map_to_odom);
+        pose_estimation_ = T_pub;
+        registration_success_ = true;  // 设置配准成功标志
+        registration_fail_count_ = 0;  // 成功后清零
+        return true;
+    } else {
+        RCLCPP_WARN(this->get_logger(),
+                    "registration rejected (fitness=%.5f, dtrans=%.3f, "
+                    "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
+                    best_fitness, TransDelta(best_T, pose_estimation_),
+                    RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
+                    PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
+                    YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
+        registration_fail_count_++;
+
+        if (registration_fail_count_ >= max_fail_before_fallback_) {
+            RCLCPP_WARN(this->get_logger(),
+                        "Registration failed over %d times, publishing "
+                        "fallback (%s)!",
+                        max_fail_before_fallback_, fallback_policy_.c_str());
+            nav_msgs::msg::Odometry map_to_odom;
+            if (fallback_policy_ == "identity") {
+                map_to_odom.pose.pose = MatToPose(Eigen::Matrix4d::Identity());
+            } else {
+                map_to_odom.pose.pose = MatToPose(
+                    CreateTfMatrix(init_x_, init_y_, init_z_, init_yaw_,
+                                   init_pitch_, init_roll_));
+            }
+            map_to_odom.header.stamp = this->now();
+            map_to_odom.header.frame_id = "map";
+            pub_map_to_odom_->publish(map_to_odom);
+            registration_success_ = true;
+            registration_fail_count_ = 0;  // 重置计数
+        }
+        return false;
+    }
+    this->scan_count = 0;  // 点云累计清零
+    this->has_scan_ = false;
+    accumulated_cloud->clear();
 }
 
 void RelocalizationNode::GlobalLocalizationTimerCallback() {
@@ -276,7 +269,7 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
 }
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr RelocalizationNode::VoxelDownSamping(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud, double leaf_size) {
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, double leaf_size) {
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(
         new pcl::PointCloud<pcl::PointXYZ>);
     pcl::VoxelGrid<pcl::PointXYZ> sor;
@@ -287,11 +280,11 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr RelocalizationNode::VoxelDownSamping(
 }
 
 std::vector<Eigen::Vector3d> RelocalizationNode::ConvertPointCloudToEigenVector(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud) {
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
     std::vector<Eigen::Vector3d> eigen_vectors;
     eigen_vectors.reserve(cloud->size());  // 预留空间以提高性能
 
-    for (const auto &point : *cloud) {
+    for (const auto& point : *cloud) {
         eigen_vectors.emplace_back(point.x, point.y, point.z);
     }
 
@@ -299,29 +292,27 @@ std::vector<Eigen::Vector3d> RelocalizationNode::ConvertPointCloudToEigenVector(
 }
 
 Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc_scan,
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc_map,
-    const Eigen::Matrix4d &initial, double &fitness) {
-    std::vector<Eigen::Vector3d> source_points =
-        ConvertPointCloudToEigenVector(pc_scan);
-    std::vector<Eigen::Vector3d> target_points =
-        ConvertPointCloudToEigenVector(pc_map);
-    int num_threads = 4;                    // Number of threads to be used
-    double downsampling_resolution = 0.25;  // Downsampling resolution
-    int num_neighbors = 10;
-    auto [source, source_tree] = preprocess_points(
-        source_points, downsampling_resolution, num_neighbors, num_threads);
-    auto [target, target_tree] = preprocess_points(
-        target_points, downsampling_resolution, num_neighbors, num_threads);
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
+    const Eigen::Matrix4d& initial, double& fitness) {
+    // 扫描点云处理
+    this->source_ = small_gicp::voxelgrid_sampling_omp<
+        pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
+        *pc_scan, this->smgicp_local_leaf_size_);
+    small_gicp::estimate_covariances_omp(*source_, nebhor_num,
+                                         this->smgicp_num_threads_);
+    this->source_tree_ = std::make_shared<
+        small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
+        this->source_, small_gicp::KdTreeBuilderOMP(this->smgicp_num_threads_));
+    //初始位姿估计
 
-    RegistrationSetting setting;
-    setting.num_threads = num_threads;
-    setting.max_correspondence_distance = 1.0;
     Eigen::Isometry3d init_T_target_source;
     init_T_target_source.matrix() = initial;
-
-    RegistrationResult result =
-        align(*target, *source, *target_tree, init_T_target_source, setting);
+    if (!source_ || !source_tree_) {
+        return init_T_target_source;
+    }
+    //匹配
+    auto result = register_->align(*target_, *source_, *target_tree_,
+                                   init_T_target_source);
     size_t num_inliers = result.num_inliers;  // Number of inlier source points
     fitness = result.error / num_inliers;     // Fitness score
     if (result.converged) {
@@ -343,9 +334,9 @@ Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
 
 // 配准的输入源是当前的scan，camera_init系下的，配准对象为，参考系为map系，但点云是FOV视角中的
 Eigen::Matrix4d RelocalizationNode::IcpRegistration(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc_scan,
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc_map,
-    const Eigen::Matrix4d &initial, double scale, double &fitness) {
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_map,
+    const Eigen::Matrix4d& initial, double scale, double& fitness) {
     pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
     // icp.setInputSource(VoxelDownSamping(pc_scan, 0.1 * scale));
     // icp.setInputTarget(VoxelDownSamping(pc_map, 0.4 * scale));
@@ -372,9 +363,9 @@ Eigen::Matrix4d RelocalizationNode::IcpRegistration(
 }
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr RelocalizationNode::CropMapInFov(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr &global_map,
-    const Eigen::Matrix4d &pose_estimation,
-    const nav_msgs::msg::Odometry &cur_odom, double FOV, double FOV_FAR) {
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& global_map,
+    const Eigen::Matrix4d& pose_estimation,
+    const nav_msgs::msg::Odometry& cur_odom, double FOV, double FOV_FAR) {
     // pose_estimation是map to odom
     Eigen::Matrix4d T_odom_to_base_link = PoseToMat(cur_odom.pose.pose);
     Eigen::Matrix4d T_map_to_base_link = pose_estimation * T_odom_to_base_link;
@@ -428,7 +419,7 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr RelocalizationNode::CropMapInFov(
 }
 
 void RelocalizationNode::PublishCropMap(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr &crop_map) {
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& crop_map) {
     sensor_msgs::msg::PointCloud2 msg;
     pcl::toROSMsg(*crop_map, msg);
     msg.header.frame_id = "map";
@@ -446,7 +437,7 @@ bool RelocalizationNode::InitGlobalMap(std::string map_path) {
 }
 
 Eigen::Matrix4d RelocalizationNode::PoseToMat(
-    const geometry_msgs::msg::Pose &pose) {
+    const geometry_msgs::msg::Pose& pose) {
     Eigen::Matrix4d mat = Eigen::Matrix4d::Identity();
     mat(0, 3) = pose.position.x;
     mat(1, 3) = pose.position.y;
@@ -464,7 +455,7 @@ Eigen::Matrix4d RelocalizationNode::PoseToMat(
 }
 
 geometry_msgs::msg::Pose RelocalizationNode::MatToPose(
-    const Eigen::Matrix4d &mat) {
+    const Eigen::Matrix4d& mat) {
     geometry_msgs::msg::Pose pose;
 
     // 提取位置信息
@@ -507,7 +498,7 @@ Eigen::Matrix4d RelocalizationNode::CreateTfMatrix(double x, double y, double z,
     return T;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<RelocalizationNode>();
 

@@ -16,16 +16,17 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
+find_package(OpenMP REQUIRED)
 find_package(small_gicp REQUIRED)
 find_package(pcl_conversions REQUIRED)
 include_directories(include ${small_gicp_INCLUDE_DIRS})
 # 添加可执行文件
 add_executable(relocalization_node src/relocalization_node.cpp)
 
-ament_target_dependencies(relocalization_node rclcpp geometry_msgs nav_msgs tf2 tf2_ros Eigen3 sensor_msgs pcl_conversions)
+ament_target_dependencies(relocalization_node rclcpp geometry_msgs nav_msgs tf2 tf2_ros Eigen3 sensor_msgs pcl_conversions OpenMP)
 
 # 链接PCL
-target_link_libraries(relocalization_node ${PCL_LIBRARIES} ${small_gicp_LIBRARIES})
+target_link_libraries(relocalization_node ${PCL_LIBRARIES} ${small_gicp_LIBRARIES} OpenMP::OpenMP_CXX)
 
 # 安装目标
 install(TARGETS relocalization_node

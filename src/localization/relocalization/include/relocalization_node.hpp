@@ -9,7 +9,9 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <Eigen/Dense>
 #include <chrono>
@@ -23,12 +25,17 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <small_gicp/registration/registration_helper.hpp>
+#include <small_gicp/benchmark/read_points.hpp>
+#include <small_gicp/pcl/pcl_point.hpp>
+#include <small_gicp/pcl/pcl_point_traits.hpp>
+#include <small_gicp/pcl/pcl_registration.hpp>
+#include <small_gicp/util/downsampling_omp.hpp>
 #include <string>
 #include <thread>
 #include <vector>
-// #include <small_gicp/pcl/pcl_registration.hpp>
 
+// #include <small_gicp/pcl/pcl_registration.hpp>
+using namespace small_gicp;
 class RelocalizationNode : public rclcpp::Node {
    public:
     RelocalizationNode();
@@ -46,7 +53,7 @@ class RelocalizationNode : public rclcpp::Node {
     void InitPoseCallback(
         const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
 
-    void PublishCropMap(const pcl::PointCloud<pcl::PointXYZ>::Ptr &crop_map);
+    void PublishCropMap(const pcl::PointCloud<pcl::PointXYZ>::Ptr& crop_map);
     // 发布接受到的fast_lio的点云，在camera_init系下
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_cur_scan_;
     // 参考系为map系，但点云是FOV视角中的
@@ -73,29 +80,28 @@ class RelocalizationNode : public rclcpp::Node {
     double init_roll_;
     std::string pcd_path_;
 
-    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::TimerBase::SharedPtr timer_, transform_timer_;
 
     bool InitGlobalMap(std::string map_path);
     // 裁减FOV中的地图，目前写的是方形采样
     pcl::PointCloud<pcl::PointXYZ>::Ptr CropMapInFov(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr &global_map,
-        const Eigen::Matrix4d &pose_estimation,
-        const nav_msgs::msg::Odometry &cur_odom, double FOV, double FOV_FAR);
+        const pcl::PointCloud<pcl::PointXYZ>::Ptr& global_map,
+        const Eigen::Matrix4d& pose_estimation,
+        const nav_msgs::msg::Odometry& cur_odom, double FOV, double FOV_FAR);
     // voxel下采样
     pcl::PointCloud<pcl::PointXYZ>::Ptr VoxelDownSamping(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud, double leaf_size);
+        const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, double leaf_size);
     std::vector<Eigen::Vector3d> ConvertPointCloudToEigenVector(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud);
+        const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
     Eigen::Isometry3d SmallIcpRegistration(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc_scan,
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc_map,
-        const Eigen::Matrix4d &initial, double &fitness);
+        const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
+        const Eigen::Matrix4d& initial, double& fitness);
     Eigen::Matrix4d IcpRegistration(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc_scan,
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc_map,
-        const Eigen::Matrix4d &initial, double scale, double &fitness);
-    Eigen::Matrix4d PoseToMat(const geometry_msgs::msg::Pose &pose);
-    geometry_msgs::msg::Pose MatToPose(const Eigen::Matrix4d &mat);
+        const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
+        const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_map,
+        const Eigen::Matrix4d& initial, double scale, double& fitness);
+    Eigen::Matrix4d PoseToMat(const geometry_msgs::msg::Pose& pose);
+    geometry_msgs::msg::Pose MatToPose(const Eigen::Matrix4d& mat);
     Eigen::Matrix4d CreateTfMatrix(double x, double y, double z, double yaw,
                                    double pitch, double roll);
     double Deg2Rad(double deg);
@@ -106,18 +112,18 @@ class RelocalizationNode : public rclcpp::Node {
         while (a < -M_PI) a += 2 * M_PI;
         return a;
     }
-    static inline double YawFromMat(const Eigen::Matrix4d &T) {
-        const auto &R = T.block<3, 3>(0, 0);
+    static inline double YawFromMat(const Eigen::Matrix4d& T) {
+        const auto& R = T.block<3, 3>(0, 0);
         return std::atan2(R(1, 0), R(0, 0));
     }
-    static inline double PitchFromMat(const Eigen::Matrix4d &T) {
-        const auto &R = T.block<3, 3>(0, 0);
+    static inline double PitchFromMat(const Eigen::Matrix4d& T) {
+        const auto& R = T.block<3, 3>(0, 0);
         // Eigen ZYX order: yaw(Z), pitch(Y), roll(X)
         Eigen::Vector3d eul = R.eulerAngles(2, 1, 0);
         return eul[1];
     }
-    static inline double RollFromMat(const Eigen::Matrix4d &T) {
-        const auto &R = T.block<3, 3>(0, 0);
+    static inline double RollFromMat(const Eigen::Matrix4d& T) {
+        const auto& R = T.block<3, 3>(0, 0);
         Eigen::Vector3d eul = R.eulerAngles(2, 1, 0);
         return eul[2];
     }
@@ -130,29 +136,29 @@ class RelocalizationNode : public rclcpp::Node {
         T(1, 1) = c;
         return T;
     }
-    static inline void ZeroRollPitchKeepYaw(Eigen::Matrix4d &T) {
+    static inline void ZeroRollPitchKeepYaw(Eigen::Matrix4d& T) {
         double yaw = YawFromMat(T);
         T.block<3, 3>(0, 0) = RotZ(yaw).block<3, 3>(0, 0);
     }
-    static inline double TransDelta(const Eigen::Matrix4d &A,
-                                    const Eigen::Matrix4d &B) {
+    static inline double TransDelta(const Eigen::Matrix4d& A,
+                                    const Eigen::Matrix4d& B) {
         Eigen::Vector3d da = A.block<3, 1>(0, 3);
         Eigen::Vector3d db = B.block<3, 1>(0, 3);
         return (da - db).norm();
     }
-    static inline double YawDelta(const Eigen::Matrix4d &A,
-                                  const Eigen::Matrix4d &B) {
+    static inline double YawDelta(const Eigen::Matrix4d& A,
+                                  const Eigen::Matrix4d& B) {
         return std::abs(NormalizeAngle(YawFromMat(A) - YawFromMat(B)));
     }
-    static inline double PitchDelta(const Eigen::Matrix4d &A,
-                                    const Eigen::Matrix4d &B) {
+    static inline double PitchDelta(const Eigen::Matrix4d& A,
+                                    const Eigen::Matrix4d& B) {
         double deg =
             std::abs(NormalizeAngle(PitchFromMat(A) - PitchFromMat(B)));
         if (deg > 175.0 * M_PI / 180.0) deg = std::abs(M_PI - deg);
         return deg;
     }
-    static inline double RollDelta(const Eigen::Matrix4d &A,
-                                   const Eigen::Matrix4d &B) {
+    static inline double RollDelta(const Eigen::Matrix4d& A,
+                                   const Eigen::Matrix4d& B) {
         double deg = std::abs(NormalizeAngle(RollFromMat(A) - RollFromMat(B)));
         if (deg > 175.0 * M_PI / 180.0) deg = std::abs(M_PI - deg);
         return deg;
@@ -197,5 +203,22 @@ class RelocalizationNode : public rclcpp::Node {
     // ...existing code...
     int registration_fail_count_ = 0;  // 配准失败计数
                                        // ...existing code...
-    pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_cloud;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_cloud;  //累计点云
+    std::shared_ptr<small_gicp::Registration<small_gicp::GICPFactor,
+                                             small_gicp::ParallelReductionOMP>>
+        register_;                                       //重定位
+    pcl::PointCloud<pcl::PointCovariance>::Ptr target_;  //先验地图
+    pcl::PointCloud<pcl::PointCovariance>::Ptr source_;  //扫描
+    std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>
+        target_tree_;
+    std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>
+        source_tree_;  // kd树
+    // small_gicp参数
+    double smgicp_global_leaf_size_, smgicp_local_leaf_size_;
+    int smgicp_max_iterations_;
+    int smgicp_num_threads_;
+    double smgicp_max_dist_sq_;
+    int nebhor_num;
+    //当前累计点云帧数目
+    int scan_count = 0;
 };
