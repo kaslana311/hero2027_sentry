@@ -63,6 +63,10 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     // 触发式消息发送
     trigger_pub_ = this->create_publisher<geometry_msgs::msg::Point>(
         "trigger_msg", 1, refree_pub_options);
+    // 轮式里程计速度发布器（用于 EKF 融合）
+    wheel_odom_vel_pub_ =
+        this->create_publisher<geometry_msgs::msg::TwistStamped>(
+            "/wheel_odom_velocity", 10, refree_pub_options);
 
     // 创建来自底盘裁判系统的定时器
     referee_timer = this->create_wall_timer(
@@ -226,25 +230,10 @@ void ChassisNode::ChassisCmdTimerCallback() {
     }
 
     // 更新cmd_builder的转速参数
-    // 注意：这里保留了之前设置的线速度参数，仅更新转速
-
     ctrl_info_t_data.x = vel_x_mms;           // 更新线速度x
     ctrl_info_t_data.y = vel_y_mms;           // 更新线速度y
     ctrl_info_t_data.w = current_spin_speed;  // 更新转速
-
-    // RCLCPP_INFO(this->get_logger()," 发送底盘控制命令: x=%.2f mm/s, y=%.2f
-    // mm/s, w=%d",
-    //             ctrl_info_t_data.x, ctrl_info_t_data.y, ctrl_info_t_data.w);
-
-    // 原有代码
-    // auto buffer = cmd_builder.build();
-    // Send_Cmd_Packet(serial_dev_, buffer.data(), buffer.size(), 0);
-
-    // Send_Cmd_Packet(serial_dev_, &ctrl_info_t_data, sizeof(ctrl_info_t_data),
-    // 0);
     Send_Cmd_Packet(serial_dev_, tx_buffer, sizeof(tx_buffer), 0);
-    // boost::asio::mutable_buffer send_buffer = boost::asio::buffer(buffer,
-    // 25); std::cout << "发送中" << std::endl; boost_asio_.Write(send_buffer);
 }
 
 void ChassisNode::RefreeTimerCallback() {
@@ -287,6 +276,29 @@ void ChassisNode::RefreeTimerCallback() {
         std::cout << "报点y:" << robot_command_map_data.target_position_y
                   << std::endl;
 
+        // 发布轮式里程计速度（用于 EKF 融合）
+        // target_position_x 和 target_position_y 现在代表 v_x 和 v_y (单位: m/s)
+        geometry_msgs::msg::TwistStamped wheel_vel_msg;
+        wheel_vel_msg.header.stamp = this->now();
+        wheel_vel_msg.header.frame_id = "base_link";
+        
+        // 将底盘发来的速度信息填入消息
+        wheel_vel_msg.twist.linear.x = robot_command_map_data.target_position_x;
+        wheel_vel_msg.twist.linear.y = robot_command_map_data.target_position_y;
+        wheel_vel_msg.twist.linear.z = 0.0;
+        
+        // 角速度暂时设为0（如果底盘有角速度数据可以添加）
+        wheel_vel_msg.twist.angular.x = 0.0;
+        wheel_vel_msg.twist.angular.y = 0.0;
+        wheel_vel_msg.twist.angular.z = 0.0;
+        
+        wheel_odom_vel_pub_->publish(wheel_vel_msg);
+        
+        RCLCPP_DEBUG(this->get_logger(), 
+                    "发布轮式速度: vx=%.3f, vy=%.3f", 
+                    wheel_vel_msg.twist.linear.x,
+                    wheel_vel_msg.twist.linear.y);
+
         msg.competition_type = game_info_t_data.game_type;
         msg.competition_stage = game_info_t_data.game_progress;
         msg.stage_time = game_info_t_data.stage_remain_time;
@@ -326,37 +338,6 @@ void ChassisNode::RefreeTimerCallback() {
         }
         // 移除已处理数据
         boost_asio_.Consume(data.size());
-        // size_t processed = 0;
-
-        // while (true) {
-        //   size_t header_pos = FindFrameHeader(data);
-        //   if (header_pos == -1 || data.size() - header_pos < 112)
-        //     break;
-
-        //   // 提取数据包
-        //   std::vector<uint8_t> packet(data.begin() + header_pos,
-        //                               data.begin() + header_pos + 112);
-        //   // 解析协议
-        //   if (referee_parser.parse(packet)) {
-        //     PrintRefereeData(referee_parser);
-        //     serial_interfaces::msg::Refree msg; //
-        //     msg.competition_stage = referee_parser.competition_stage(); //
-        //     msg.competition_type = referee_parser.competition_type(); //
-        //     msg.stage_time = referee_parser.stage_remaining_time(); //
-        //     msg.current_hp = referee_parser.current_hp(); //
-        //     msg.bullet_17mm = referee_parser.bullet_17mm();
-        //     msg.red_outpost = referee_parser.red_outpost_hp();
-
-        // refree_pub_->publish(msg);
-        //     processed = header_pos + 112;
-        //   } else {
-        //     // 校验失败，跳过错误帧头
-        //     processed = header_pos + 1;
-        //   }
-
-        //   // 移除已处理数据
-        //   boost_asio_.Consume(processed);
-        // }
     }
 }
 
