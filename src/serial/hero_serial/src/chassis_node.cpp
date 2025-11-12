@@ -7,8 +7,8 @@ void Callback_func_data1(void* data) {
 
 void Callback_func_data2(void* data) {
     // std::cout << "Callback_func_data1 called with data" << std::endl;
-    RCLCPP_INFO(rclcpp::get_logger("Robot"),
-                "Callback_func_data1 called with data");
+    // RCLCPP_INFO(rclcpp::get_logger("Robot"),
+    //             "Callback_func_data1 called with data");
 }
 
 // extern ComReceiveCtrl_t receiveCtrl[10];   //
@@ -31,10 +31,8 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         return;
     }
     auto native_handle = boost_asio_.serial_port.lowest_layer().native_handle();
-    // serial_dev_ =
-    // reinterpret_cast<rt_device_t>(static_cast<intptr_t>(native_handle)); //
-    // 安全转换
-    serial_dev_ = (rt_device_t)(intptr_t)native_handle;  // 使用 C 风格转换
+    serial_dev_ = (rt_device_t)(intptr_t)native_handle; 
+
     RCLCPP_INFO(this->get_logger(), "底盘串口节点初始化成功，文件描述符: %d",
                 static_cast<int>(native_handle));
     RCLCPP_INFO(this->get_logger(), "底盘串口节点初始化成功");
@@ -70,7 +68,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
 
     // 创建来自底盘裁判系统的定时器
     referee_timer = this->create_wall_timer(
-        std::chrono::milliseconds(100),
+        std::chrono::milliseconds(10),
         std::bind(&ChassisNode::RefreeTimerCallback, this), refree_cb_group_);
 
     reach_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
@@ -234,6 +232,7 @@ void ChassisNode::ChassisCmdTimerCallback() {
     ctrl_info_t_data.y = vel_y_mms;           // 更新线速度y
     ctrl_info_t_data.w = current_spin_speed;  // 更新转速
     Send_Cmd_Packet(serial_dev_, tx_buffer, sizeof(tx_buffer), 0);
+    RCLCPP_INFO(this->get_logger(), "发送回调函数");
 }
 
 void ChassisNode::RefreeTimerCallback() {
@@ -294,7 +293,7 @@ void ChassisNode::RefreeTimerCallback() {
         
         wheel_odom_vel_pub_->publish(wheel_vel_msg);
         
-        RCLCPP_DEBUG(this->get_logger(), 
+        RCLCPP_INFO(this->get_logger(), 
                     "发布轮式速度: vx=%.3f, vy=%.3f", 
                     wheel_vel_msg.twist.linear.x,
                     wheel_vel_msg.twist.linear.y);
@@ -487,7 +486,10 @@ void ChassisNode::PrintRefereeData(const auto& referee_parser) {
 
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<ChassisNode>());
+    auto node = std::make_shared<ChassisNode>();
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(node);
+    executor.spin();
     rclcpp::shutdown();
     return 0;
 }
