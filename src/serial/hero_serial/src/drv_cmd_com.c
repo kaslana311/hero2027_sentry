@@ -61,11 +61,6 @@ int rt_device_write(rt_device_t serial, int start_postion, char *buffer,
 int rt_device_write(rt_device_t serial, int start_postion, char *buffer,
                     int size) {
     if (!serial || start_postion < 0 || size <= 0) return -1;
-    // printf("Trying to write the data...");
-    // // int fd = *(int*)serial; // 假设设备句柄是文件描述符
-    //  int fd = reinterpret_cast<intptr_t>(serial); // C++ 标准方式
-    // return write(fd, buffer + start_postion, size);
-    // 安全地将 void* 转换为文件描述符
     int fd = (int)(intptr_t)serial;
 
     // 实际写入串口
@@ -159,7 +154,7 @@ unsigned char Attach_SendCmd(rt_device_t serial, unsigned short CmdID,
             continue;
         } else {
             sendCtrl[i].serial = serial;  // 将发送的命令绑定到串口设备
-            sendCtrl[i].CmdID = CmdID;    // 如果命令ID不存在，则添加新的命令
+            sendCtrl[i].CmdID = CmdID;  // 如果命令ID不存在，则添加新的命令
             sendCtrl[i].TransType = TransType;
             sendCtrl[i].send_period = send_period;
             sendCtrl[i].DataLength = DataLength;
@@ -458,10 +453,10 @@ unsigned char Receive_Handle(unsigned char *SrcData, unsigned short srcSize) {
             pSrcData += sizeof(pPacket.ComHeader.SOF);  // 跳过帧头
             pPacket.ComHeader.SOF = COM_HEADER_SOF;     // 设置帧头
             pPacket.ComHeader.DataLength =
-                *(unsigned short *)pSrcData;                     // 获取数据长度
-            pSrcData += sizeof(pPacket.ComHeader.DataLength);    // 跳过数据长度
+                *(unsigned short *)pSrcData;  // 获取数据长度
+            pSrcData += sizeof(pPacket.ComHeader.DataLength);  // 跳过数据长度
             pPacket.ComHeader.Seq = *(unsigned char *)pSrcData;  // 获取包序号
-            pSrcData += sizeof(pPacket.ComHeader.Seq);           // 跳过包序号
+            pSrcData += sizeof(pPacket.ComHeader.Seq);  // 跳过包序号
             pPacket.ComHeader.CRC8 =
                 *(unsigned char *)pSrcData;              // 获取CRC8校验
             pSrcData += sizeof(pPacket.ComHeader.CRC8);  // 跳过CRC8校验

@@ -1,14 +1,41 @@
 #include "chassis_node.hpp"
 
+// 全局指针，用于在静态回调中访问 ChassisNode 实例
+static ChassisNode* g_chassis_node_instance = nullptr;
+
 // 测试用例回调函数
 void Callback_func_data1(void* data) {
     // std::cout << "Callback_func_data1 called with data" << std::endl;
 }
 
-void Callback_func_data2(void* data) {
-    // std::cout << "Callback_func_data1 called with data" << std::endl;
-    // RCLCPP_INFO(rclcpp::get_logger("Robot"),
-    //             "Callback_func_data1 called with data");
+// 全局回调函数，用于轮式里程计数据
+void VelOdometry_Global_Callback(void* data) {
+    if (g_chassis_node_instance) {
+        g_chassis_node_instance->VelOdometry_Callback(data);
+    }
+}
+
+void ChassisNode::VelOdometry_Callback(void* data) {
+    // 发布轮式里程计速度（用于 EKF 融合）
+    // target_position_x 和 target_position_y 现在代表 v_x 和 v_y (单位: m/s)
+    geometry_msgs::msg::TwistStamped wheel_vel_msg;
+    wheel_vel_msg.header.stamp = this->now();
+    wheel_vel_msg.header.frame_id = "base_link";
+
+    // 将底盘发来的速度信息填入消息
+    wheel_vel_msg.twist.linear.x = robot_command_map_data.target_position_x;
+    wheel_vel_msg.twist.linear.y = robot_command_map_data.target_position_y;
+    wheel_vel_msg.twist.linear.z = 0.0;
+
+    // 角速度暂时设为0（如果底盘有角速度数据可以添加）
+    wheel_vel_msg.twist.angular.x = 0.0;
+    wheel_vel_msg.twist.angular.y = 0.0;
+    wheel_vel_msg.twist.angular.z = 0.0;
+
+    wheel_odom_vel_pub_->publish(wheel_vel_msg);
+
+    RCLCPP_INFO(this->get_logger(), "发布轮式速度: vx=%.3f, vy=%.3f",
+                wheel_vel_msg.twist.linear.x, wheel_vel_msg.twist.linear.y);
 }
 
 // extern ComReceiveCtrl_t receiveCtrl[10];   //
@@ -24,6 +51,9 @@ constexpr double MPS_TO_MMPS = 1000.0;        // 米/秒 -> 毫米/秒
 constexpr double RAD_TO_0_1DEG = 572.957795;  // 弧度 -> 0.1度
 
 ChassisNode ::ChassisNode() : Node("chassis_node") {
+    // 设置全局实例指针
+    g_chassis_node_instance = this;
+
     // 初始化串口
     if (!boost_asio_.Init("/dev/chassis", 115200)) {
         RCLCPP_ERROR(this->get_logger(), "底盘串口初始化失败");
@@ -31,7 +61,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         return;
     }
     auto native_handle = boost_asio_.serial_port.lowest_layer().native_handle();
-    serial_dev_ = (rt_device_t)(intptr_t)native_handle; 
+    serial_dev_ = (rt_device_t)(intptr_t)native_handle;
 
     RCLCPP_INFO(this->get_logger(), "底盘串口节点初始化成功，文件描述符: %d",
                 static_cast<int>(native_handle));
@@ -109,7 +139,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
                             (void*)&game_robot_survivors, Callback_func_data1);
     Attach_Receive_callback(
         CMD_ID_Robot_command_map, sizeof(Robot_command_map_t),
-        (void*)&robot_command_map_data, Callback_func_data2);
+        (void*)&robot_command_map_data, VelOdometry_Global_Callback);
 
     Attach_SendCmd(serial_dev_,               // 设备句柄
                    CMD_ID_VISUAL_CTRL,        // 命令ID
@@ -273,29 +303,6 @@ void ChassisNode::RefreeTimerCallback() {
                   << std::endl;
         std::cout << "报点y:" << robot_command_map_data.target_position_y
                   << std::endl;
-
-        // 发布轮式里程计速度（用于 EKF 融合）
-        // target_position_x 和 target_position_y 现在代表 v_x 和 v_y (单位: m/s)
-        geometry_msgs::msg::TwistStamped wheel_vel_msg;
-        wheel_vel_msg.header.stamp = this->now();
-        wheel_vel_msg.header.frame_id = "base_link";
-        
-        // 将底盘发来的速度信息填入消息
-        wheel_vel_msg.twist.linear.x = robot_command_map_data.target_position_x;
-        wheel_vel_msg.twist.linear.y = robot_command_map_data.target_position_y;
-        wheel_vel_msg.twist.linear.z = 0.0;
-        
-        // 角速度暂时设为0（如果底盘有角速度数据可以添加）
-        wheel_vel_msg.twist.angular.x = 0.0;
-        wheel_vel_msg.twist.angular.y = 0.0;
-        wheel_vel_msg.twist.angular.z = 0.0;
-        
-        wheel_odom_vel_pub_->publish(wheel_vel_msg);
-        
-        RCLCPP_INFO(this->get_logger(), 
-                    "发布轮式速度: vx=%.3f, vy=%.3f", 
-                    wheel_vel_msg.twist.linear.x,
-                    wheel_vel_msg.twist.linear.y);
 
         msg.competition_type = game_info_t_data.game_type;
         msg.competition_stage = game_info_t_data.game_progress;
