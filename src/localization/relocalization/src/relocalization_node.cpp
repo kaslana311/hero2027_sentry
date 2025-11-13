@@ -120,7 +120,7 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
                   std::placeholders::_1));
     std::cout << "running relocazation" << std::endl;
     timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(1000),
+        std::chrono::milliseconds(500),
         std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
 }
 void RelocalizationNode::publishTransform() {

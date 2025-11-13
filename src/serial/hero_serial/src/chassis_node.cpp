@@ -232,7 +232,6 @@ void ChassisNode::ChassisCmdTimerCallback() {
     ctrl_info_t_data.y = vel_y_mms;           // 更新线速度y
     ctrl_info_t_data.w = current_spin_speed;  // 更新转速
     Send_Cmd_Packet(serial_dev_, tx_buffer, sizeof(tx_buffer), 0);
-    RCLCPP_INFO(this->get_logger(), "发送回调函数");
 }
 
 void ChassisNode::RefreeTimerCallback() {
