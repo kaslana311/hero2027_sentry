@@ -42,6 +42,7 @@ class ChassisNode : public rclcpp::Node {
     BoostAsio boost_asio_;
     rclcpp::TimerBase::SharedPtr chassis_cmd_timer;
     rclcpp::TimerBase::SharedPtr referee_timer;
+    rclcpp::TimerBase::SharedPtr referee_pub_timer;
 
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr
         vel_subscription_;
@@ -116,6 +117,7 @@ class ChassisNode : public rclcpp::Node {
     size_t FindFrameHeader(const std::vector<uint8_t>& data);
     void ChassisCmdTimerCallback();
     void RefreeTimerCallback();
+    void RefreePubTimerCallback();
 
     void ReachCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void PrintRefereeData(const auto& referee_parser);

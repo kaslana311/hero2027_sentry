@@ -1,5 +1,8 @@
 #include "chassis_node.hpp"
 
+// 单位转换常量
+constexpr double MPS_TO_MMPS = 1000.0;        // 米/秒 -> 毫米/秒
+constexpr double RAD_TO_0_1DEG = 572.957795;  // 弧度 -> 0.1度
 // 全局指针，用于在静态回调中访问 ChassisNode 实例
 static ChassisNode* g_chassis_node_instance = nullptr;
 
@@ -38,18 +41,6 @@ void ChassisNode::VelOdometry_Callback(void* data) {
                 wheel_vel_msg.twist.linear.x, wheel_vel_msg.twist.linear.y);
 }
 
-// extern ComReceiveCtrl_t receiveCtrl[10];   //
-// 接收控制结构体（与接收命令对应）
-
-// void Callback_func_data3(void* data)
-// {
-//   std::cout << receiveCtrl[4].frequency << std::endl;
-// }
-
-// 单位转换常量
-constexpr double MPS_TO_MMPS = 1000.0;        // 米/秒 -> 毫米/秒
-constexpr double RAD_TO_0_1DEG = 572.957795;  // 弧度 -> 0.1度
-
 ChassisNode ::ChassisNode() : Node("chassis_node") {
     // 设置全局实例指针
     g_chassis_node_instance = this;
@@ -84,6 +75,15 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         std::chrono::milliseconds(10),
         std::bind(&ChassisNode::ChassisCmdTimerCallback, this),
         chassis_cmd_cb_group_);
+    // 创建来自底盘裁判系统的定时器
+    referee_timer = this->create_wall_timer(
+        std::chrono::milliseconds(10),
+        std::bind(&ChassisNode::RefreeTimerCallback, this), refree_cb_group_);
+    // 创建裁判系统广播定时器
+    chassis_cmd_timer = this->create_wall_timer(
+        std::chrono::milliseconds(100),
+        std::bind(&ChassisNode::RefreePubTimerCallback, this),
+        refree_cb_group_);
 
     // 发布裁判系统信息给决策节点
     refree_pub_ = this->create_publisher<serial_interfaces::msg::Refree>(
@@ -95,11 +95,6 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     wheel_odom_vel_pub_ =
         this->create_publisher<geometry_msgs::msg::TwistStamped>(
             "/wheel_odom_velocity", 10, refree_pub_options);
-
-    // 创建来自底盘裁判系统的定时器
-    referee_timer = this->create_wall_timer(
-        std::chrono::milliseconds(10),
-        std::bind(&ChassisNode::RefreeTimerCallback, this), refree_cb_group_);
 
     reach_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
         "arrived_at_goal", 10,
@@ -271,223 +266,79 @@ void ChassisNode::RefreeTimerCallback() {
                             static_cast<unsigned int>(data.size()))) {
             RCLCPP_ERROR(this->get_logger(), "裁判系统数据解析失败,%d",
                          data.size());
-            // return;
         }
         RCLCPP_INFO(this->get_logger(), "数据正常解析,%d", data.size());
-        serial_interfaces::msg::Refree msg;
-        std::cout << "比赛类型: "
-                  << static_cast<int>(game_info_t_data.game_type) << std::endl;
-        std::cout << "比赛阶段: "
-                  << static_cast<int>(game_info_t_data.game_progress)
-                  << std::endl;
-        std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time
-                  << " 秒" << std::endl;
-        std::cout << "机器人ID: "
-                  << static_cast<int>(robot_info_t_data.robot_id) << std::endl;
-        std::cout << "当前血量: " << robot_info_t_data.remain_HP << std::endl;
-        std::cout << "17mm弹药剩余: "
-                  << bullet_remaining_t_data.bullet_remaining_num_17mm
-                  << std::endl;
-        std::cout << "堡垒上允许发弹："
-                  << bullet_remaining_t_data.projectile_allowance_fortress
-                  << std::endl;
-        std::cout << "红方哨兵：" << game_robot_survivors.red_7_robot_HP
-                  << std::endl;
-        std::cout << "蓝方哨兵：" << game_robot_survivors.blue_7_robot_HP
-                  << std::endl;
-        std::cout << "红方前哨：" << game_robot_survivors.red_outpost_HP
-                  << std::endl;
-        std::cout << "蓝方前哨：" << game_robot_survivors.blue_outpost_HP
-                  << std::endl;
-        std::cout << "报点x:" << robot_command_map_data.target_position_x
-                  << std::endl;
-        std::cout << "报点y:" << robot_command_map_data.target_position_y
-                  << std::endl;
-
-        msg.competition_type = game_info_t_data.game_type;
-        msg.competition_stage = game_info_t_data.game_progress;
-        msg.stage_time = game_info_t_data.stage_remain_time;
-
-        msg.robot_id = robot_info_t_data.robot_id;
-        msg.current_hp = robot_info_t_data.remain_HP;
-
-        msg.bullet_17mm = bullet_remaining_t_data.bullet_remaining_num_17mm;
-        msg.projectile_allowance_fortress =
-            bullet_remaining_t_data.projectile_allowance_fortress;
-
-        msg.red_sentry = game_robot_survivors.red_7_robot_HP;
-        msg.blue_sentry = game_robot_survivors.blue_7_robot_HP;
-        msg.red_outpost = game_robot_survivors.red_outpost_HP;
-        msg.blue_outpost = game_robot_survivors.blue_outpost_HP;
-        refree_pub_->publish(msg);
-
-        if ((robot_command_map_data.target_position_x !=
-                 last_robot_command_map_data.target_position_x ||
-             robot_command_map_data.target_position_y !=
-                 last_robot_command_map_data.target_position_y) &&
-            (robot_command_map_data.target_position_x != 0.0 &&
-             robot_command_map_data.target_position_y != 0.0)) {
-            geometry_msgs::msg::Point point;
-            point.x = robot_command_map_data.target_position_x;
-            point.y = robot_command_map_data.target_position_y;
-            point.z = 0.0;
-
-            last_robot_command_map_data.target_position_x =
-                robot_command_map_data.target_position_x;
-            last_robot_command_map_data.target_position_y =
-                robot_command_map_data.target_position_y;
-
-            trigger_pub_->publish(point);
-
-            std::cout << "收到触发消息！" << std::endl;
-        }
         // 移除已处理数据
         boost_asio_.Consume(data.size());
     }
 }
 
-void ChassisNode::PrintRefereeData(const auto& referee_parser) {
-    //---------------- 比赛状态 ----------------
-    // RCLCPP_INFO(this->get_logger(), "stage_remaining_time:%d",
-    // referee_parser.stage_remaining_time());
-
-    std::cout << "\n===== 比赛状态 =====\n";
-    std::cout << "competition_type: "
-              << static_cast<int>(referee_parser.competition_type())
+void ChassisNode::RefreePubTimerCallback() {
+    serial_interfaces::msg::Refree msg;
+    std::cout << "比赛类型: " << static_cast<int>(game_info_t_data.game_type)
               << std::endl;
-    std::cout << "competition_stage: "
-              << static_cast<int>(referee_parser.competition_stage())
+    std::cout << "比赛阶段: "
+              << static_cast<int>(game_info_t_data.game_progress) << std::endl;
+    std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time << " 秒"
               << std::endl;
-    std::cout << "stage_remaining_time: "
-              << referee_parser.stage_remaining_time() << " 秒\n";
+    std::cout << "机器人ID: " << static_cast<int>(robot_info_t_data.robot_id)
+              << std::endl;
+    std::cout << "当前血量: " << robot_info_t_data.remain_HP << std::endl;
+    std::cout << "17mm弹药剩余: "
+              << bullet_remaining_t_data.bullet_remaining_num_17mm << std::endl;
+    std::cout << "堡垒上允许发弹："
+              << bullet_remaining_t_data.projectile_allowance_fortress
+              << std::endl;
+    std::cout << "红方哨兵：" << game_robot_survivors.red_7_robot_HP
+              << std::endl;
+    std::cout << "蓝方哨兵：" << game_robot_survivors.blue_7_robot_HP
+              << std::endl;
+    std::cout << "红方前哨：" << game_robot_survivors.red_outpost_HP
+              << std::endl;
+    std::cout << "蓝方前哨：" << game_robot_survivors.blue_outpost_HP
+              << std::endl;
+    std::cout << "报点x:" << robot_command_map_data.target_position_x
+              << std::endl;
+    std::cout << "报点y:" << robot_command_map_data.target_position_y
+              << std::endl;
 
-    // //---------------- 红方状态 ----------------
-    // std::cout << "\n===== 红方状态 =====\n";
-    // std::cout << "红方英雄血量: " << referee_parser.red_hero_hp() <<
-    // std::endl; std::cout << "红方工程血量: " <<
-    // referee_parser.red_engineer_hp()
-    //           << std::endl;
-    // std::cout << "红方步兵3血量: " << referee_parser.red_infantry3_hp()
-    //           << std::endl;
-    // std::cout << "红方步兵4血量: " << referee_parser.red_infantry4_hp()
-    //           << std::endl;
-    // std::cout << "红方哨兵血量: " << referee_parser.red_sentry_hp() <<
-    // std::endl; std::cout << "红方前哨血量: " <<
-    // referee_parser.red_outpost_hp() << std::endl; std::cout << "红方基地血量:
-    // " << referee_parser.red_base_hp() << std::endl;
+    msg.competition_type = game_info_t_data.game_type;
+    msg.competition_stage = game_info_t_data.game_progress;
+    msg.stage_time = game_info_t_data.stage_remain_time;
 
-    // //---------------- 蓝方状态 ----------------
-    // std::cout << "\n===== 蓝方状态 =====\n";
-    // std::cout << "蓝方英雄血量: " << referee_parser.blue_hero_hp() <<
-    // std::endl; std::cout << "蓝方工程血量: " <<
-    // referee_parser.blue_engineer_hp()
-    //           << std::endl;
-    // std::cout << "蓝方步兵3血量: " << referee_parser.blue_infantry3_hp()
-    //           << std::endl;
-    // std::cout << "蓝方步兵4血量: " << referee_parser.blue_infantry4_hp()
-    //           << std::endl;
-    // std::cout << "蓝方哨兵血量: " << referee_parser.blue_sentry_hp() <<
-    // std::endl; std::cout << "蓝方前哨血量: " <<
-    // referee_parser.blue_outpost_hp()
-    //           << std::endl;
-    // std::cout << "蓝方基地血量: " << referee_parser.blue_base_hp() <<
-    // std::endl;
+    msg.robot_id = robot_info_t_data.robot_id;
+    msg.current_hp = robot_info_t_data.remain_HP;
 
-    // //---------------- 战场状态 ----------------
-    // std::cout << "\n===== 战场状态 =====\n";
-    // std::cout << std::boolalpha;  // 布尔值显示为 true/false
-    // std::cout << "补给区非重叠状态: " << referee_parser.supply_non_overlap()
-    //           << std::endl;
-    // std::cout << "补给区重叠状态: " << referee_parser.supply_overlap()
-    //           << std::endl;
-    // std::cout << "补给区占领状态: " << referee_parser.supply_occupied()
-    //           << std::endl;
-    // std::cout << "能量机关激活进度: "
-    //           << static_cast<int>(referee_parser.energy_activation()) <<
-    //           "%\n";
-    // std::cout << "高地状态: "
-    //           << static_cast<int>(referee_parser.highland_status()) <<
-    //           std::endl;
-    // std::cout << "梯形区域状态: "
-    //           << static_cast<int>(referee_parser.trapezoid_status()) <<
-    //           std::endl;
-    // std::cout << "飞镖命中时间: " << referee_parser.dart_hit_time() << "
-    // 秒\n"; std::cout << "飞镖目标: " <<
-    // static_cast<int>(referee_parser.dart_target())
-    //           << std::endl;
-    // std::cout << "中央控制权: "
-    //           << static_cast<int>(referee_parser.center_control()) <<
-    //           std::endl;
+    msg.bullet_17mm = bullet_remaining_t_data.bullet_remaining_num_17mm;
+    msg.projectile_allowance_fortress =
+        bullet_remaining_t_data.projectile_allowance_fortress;
 
-    // //---------------- 本机状态 ----------------
-    // std::cout << "\n===== 本机状态 =====\n";
-    // std::cout << "机器人ID: " << static_cast<int>(referee_parser.robot_id())
-    //           << std::endl;
-    // std::cout << "机器人等级: " <<
-    // static_cast<int>(referee_parser.robot_level())
-    //           << std::endl;
-    std::cout << "当前血量: " << referee_parser.current_hp() << std::endl;
-    // std::cout << "最大血量: " << referee_parser.max_hp() << std::endl;
-    // std::cout << "冷却速率: " << referee_parser.cooling_rate() << "
-    // units/s\n"; std::cout << "热量上限: " << referee_parser.heat_limit() <<
-    // std::endl; std::cout << "底盘热量上限: " <<
-    // referee_parser.chassis_heat_limit()
-    //           << std::endl;
+    msg.red_sentry = game_robot_survivors.red_7_robot_HP;
+    msg.blue_sentry = game_robot_survivors.blue_7_robot_HP;
+    msg.red_outpost = game_robot_survivors.red_outpost_HP;
+    msg.blue_outpost = game_robot_survivors.blue_outpost_HP;
+    refree_pub_->publish(msg);
 
-    // //---------------- 位置信息 ----------------
-    // std::cout << "\n===== 位置信息 =====\n";
-    // std::cout << std::fixed << std::setprecision(2);
-    // std::cout << "X坐标: " << referee_parser.position_x() << " 米\n";
-    // std::cout << "Y坐标: " << referee_parser.position_y() << " 米\n";
-    // std::cout << "朝向: " << referee_parser.orientation() << " 弧度\n";
+    // if ((robot_command_map_data.target_position_x !=
+    //          last_robot_command_map_data.target_position_x ||
+    //      robot_command_map_data.target_position_y !=
+    //          last_robot_command_map_data.target_position_y) &&
+    //     (robot_command_map_data.target_position_x != 0.0 &&
+    //      robot_command_map_data.target_position_y != 0.0)) {
+    //     geometry_msgs::msg::Point point;
+    //     point.x = robot_command_map_data.target_position_x;
+    //     point.y = robot_command_map_data.target_position_y;
+    //     point.z = 0.0;
 
-    // //---------------- 弹药状态 ----------------
-    // std::cout << "\n===== 弹药状态 =====\n";
-    // std::cout << "17mm弹丸余量: " << referee_parser.bullet_17mm() << " 发\n";
-    // std::cout << "42mm弹丸余量: " << referee_parser.bullet_42mm() << " 发\n";
-    // std::cout << "剩余金币: " << referee_parser.remaining_gold() <<
-    // std::endl;
+    //     last_robot_command_map_data.target_position_x =
+    //         robot_command_map_data.target_position_x;
+    //     last_robot_command_map_data.target_position_y =
+    //         robot_command_map_data.target_position_y;
 
-    // //---------------- 队友位置 ----------------
-    // std::cout << "\n===== 队友位置 =====\n";
-    // auto print_pair = [](const std::string& name, const auto& pos) {
-    //   std::cout << name << ": (" << pos.first << ", " << pos.second << ")\n";
-    // };
-    // print_pair("英雄位置", referee_parser.hero_position());
-    // print_pair("工程位置", referee_parser.engineer_position());
-    // print_pair("步兵3位置", referee_parser.infantry3_position());
-    // print_pair("步兵4位置", referee_parser.infantry4_position());
+    //     trigger_pub_->publish(point);
 
-    // //---------------- 哨兵状态 ----------------
-    // std::cout << "\n===== 哨兵状态 =====\n";
-    // std::cout << "哨兵子弹余量: " << referee_parser.sentry_bullet_allowance()
-    //           << " 发\n";
-    // std::cout << "远程补给子弹次数: "
-    //           <<
-    //           static_cast<int>(referee_parser.sentry_remote_bullet_count())
-    //           << std::endl;
-    // std::cout << "远程补给血量次数: "
-    //           << static_cast<int>(referee_parser.sentry_remote_hp_count())
-    //           << std::endl;
-    // std::cout << "确认复活状态: " << referee_parser.sentry_confirm_revive()
-    //           << std::endl;
-    // std::cout << "立即复活状态: " << referee_parser.sentry_immediate_revive()
-    //           << std::endl;
-    // std::cout << "复活消耗: " << referee_parser.sentry_revive_cost() << "
-    // 金币\n";
-
-    // //---------------- 附加状态 ----------------
-    // std::cout << "\n===== 附加状态 =====\n";
-    // std::cout << "附加状态位0: " << referee_parser.additional_status_bit0()
-    //           << std::endl;
-    // std::cout << "附加状态位1-11: "
-    //           <<
-    //           static_cast<int>(referee_parser.additional_status_bits1_11())
-    //           << std::dec << std::endl;
-    // std::cout << "附加状态位12-15: "
-    //           <<
-    //           static_cast<int>(referee_parser.additional_status_bits12_15())
-    //           << std::endl;
+    //     std::cout << "收到触发消息！" << std::endl;
+    // }
 }
 
 int main(int argc, char* argv[]) {
