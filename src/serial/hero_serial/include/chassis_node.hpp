@@ -8,6 +8,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <memory>
 #include <mutex>
@@ -34,6 +35,8 @@ class ChassisNode : public rclcpp::Node {
    public:
     ChassisNode();
     ~ChassisNode() = default;
+
+    void VelOdometry_Callback(void* data);
 
    private:
     BoostAsio boost_asio_;
