@@ -13,19 +13,19 @@ def generate_launch_description():
     
     #  base_link -> imu_link (飞控IMU的安装位置)
     #  参数: [x, y, z, yaw, pitch, roll]
-    static_tf_imu_node = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_tf_base_to_imu',
-        arguments=['0.08', '-0.02', '-0.165', '0', '0', '0', 'base_link', 'chassis_link']
-    )
+    # static_tf_imu_node = Node(
+    #     package='tf2_ros',
+    #     executable='static_transform_publisher',
+    #     name='static_tf_base_to_imu',
+    #     arguments=['0.08', '-0.02', '-0.165', '0', '0', '0', 'base_link', 'chassis_link']
+    # )
 
     #  base_link -> lidar_link (激光雷达的安装位置)
     static_tf_joint_node = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_tf_base_to_lidar',
-        arguments=['0.15', '0', '0', '0', '0.349066', '0', 'chassis_link', 'lidar_link']
+        arguments=['0.15', '0', '0', '0', '0.349066', '0', 'base_link', 'lidar_link']
     )
 
     # static_tf_lidar_node = Node(
@@ -45,7 +45,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        static_tf_imu_node,
+        # static_tf_imu_node,
         # static_tf_lidar_node,
         static_tf_joint_node,
         ekf_node
