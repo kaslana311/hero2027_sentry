@@ -263,6 +263,28 @@ bool RelocalizationNode::GlobalLocalization() {
 void RelocalizationNode::GlobalLocalizationTimerCallback() {
     if (!registration_success_) {  // 如果配准还未成功，继续尝试
         GlobalLocalization();
+    } else {
+        // 直接发布map->odom的tf变换，无需再发布Odometry消息
+        geometry_msgs::msg::TransformStamped transform;
+        transform.header.stamp = this->now();
+        transform.header.frame_id = "map";
+        transform.child_frame_id = "odom";
+        transform.transform.translation.x = pose_estimation_(0, 3);
+        transform.transform.translation.y = pose_estimation_(1, 3);
+        transform.transform.translation.z = pose_estimation_(2, 3);
+        tf2::Matrix3x3 m(
+            pose_estimation_(0, 0), pose_estimation_(0, 1), pose_estimation_(0, 2),
+            pose_estimation_(1, 0), pose_estimation_(1, 1), pose_estimation_(1, 2),
+            pose_estimation_(2, 0), pose_estimation_(2, 1), pose_estimation_(2, 2));
+        tf2::Quaternion q;
+        m.getRotation(q);
+        transform.transform.rotation = tf2::toMsg(q);
+        // 发布tf变换
+        static std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
+        if (!tf_broadcaster) {
+            tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(shared_from_this());
+        }
+        tf_broadcaster->sendTransform(transform);
     }
 }
 
@@ -327,36 +349,6 @@ Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
     } else {
         std::cout << "Gicp registration not converged" << std::endl;
         return init_T_target_source;
-    }
-}
-
-// 配准的输入源是当前的scan，camera_init系下的，配准对象为，参考系为map系，但点云是FOV视角中的
-Eigen::Matrix4d RelocalizationNode::IcpRegistration(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_map,
-    const Eigen::Matrix4d& initial, double scale, double& fitness) {
-    pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
-    // icp.setInputSource(VoxelDownSamping(pc_scan, 0.1 * scale));
-    // icp.setInputTarget(VoxelDownSamping(pc_map, 0.4 * scale));
-    icp.setInputSource(pc_scan);
-    icp.setInputTarget(pc_map);
-    pcl::PointCloud<pcl::PointXYZ> Final;
-    icp.setMaximumIterations(50);          // 最大迭代次数
-    icp.setTransformationEpsilon(1e-8);    // 变换矩阵的容差
-    icp.setEuclideanFitnessEpsilon(1e-6);  // 欧几里得适应度容差
-    icp.align(Final, initial.cast<float>());
-    // icp.align(Final);
-
-    if (icp.hasConverged()) {
-        std::cout << "ICP has converged!" << std::endl;
-        std::cout << "Fitness score: " << icp.getFitnessScore() << std::endl;
-        std::cout << "Transformation matrix:\n"
-                  << icp.getFinalTransformation() << std::endl;
-        fitness = icp.getFitnessScore();
-        return icp.getFinalTransformation().cast<double>();
-    } else {
-        std::cout << "ICP did not converge." << std::endl;
-        return initial;
     }
 }
 

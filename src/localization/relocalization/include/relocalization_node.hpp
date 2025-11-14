@@ -96,10 +96,6 @@ class RelocalizationNode : public rclcpp::Node {
     Eigen::Isometry3d SmallIcpRegistration(
         const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
         const Eigen::Matrix4d& initial, double& fitness);
-    Eigen::Matrix4d IcpRegistration(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_map,
-        const Eigen::Matrix4d& initial, double scale, double& fitness);
     Eigen::Matrix4d PoseToMat(const geometry_msgs::msg::Pose& pose);
     geometry_msgs::msg::Pose MatToPose(const Eigen::Matrix4d& mat);
     Eigen::Matrix4d CreateTfMatrix(double x, double y, double z, double yaw,
