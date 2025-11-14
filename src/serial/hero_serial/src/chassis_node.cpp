@@ -26,8 +26,8 @@ void ChassisNode::VelOdometry_Callback(void* data) {
     wheel_vel_msg.header.frame_id = "base_link";
 
     // 将底盘发来的速度信息填入消息
-    wheel_vel_msg.twist.linear.x = robot_command_map_data.target_position_x;
-    wheel_vel_msg.twist.linear.y = robot_command_map_data.target_position_y;
+    wheel_vel_msg.twist.linear.x = robot_command_map_data.target_position_y;
+    wheel_vel_msg.twist.linear.y = -robot_command_map_data.target_position_x;
     wheel_vel_msg.twist.linear.z = 0.0;
 
     // 角速度暂时设为0（如果底盘有角速度数据可以添加）
@@ -37,8 +37,8 @@ void ChassisNode::VelOdometry_Callback(void* data) {
 
     wheel_odom_vel_pub_->publish(wheel_vel_msg);
 
-    RCLCPP_INFO(this->get_logger(), "发布轮式速度: vx=%.3f, vy=%.3f",
-                wheel_vel_msg.twist.linear.x, wheel_vel_msg.twist.linear.y);
+    // RCLCPP_INFO(this->get_logger(), "发布轮式速度: vx=%.3f, vy=%.3f",
+    //             wheel_vel_msg.twist.linear.x, wheel_vel_msg.twist.linear.y);
 }
 
 ChassisNode ::ChassisNode() : Node("chassis_node") {
@@ -274,33 +274,34 @@ void ChassisNode::RefreeTimerCallback() {
 }
 
 void ChassisNode::RefreePubTimerCallback() {
+    RCLCPP_INFO(this->get_logger(), "发布回调");
     serial_interfaces::msg::Refree msg;
-    std::cout << "比赛类型: " << static_cast<int>(game_info_t_data.game_type)
-              << std::endl;
-    std::cout << "比赛阶段: "
-              << static_cast<int>(game_info_t_data.game_progress) << std::endl;
-    std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time << " 秒"
-              << std::endl;
-    std::cout << "机器人ID: " << static_cast<int>(robot_info_t_data.robot_id)
-              << std::endl;
-    std::cout << "当前血量: " << robot_info_t_data.remain_HP << std::endl;
-    std::cout << "17mm弹药剩余: "
-              << bullet_remaining_t_data.bullet_remaining_num_17mm << std::endl;
-    std::cout << "堡垒上允许发弹："
-              << bullet_remaining_t_data.projectile_allowance_fortress
-              << std::endl;
-    std::cout << "红方哨兵：" << game_robot_survivors.red_7_robot_HP
-              << std::endl;
-    std::cout << "蓝方哨兵：" << game_robot_survivors.blue_7_robot_HP
-              << std::endl;
-    std::cout << "红方前哨：" << game_robot_survivors.red_outpost_HP
-              << std::endl;
-    std::cout << "蓝方前哨：" << game_robot_survivors.blue_outpost_HP
-              << std::endl;
-    std::cout << "报点x:" << robot_command_map_data.target_position_x
-              << std::endl;
-    std::cout << "报点y:" << robot_command_map_data.target_position_y
-              << std::endl;
+    // std::cout << "比赛类型: " << static_cast<int>(game_info_t_data.game_type)
+    //           << std::endl;
+    // std::cout << "比赛阶段: "
+    //           << static_cast<int>(game_info_t_data.game_progress) << std::endl;
+    // std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time << " 秒"
+    //           << std::endl;
+    // std::cout << "机器人ID: " << static_cast<int>(robot_info_t_data.robot_id)
+    //           << std::endl;
+    // std::cout << "当前血量: " << robot_info_t_data.remain_HP << std::endl;
+    // std::cout << "17mm弹药剩余: "
+    //           << bullet_remaining_t_data.bullet_remaining_num_17mm << std::endl;
+    // std::cout << "堡垒上允许发弹："
+    //           << bullet_remaining_t_data.projectile_allowance_fortress
+    //           << std::endl;
+    // std::cout << "红方哨兵：" << game_robot_survivors.red_7_robot_HP
+    //           << std::endl;
+    // std::cout << "蓝方哨兵：" << game_robot_survivors.blue_7_robot_HP
+    //           << std::endl;
+    // std::cout << "红方前哨：" << game_robot_survivors.red_outpost_HP
+    //           << std::endl;
+    // std::cout << "蓝方前哨：" << game_robot_survivors.blue_outpost_HP
+    //           << std::endl;
+    // std::cout << "报点x:" << robot_command_map_data.target_position_x
+    //           << std::endl;
+    // std::cout << "报点y:" << robot_command_map_data.target_position_y
+    //           << std::endl;
 
     msg.competition_type = game_info_t_data.game_type;
     msg.competition_stage = game_info_t_data.game_progress;
