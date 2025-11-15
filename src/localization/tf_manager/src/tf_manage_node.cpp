@@ -13,7 +13,7 @@
 
 class TfManager : public rclcpp::Node {
    public:
-    TfManager() : Node("tf_manage_node"), last_odom_msg_(nullptr) {
+    TfManager() : Node("tf_manage_node") {
         // 参数配置
         declare_parameter("odom_frame_id", "odom");
         declare_parameter("lidar_frame_id", "livox_frame");
@@ -135,34 +135,34 @@ class TfManager : public rclcpp::Node {
         RCLCPP_INFO(this->get_logger(), "static tf pub!");
     }
 
-    void HandleMapOdom(const nav_msgs::msg::Odometry::SharedPtr msg) {
-        geometry_msgs::msg::TransformStamped transform;
+    // void HandleMapOdom(const nav_msgs::msg::Odometry::SharedPtr msg) {
+    //     geometry_msgs::msg::TransformStamped transform;
 
-        // 填充头信息
-        transform.header.stamp = msg->header.stamp;  // 使用消息自带时间戳
-        transform.header.frame_id = "map";
-        transform.child_frame_id = "odom";
+    //     // 填充头信息
+    //     transform.header.stamp = msg->header.stamp;  // 使用消息自带时间戳
+    //     transform.header.frame_id = "map";
+    //     transform.child_frame_id = "odom";
 
-        // 位置数据
-        transform.transform.translation.x = msg->pose.pose.position.x;
-        transform.transform.translation.y = msg->pose.pose.position.y;
-        transform.transform.translation.z = msg->pose.pose.position.z;
+    //     // 位置数据
+    //     transform.transform.translation.x = msg->pose.pose.position.x;
+    //     transform.transform.translation.y = msg->pose.pose.position.y;
+    //     transform.transform.translation.z = msg->pose.pose.position.z;
 
-        // 方向数据（自动归一化）
-        tf2::Quaternion q(
-            msg->pose.pose.orientation.x, msg->pose.pose.orientation.y,
-            msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
-        q.normalize();
+    //     // 方向数据（自动归一化）
+    //     tf2::Quaternion q(
+    //         msg->pose.pose.orientation.x, msg->pose.pose.orientation.y,
+    //         msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
+    //     q.normalize();
 
-        transform.transform.rotation.x = q.x();
-        transform.transform.rotation.y = q.y();
-        transform.transform.rotation.z = q.z();
-        transform.transform.rotation.w = q.w();
+    //     transform.transform.rotation.x = q.x();
+    //     transform.transform.rotation.y = q.y();
+    //     transform.transform.rotation.z = q.z();
+    //     transform.transform.rotation.w = q.w();
 
-        // 发布变换
-        map_odom_broadcaster_->sendTransform(transform);
-        // RCLCPP_INFO(this->get_logger(), "static tf pub!");
-    }
+    //     // 发布变换
+    //     map_odom_broadcaster_->sendTransform(transform);
+    //     // RCLCPP_INFO(this->get_logger(), "static tf pub!");
+    // }
 
     void HandleOdomBase(const nav_msgs::msg::Odometry::SharedPtr msg) {
         geometry_msgs::msg::TransformStamped transform;
@@ -316,8 +316,6 @@ class TfManager : public rclcpp::Node {
     rclcpp::TimerBase::SharedPtr map_fake_base_timer_;  // 新增
 
     std::mutex mutex_;
-    nav_msgs::msg::Odometry::SharedPtr last_odom_msg_;
-    bool has_valid_data_ = false;  // 新增数据有效性标志
 };
 
 int main(int argc, char** argv) {
