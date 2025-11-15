@@ -239,7 +239,7 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     if (judge_ok) {
         Eigen::Matrix4d T_pub = best_T;
         if (enforce_rp_zero_) {
-            ZeroRollPitchKeepYaw(T_pub);
+            ZeroRollPitchKeepYaw(best_T);
         }
         relocResult.isOk = true;
         result_t_.matrix() = T_pub;
