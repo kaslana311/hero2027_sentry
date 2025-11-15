@@ -1,8 +1,5 @@
 #include "relocalization_node.hpp"
 
-#include <tf2_ros/transform_broadcaster.h>
-
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 // Limit namespace leakage to this translation unit only
 using namespace small_gicp;
@@ -193,7 +190,7 @@ bool RelocalizationNode::GlobalLocalization() {
             best_T = res.matrix();
         }
     }
-    //此时得到了最好的变幻关系
+    //此时得到了最好的变换关系
     rclcpp::Time end_icp_time = this->now();
     RCLCPP_INFO(this->get_logger(), "Registration time: %f, best fitness: %f",
                 (end_icp_time - begin_icp_time).seconds(), best_fitness);
@@ -256,12 +253,17 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     if (!registration_success_) {  // 如果配准还未成功，继续尝试
         GlobalLocalization();
     } else {
+        geometry_msgs::msg::Pose pose = MatToPose(pose_estimation_);
         // 如果已经配准成功，就持续发布当前的位姿估计
         geometry_msgs::msg::TransformStamped transform_stamped;
         transform_stamped.header.stamp = this->now();
         transform_stamped.header.frame_id = "map";
         transform_stamped.child_frame_id = "odom";
-        transform_stamped.transform = tf2::toMsg(MatToPose(pose_estimation_));
+
+        transform_stamped.transform.translation.x = pose.position.x;
+        transform_stamped.transform.translation.y = pose.position.y;
+        transform_stamped.transform.translation.z = pose.position.z;
+        transform_stamped.transform.rotation = pose.orientation;
         tf_broadcaster_->sendTransform(transform_stamped);
     }
 }
