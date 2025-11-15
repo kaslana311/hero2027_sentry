@@ -48,21 +48,24 @@ class RelocalizationNode : public rclcpp::Node {
     void GlobalLocalizationTimerCallback();
     bool GlobalLocalization();
 
-    void SaveCurOdomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
     void SaveCurScanCallback(
         const sensor_msgs::msg::PointCloud2::SharedPtr msg);
-
-    void PublishCropMap(const pcl::PointCloud<pcl::PointXYZ>::Ptr& crop_map);
+    void InitPoseCallback(
+        const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+    void PassThroughFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
+                           pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out,
+                           double min_z, double max_z, double min_y,
+                           double max_y, double min_x, double max_x);
     // 发布接受到的fast_lio的点云，在camera_init系下
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_cur_scan_;
     // 参考系为map系，但点云是FOV视角中的
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_crop_map_;
-    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_map_to_odom_;
 
-    // 订阅odom和fast_lio的点云数据
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_scan_;
 
-    nav_msgs::msg::Odometry cur_odom_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::
+        SharedPtr sub_init_pose_;
+
     // 分配内存需要在构造函数中
     pcl::PointCloud<pcl::PointXYZ>::Ptr cur_scan_ = nullptr;
 
@@ -75,17 +78,11 @@ class RelocalizationNode : public rclcpp::Node {
     double init_roll_;
     std::string pcd_path_;
 
-    rclcpp::TimerBase::SharedPtr timer_, transform_timer_;
+    rclcpp::TimerBase::SharedPtr timer_;
 
     bool InitGlobalMap(std::string map_path);
     // 裁减FOV中的地图，目前写的是方形采样
-    pcl::PointCloud<pcl::PointXYZ>::Ptr CropMapInFov(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr& global_map,
-        const Eigen::Matrix4d& pose_estimation,
-        const nav_msgs::msg::Odometry& cur_odom, double FOV, double FOV_FAR);
-    // voxel下采样
-    pcl::PointCloud<pcl::PointXYZ>::Ptr VoxelDownSamping(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, double leaf_size);
+
     std::vector<Eigen::Vector3d> ConvertPointCloudToEigenVector(
         const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
     Eigen::Isometry3d SmallIcpRegistration(
@@ -156,25 +153,23 @@ class RelocalizationNode : public rclcpp::Node {
     }
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_ = nullptr;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr crop_global_map_ = nullptr;
 
     bool has_global_map_ = false;
-    bool has_odom_ = false;
     bool has_scan_ = false;
 
-    bool first_registration_ = false;
-    bool only_one_ = false;
+    // bool first_registration_ = false;
+    // bool only_one_ = false;
     bool registration_success_ = false;
 
     // 配准参数
-    int num_threads_ = 4;                           // 线程数
-    double downsampling_resolution_ = 0.25;         // 降采样分辨率
-    int num_neighbors_ = 10;                        // 邻居点数量
-    double max_correspondence_distance_ = 1.0;      // 最大对应点距离
-    double rotation_epsilon_ = 0.1 * M_PI / 180.0;  // 旋转收敛阈值
-    double translation_epsilon_ = 1e-3;             // 平移收敛阈值
-    int max_iterations_ = 20;                       // 最大迭代次数
-    bool verbose_ = false;                          // 是否输出详细信息
+    // int num_threads_ = 4;                           // 线程数
+    // double downsampling_resolution_ = 0.25;         // 降采样分辨率
+    // int num_neighbors_ = 10;                        // 邻居点数量
+    // double max_correspondence_distance_ = 1.0;      // 最大对应点距离
+    // double rotation_epsilon_ = 0.1 * M_PI / 180.0;  // 旋转收敛阈值
+    // double translation_epsilon_ = 1e-3;             // 平移收敛阈值
+    // int max_iterations_ = 20;                       // 最大迭代次数
+    // bool verbose_ = false;                          // 是否输出详细信息
     double max_fitness_threshold_ = 0.1;  // 最大允许的fitness分数
 
     // Gates and policies (populated from ROS parameters at runtime)
@@ -187,8 +182,8 @@ class RelocalizationNode : public rclcpp::Node {
     double yaw_search_step_deg_ = 2.0;         // 粗搜步长（度）
     int max_fail_before_fallback_ = 5;         // 失败次数后触发兜底
     std::string fallback_policy_ = "initial";  // initial | identity
-    bool use_crop_map_ = true;                 // 使用裁剪地图
-    double crop_radius_ = 30.0;                // 裁剪半径（米）
+    // bool use_crop_map_ = true;                 // 使用裁剪地图
+    // double crop_radius_ = 30.0;                // 裁剪半径（米）
     double fitness_threshold_ = 0.08;  // 接受阈值（与代码内一致）
 
     // ...existing code...

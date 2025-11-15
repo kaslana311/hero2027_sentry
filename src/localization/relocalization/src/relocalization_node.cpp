@@ -1,5 +1,6 @@
 #include "relocalization_node.hpp"
 
+#include <pcl/filters/passthrough.h>
 // Limit namespace leakage to this translation unit only
 using namespace small_gicp;
 
@@ -31,8 +32,6 @@ RelocalizationNode::RelocalizationNode()
     this->declare_parameter("max_fail_before_fallback",
                             max_fail_before_fallback_);
     this->declare_parameter("fallback_policy", fallback_policy_);
-    this->declare_parameter("use_crop_map", use_crop_map_);
-    this->declare_parameter("crop_radius", crop_radius_);
     //------------
     this->declare_parameter("fitness_threshold", fitness_threshold_);
     this->declare_parameter("num_neighbors", 20);
@@ -61,8 +60,6 @@ RelocalizationNode::RelocalizationNode()
     max_fail_before_fallback_ =
         this->get_parameter("max_fail_before_fallback").as_int();
     fallback_policy_ = this->get_parameter("fallback_policy").as_string();
-    use_crop_map_ = this->get_parameter("use_crop_map").as_bool();
-    crop_radius_ = this->get_parameter("crop_radius").as_double();
     fitness_threshold_ = this->get_parameter("fitness_threshold").as_double();
     gate_roll_deg_ = this->get_parameter("gate_roll_deg").as_double();
     gate_pitch_deg_ = this->get_parameter("gate_pitch_deg").as_double();
@@ -108,8 +105,14 @@ RelocalizationNode::RelocalizationNode()
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
                   std::placeholders::_1));
 
-    pub_crop_map_ =
-        this->create_publisher<sensor_msgs::msg::PointCloud2>("/crop_map", 1);
+    sub_init_pose_ = this->create_subscription<
+        geometry_msgs::msg::PoseWithCovarianceStamped>(
+        "/initialpose", 1,
+        std::bind(&RelocalizationNode::InitPoseCallback, this,
+                  std::placeholders::_1));
+
+    pub_map_to_odom_ =
+        this->create_publisher<nav_msgs::msg::Odometry>("/map_to_odom", 1);
     pub_cur_scan_ =
         this->create_publisher<sensor_msgs::msg::PointCloud2>("/cur_scan", 1);
     timer_ = this->create_wall_timer(
@@ -119,14 +122,47 @@ RelocalizationNode::RelocalizationNode()
 void RelocalizationNode::SaveCurScanCallback(
     const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     //累计10帧
-    if (registration_success_) return;
+    if (this->scan_count >= 10) return;
     std::lock_guard<std::mutex> lock(mtx);
     pcl::fromROSMsg(*msg, *cur_scan_);
+    PassThroughFilter(cur_scan_, cur_scan_, 0.0, 3.5, -9.2, 5.3, -3.2, 24.7);
     *accumulated_cloud += *cur_scan_;
     this->scan_count++;
-    *accumulated_cloud += *cur_scan_;
     //至少积累10帧才进行匹配
     if (this->scan_count == 10) has_scan_ = true;
+}
+void RelocalizationNode::PassThroughFilter(
+    pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
+    pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out, double min_z, double max_z,
+    double min_y, double max_y, double min_x, double max_x) {
+    pcl::PassThrough<pcl::PointXYZ> pass;
+    pass.setInputCloud(cloud_in);
+
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(min_z, max_z);
+    pass.filter(*cloud_out);
+
+    pass.setInputCloud(cloud_out);
+    pass.setFilterFieldName("y");
+    pass.setFilterLimits(min_y, max_y);
+    pass.filter(*cloud_out);
+
+    pass.setInputCloud(cloud_out);
+    pass.setFilterFieldName("x");
+    pass.setFilterLimits(min_x, max_x);
+    pass.filter(*cloud_out);
+}
+void RelocalizationNode::InitPoseCallback(
+    const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
+    geometry_msgs::msg::Pose pose = msg->pose.pose;
+    pose_estimation_ = PoseToMat(pose);
+    // pose_estimation_ = PoseToMat();
+    std::cout << "pose_estimation:\n" << pose_estimation_ << std::endl;
+
+    // 重置配准状态，重新开始配准
+    registration_success_ = false;
+    RCLCPP_INFO(this->get_logger(),
+                "Received new initial pose, restarting registration...");
 }
 
 bool RelocalizationNode::GlobalLocalization() {
@@ -213,52 +249,26 @@ bool RelocalizationNode::GlobalLocalization() {
         }
         return false;
     }
-    this->scan_count = 0;  // 点云累计清零
-    this->has_scan_ = false;
-    accumulated_cloud->clear();
 }
 
 void RelocalizationNode::GlobalLocalizationTimerCallback() {
     if (!registration_success_) {  // 如果配准还未成功，继续尝试
         GlobalLocalization();
-    } else {
-        geometry_msgs::msg::Pose pose = MatToPose(pose_estimation_);
-        // 如果已经配准成功，就持续发布当前的位姿估计
-        geometry_msgs::msg::TransformStamped transform_stamped;
-        transform_stamped.header.stamp = this->now();
-        transform_stamped.header.frame_id = "map";
-        transform_stamped.child_frame_id = "odom";
-
-        transform_stamped.transform.translation.x = pose.position.x;
-        transform_stamped.transform.translation.y = pose.position.y;
-        transform_stamped.transform.translation.z = pose.position.z;
-        transform_stamped.transform.rotation = pose.orientation;
-        tf_broadcaster_->sendTransform(transform_stamped);
     }
 }
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr RelocalizationNode::VoxelDownSamping(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, double leaf_size) {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(
-        new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::VoxelGrid<pcl::PointXYZ> sor;
-    sor.setInputCloud(cloud);
-    sor.setLeafSize(leaf_size, leaf_size, leaf_size);
-    sor.filter(*cloud_filtered);
-    return cloud_filtered;
-}
+// std::vector<Eigen::Vector3d>
+// RelocalizationNode::ConvertPointCloudToEigenVector(
+//     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
+//     std::vector<Eigen::Vector3d> eigen_vectors;
+//     eigen_vectors.reserve(cloud->size());  // 预留空间以提高性能
 
-std::vector<Eigen::Vector3d> RelocalizationNode::ConvertPointCloudToEigenVector(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
-    std::vector<Eigen::Vector3d> eigen_vectors;
-    eigen_vectors.reserve(cloud->size());  // 预留空间以提高性能
+//     for (const auto& point : *cloud) {
+//         eigen_vectors.emplace_back(point.x, point.y, point.z);
+//     }
 
-    for (const auto& point : *cloud) {
-        eigen_vectors.emplace_back(point.x, point.y, point.z);
-    }
-
-    return eigen_vectors;
-}
+//     return eigen_vectors;
+// }
 
 Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
@@ -293,7 +303,8 @@ Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
         std::cout << "Number of inlier source points:" << num_inliers
                   << std::endl;
 
-        Eigen::Matrix<double, 6, 6> H = result.H;  // Final Hessian matrix (6x6)
+        // Eigen::Matrix<double, 6, 6> H = result.H;  // Final Hessian matrix
+        // (6x6)
         return T;
     } else {
         std::cout << "Gicp registration not converged" << std::endl;
@@ -301,70 +312,36 @@ Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
     }
 }
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr RelocalizationNode::CropMapInFov(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& global_map,
-    const Eigen::Matrix4d& pose_estimation,
-    const nav_msgs::msg::Odometry& cur_odom, double FOV, double FOV_FAR) {
-    // pose_estimation是map to odom
-    Eigen::Matrix4d T_odom_to_base_link = PoseToMat(cur_odom.pose.pose);
-    Eigen::Matrix4d T_map_to_base_link = pose_estimation * T_odom_to_base_link;
+// //
+// 配准的输入源是当前的scan，camera_init系下的，配准对象为，参考系为map系，但点云是FOV视角中的
+// Eigen::Matrix4d RelocalizationNode::IcpRegistration(
+//     const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
+//     const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_map,
+//     const Eigen::Matrix4d& initial, double scale, double& fitness) {
+//     pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
+//     // icp.setInputSource(VoxelDownSamping(pc_scan, 0.1 * scale));
+//     // icp.setInputTarget(VoxelDownSamping(pc_map, 0.4 * scale));
+//     icp.setInputSource(pc_scan);
+//     icp.setInputTarget(pc_map);
+//     pcl::PointCloud<pcl::PointXYZ> Final;
+//     icp.setMaximumIterations(50);          // 最大迭代次数
+//     icp.setTransformationEpsilon(1e-8);    // 变换矩阵的容差
+//     icp.setEuclideanFitnessEpsilon(1e-6);  // 欧几里得适应度容差
+//     icp.align(Final, initial.cast<float>());
+//     // icp.align(Final);
 
-    Eigen::Matrix4d T_base_link_to_map = T_map_to_base_link.inverse();
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_in_base_link(
-        new pcl::PointCloud<pcl::PointXYZ>());
-
-    pcl::transformPointCloud(*global_map, *global_map_in_base_link,
-                             T_base_link_to_map);
-
-    pcl::ConditionAnd<pcl::PointXYZ>::Ptr range_cond(
-        new pcl::ConditionAnd<pcl::PointXYZ>());
-    // float min_radius = 5.0f;
-    float max_radius = FOV_FAR;
-
-    // 添加条件：点到原点的距离在min_radius和max_radius之间
-    range_cond->addComparison(pcl::FieldComparison<pcl::PointXYZ>::ConstPtr(
-        new pcl::FieldComparison<pcl::PointXYZ>("x", pcl::ComparisonOps::GT,
-                                                -max_radius)));
-    range_cond->addComparison(pcl::FieldComparison<pcl::PointXYZ>::ConstPtr(
-        new pcl::FieldComparison<pcl::PointXYZ>("x", pcl::ComparisonOps::LT,
-                                                max_radius)));
-    range_cond->addComparison(pcl::FieldComparison<pcl::PointXYZ>::ConstPtr(
-        new pcl::FieldComparison<pcl::PointXYZ>("y", pcl::ComparisonOps::GT,
-                                                -max_radius)));
-    range_cond->addComparison(pcl::FieldComparison<pcl::PointXYZ>::ConstPtr(
-        new pcl::FieldComparison<pcl::PointXYZ>("y", pcl::ComparisonOps::LT,
-                                                max_radius)));
-
-    // 创建条件滤波器
-    pcl::ConditionalRemoval<pcl::PointXYZ> cond_removal;
-    cond_removal.setCondition(range_cond);
-    cond_removal.setInputCloud(global_map_in_base_link);
-    cond_removal.setKeepOrganized(false);  // 如果设置为true，保留点云结构
-
-    // 应用滤波器
-    pcl::PointCloud<pcl::PointXYZ>::Ptr crop_map(
-        new pcl::PointCloud<pcl::PointXYZ>);
-    cond_removal.filter(*crop_map);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr crop_map_in_map_frame(
-        new pcl::PointCloud<pcl::PointXYZ>);
-
-    pcl::transformPointCloud(*crop_map, *crop_map_in_map_frame,
-                             T_map_to_base_link);
-
-    PublishCropMap(crop_map_in_map_frame);
-
-    return crop_map_in_map_frame;
-}
-
-void RelocalizationNode::PublishCropMap(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& crop_map) {
-    sensor_msgs::msg::PointCloud2 msg;
-    pcl::toROSMsg(*crop_map, msg);
-    msg.header.frame_id = "map";
-    msg.header.stamp = this->now();
-    pub_crop_map_->publish(msg);
-}
+//     if (icp.hasConverged()) {
+//         std::cout << "ICP has converged!" << std::endl;
+//         std::cout << "Fitness score: " << icp.getFitnessScore() << std::endl;
+//         std::cout << "Transformation matrix:\n"
+//                   << icp.getFinalTransformation() << std::endl;
+//         fitness = icp.getFitnessScore();
+//         return icp.getFinalTransformation().cast<double>();
+//     } else {
+//         std::cout << "ICP did not converge." << std::endl;
+//         return initial;
+//     }
+// }
 
 bool RelocalizationNode::InitGlobalMap(std::string map_path) {
     // 耗时
