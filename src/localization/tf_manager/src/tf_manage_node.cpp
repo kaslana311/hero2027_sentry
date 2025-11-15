@@ -16,7 +16,7 @@ class TfManager : public rclcpp::Node {
     TfManager() : Node("tf_manage_node") {
         // 参数配置
         declare_parameter("odom_frame_id", "odom");
-        declare_parameter("lidar_frame_id", "livox_frame");
+        declare_parameter("lidar_frame_id", "lidar_link");
         declare_parameter("base_frame_id", "base_link");
         declare_parameter("publish_frequency", 100.0);
 
@@ -95,7 +95,7 @@ class TfManager : public rclcpp::Node {
         static_transform.header.stamp = now();
         static_transform.header.frame_id =
             get_parameter("lidar_frame_id")
-                .as_string();  // 父坐标系：livox_frame
+                .as_string();  // lidar_link
         static_transform.child_frame_id =
             get_parameter("base_frame_id").as_string();  // 子坐标系：base_link
 
@@ -303,11 +303,9 @@ class TfManager : public rclcpp::Node {
     }
 
     // 成员变量
-    std::shared_ptr<tf2_ros::TransformBroadcaster> odom_base_broadcaster_;
     std::shared_ptr<tf2_ros::TransformBroadcaster>
         map_fake_base_broadcaster_;  // 新增
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_broadcaster_;
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_base_sub_;
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
