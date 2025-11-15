@@ -28,8 +28,6 @@ class TfManager : public rclcpp::Node {
             std::vector<double>{0.0, 0.0, 0.0});  // 旋转角度（弧度）
 
         // 初始化三个独立的TF广播器
-        map_odom_broadcaster_ =
-            std::make_shared<tf2_ros::TransformBroadcaster>(this);
         odom_base_broadcaster_ =
             std::make_shared<tf2_ros::TransformBroadcaster>(this);
         map_fake_base_broadcaster_ =
@@ -41,29 +39,12 @@ class TfManager : public rclcpp::Node {
         PublishStaticBaseToLidarTransform();
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable();
 
-        // 订阅低频map->odom变换
-        map_odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-            "/map_to_odom", qos,
-            [this](const nav_msgs::msg::Odometry::SharedPtr msg) {
-                // HandleMapOdom(msg);
-                std::lock_guard<std::mutex> lock(mutex_);
-                last_odom_msg_ = msg;
-                has_valid_data_ = true;  // 标记已有有效数据
-                RCLCPP_INFO(this->get_logger(),
-                            "Received new map_to_odom "
-                            "data!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            });
-
         // 订阅高频odom->base_link变换
         // odom_base_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
         //     "/Odometry", qos, [this](const nav_msgs::msg::Odometry::SharedPtr
         //     msg) {
         //       HandleOdomBase(msg);
         //     });
-
-        timer_ =
-            this->create_wall_timer(std::chrono::milliseconds(50),
-                                    std::bind(&TfManager::TimerCallback, this));
 
         // 初始化TF2缓冲区和监听器
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(
@@ -301,14 +282,11 @@ class TfManager : public rclcpp::Node {
     }
 
     // 成员变量
-    std::shared_ptr<tf2_ros::TransformBroadcaster> map_odom_broadcaster_;
     std::shared_ptr<tf2_ros::TransformBroadcaster> odom_base_broadcaster_;
     std::shared_ptr<tf2_ros::TransformBroadcaster>
         map_fake_base_broadcaster_;  // 新增
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_broadcaster_;
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr map_odom_sub_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_base_sub_;
-    rclcpp::TimerBase::SharedPtr timer_;
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;

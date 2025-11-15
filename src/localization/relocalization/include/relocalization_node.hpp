@@ -58,7 +58,7 @@ class RelocalizationNode : public rclcpp::Node {
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_cur_scan_;
     // 参考系为map系，但点云是FOV视角中的
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_crop_map_;
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_map_to_odom_;
+    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
     // 订阅odom和fast_lio的点云数据
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom_;

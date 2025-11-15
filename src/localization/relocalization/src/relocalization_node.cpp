@@ -1,5 +1,9 @@
 #include "relocalization_node.hpp"
 
+#include <tf2_ros/transform_broadcaster.h>
+
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+
 // Limit namespace leakage to this translation unit only
 using namespace small_gicp;
 
@@ -101,6 +105,8 @@ RelocalizationNode::RelocalizationNode()
     register_->rejector.max_dist_sq = smgicp_max_dist_sq_;
     register_->optimizer.max_iterations = smgicp_max_iterations_;
 
+    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+
     sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "/Odometry", 1,
         std::bind(&RelocalizationNode::SaveCurOdomCallback, this,
@@ -117,8 +123,6 @@ RelocalizationNode::RelocalizationNode()
         std::bind(&RelocalizationNode::InitPoseCallback, this,
                   std::placeholders::_1));
 
-    pub_map_to_odom_ =
-        this->create_publisher<nav_msgs::msg::Odometry>("/map_to_odom", 1);
     pub_crop_map_ =
         this->create_publisher<sensor_msgs::msg::PointCloud2>("/crop_map", 1);
     pub_cur_scan_ =
@@ -211,16 +215,10 @@ bool RelocalizationNode::GlobalLocalization() {
                     PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
                     YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
         nav_msgs::msg::Odometry map_to_odom;
-        Eigen::Matrix4d T_pub = best_T;
         if (enforce_rp_zero_) {
-            ZeroRollPitchKeepYaw(T_pub);
+            ZeroRollPitchKeepYaw(best_T);
         }
-        map_to_odom.pose.pose = MatToPose(T_pub);
-        map_to_odom.header.stamp = this->now();
-        map_to_odom.header.frame_id = "map";
-
-        pub_map_to_odom_->publish(map_to_odom);
-        pose_estimation_ = T_pub;
+        pose_estimation_ = best_T;
         registration_success_ = true;  // 设置配准成功标志
         registration_fail_count_ = 0;  // 成功后清零
         return true;
@@ -239,17 +237,11 @@ bool RelocalizationNode::GlobalLocalization() {
                         "Registration failed over %d times, publishing "
                         "fallback (%s)!",
                         max_fail_before_fallback_, fallback_policy_.c_str());
-            nav_msgs::msg::Odometry map_to_odom;
-            if (fallback_policy_ == "identity") {
-                map_to_odom.pose.pose = MatToPose(Eigen::Matrix4d::Identity());
-            } else {
-                map_to_odom.pose.pose = MatToPose(
-                    CreateTfMatrix(init_x_, init_y_, init_z_, init_yaw_,
-                                   init_pitch_, init_roll_));
-            }
-            map_to_odom.header.stamp = this->now();
-            map_to_odom.header.frame_id = "map";
-            pub_map_to_odom_->publish(map_to_odom);
+
+            // if (fallback_policy_ == "identity") {
+            pose_estimation_ = CreateTfMatrix(
+                init_x_, init_y_, init_z_, init_yaw_, init_pitch_, init_roll_);
+            // }
             registration_success_ = true;
             registration_fail_count_ = 0;  // 重置计数
         }
@@ -264,27 +256,13 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     if (!registration_success_) {  // 如果配准还未成功，继续尝试
         GlobalLocalization();
     } else {
-        // 直接发布map->odom的tf变换，无需再发布Odometry消息
-        geometry_msgs::msg::TransformStamped transform;
-        transform.header.stamp = this->now();
-        transform.header.frame_id = "map";
-        transform.child_frame_id = "odom";
-        transform.transform.translation.x = pose_estimation_(0, 3);
-        transform.transform.translation.y = pose_estimation_(1, 3);
-        transform.transform.translation.z = pose_estimation_(2, 3);
-        tf2::Matrix3x3 m(
-            pose_estimation_(0, 0), pose_estimation_(0, 1), pose_estimation_(0, 2),
-            pose_estimation_(1, 0), pose_estimation_(1, 1), pose_estimation_(1, 2),
-            pose_estimation_(2, 0), pose_estimation_(2, 1), pose_estimation_(2, 2));
-        tf2::Quaternion q;
-        m.getRotation(q);
-        transform.transform.rotation = tf2::toMsg(q);
-        // 发布tf变换
-        static std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
-        if (!tf_broadcaster) {
-            tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(shared_from_this());
-        }
-        tf_broadcaster->sendTransform(transform);
+        // 如果已经配准成功，就持续发布当前的位姿估计
+        geometry_msgs::msg::TransformStamped transform_stamped;
+        transform_stamped.header.stamp = this->now();
+        transform_stamped.header.frame_id = "map";
+        transform_stamped.child_frame_id = "odom";
+        transform_stamped.transform = tf2::toMsg(MatToPose(pose_estimation_));
+        tf_broadcaster_->sendTransform(transform_stamped);
     }
 }
 
