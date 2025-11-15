@@ -1,6 +1,5 @@
 #include "relocalization_node.hpp"
 
-
 // Limit namespace leakage to this translation unit only
 using namespace small_gicp;
 
@@ -104,20 +103,9 @@ RelocalizationNode::RelocalizationNode()
 
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
-    sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "/Odometry", 1,
-        std::bind(&RelocalizationNode::SaveCurOdomCallback, this,
-                  std::placeholders::_1));
-
     sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "/cloud_registered", 1,
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
-                  std::placeholders::_1));
-
-    sub_init_pose_ = this->create_subscription<
-        geometry_msgs::msg::PoseWithCovarianceStamped>(
-        "/initialpose", 1,
-        std::bind(&RelocalizationNode::InitPoseCallback, this,
                   std::placeholders::_1));
 
     pub_crop_map_ =
@@ -128,12 +116,7 @@ RelocalizationNode::RelocalizationNode()
         std::chrono::milliseconds(500),
         std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
 }
-void RelocalizationNode::SaveCurOdomCallback(
-    const nav_msgs::msg::Odometry::SharedPtr msg) {
-    std::lock_guard<std::mutex> lock(mtx);
-    cur_odom_ = *msg;
-    has_odom_ = true;
-}
+
 void RelocalizationNode::SaveCurScanCallback(
     const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     //累计10帧
@@ -145,19 +128,6 @@ void RelocalizationNode::SaveCurScanCallback(
     *accumulated_cloud += *cur_scan_;
     //至少积累10帧才进行匹配
     if (this->scan_count == 10) has_scan_ = true;
-}
-
-void RelocalizationNode::InitPoseCallback(
-    const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
-    geometry_msgs::msg::Pose pose = msg->pose.pose;
-    pose_estimation_ = PoseToMat(pose);
-    // pose_estimation_ = PoseToMat();
-    std::cout << "pose_estimation:\n" << pose_estimation_ << std::endl;
-
-    // 重置配准状态，重新开始配准
-    registration_success_ = false;
-    RCLCPP_INFO(this->get_logger(),
-                "Received new initial pose, restarting registration...");
 }
 
 bool RelocalizationNode::GlobalLocalization() {

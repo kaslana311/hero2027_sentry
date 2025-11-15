@@ -12,7 +12,6 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 #include <Eigen/Dense>
 #include <chrono>
@@ -35,7 +34,8 @@
 #include <thread>
 #include <vector>
 
-// #include <small_gicp/pcl/pcl_registration.hpp>
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+
 using namespace small_gicp;
 class RelocalizationNode : public rclcpp::Node {
    public:
@@ -51,8 +51,6 @@ class RelocalizationNode : public rclcpp::Node {
     void SaveCurOdomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
     void SaveCurScanCallback(
         const sensor_msgs::msg::PointCloud2::SharedPtr msg);
-    void InitPoseCallback(
-        const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
 
     void PublishCropMap(const pcl::PointCloud<pcl::PointXYZ>::Ptr& crop_map);
     // 发布接受到的fast_lio的点云，在camera_init系下
@@ -62,11 +60,7 @@ class RelocalizationNode : public rclcpp::Node {
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
     // 订阅odom和fast_lio的点云数据
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_scan_;
-
-    rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::
-        SharedPtr sub_init_pose_;
 
     nav_msgs::msg::Odometry cur_odom_;
     // 分配内存需要在构造函数中
