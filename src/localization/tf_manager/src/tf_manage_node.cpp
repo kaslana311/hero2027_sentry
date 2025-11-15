@@ -16,7 +16,7 @@ class TfManager : public rclcpp::Node {
     TfManager() : Node("tf_manage_node") {
         // 参数配置
         declare_parameter("odom_frame_id", "odom");
-        declare_parameter("lidar_frame_id", "livox_frame");
+        declare_parameter("lidar_frame_id", "lidar_link");
         declare_parameter("base_frame_id", "base_link");
         declare_parameter("publish_frequency", 100.0);
 
@@ -28,8 +28,6 @@ class TfManager : public rclcpp::Node {
             std::vector<double>{0.0, 0.0, 0.0});  // 旋转角度（弧度）
 
         // 初始化三个独立的TF广播器
-        odom_base_broadcaster_ =
-            std::make_shared<tf2_ros::TransformBroadcaster>(this);
         map_fake_base_broadcaster_ =
             std::make_shared<tf2_ros::TransformBroadcaster>(
                 this);  // 新增fake_base_link广播器
@@ -38,13 +36,6 @@ class TfManager : public rclcpp::Node {
         // 创建QoS配置（根据实际需求调整）
         PublishStaticBaseToLidarTransform();
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable();
-
-        // 订阅高频odom->base_link变换
-        // odom_base_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        //     "/Odometry", qos, [this](const nav_msgs::msg::Odometry::SharedPtr
-        //     msg) {
-        //       HandleOdomBase(msg);
-        //     });
 
         // 初始化TF2缓冲区和监听器
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(
@@ -75,7 +66,7 @@ class TfManager : public rclcpp::Node {
         static_transform.header.stamp = now();
         static_transform.header.frame_id =
             get_parameter("lidar_frame_id")
-                .as_string();  // 父坐标系：livox_frame
+                .as_string();  // lidar_link
         static_transform.child_frame_id =
             get_parameter("base_frame_id").as_string();  // 子坐标系：base_link
 
@@ -113,65 +104,6 @@ class TfManager : public rclcpp::Node {
         // 发布静态TF
         static_tf_broadcaster_->sendTransform(static_transform);
         RCLCPP_INFO(this->get_logger(), "static tf pub!");
-    }
-
-    // void HandleMapOdom(const nav_msgs::msg::Odometry::SharedPtr msg) {
-    //     geometry_msgs::msg::TransformStamped transform;
-
-    //     // 填充头信息
-    //     transform.header.stamp = msg->header.stamp;  // 使用消息自带时间戳
-    //     transform.header.frame_id = "map";
-    //     transform.child_frame_id = "odom";
-
-    //     // 位置数据
-    //     transform.transform.translation.x = msg->pose.pose.position.x;
-    //     transform.transform.translation.y = msg->pose.pose.position.y;
-    //     transform.transform.translation.z = msg->pose.pose.position.z;
-
-    //     // 方向数据（自动归一化）
-    //     tf2::Quaternion q(
-    //         msg->pose.pose.orientation.x, msg->pose.pose.orientation.y,
-    //         msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
-    //     q.normalize();
-
-    //     transform.transform.rotation.x = q.x();
-    //     transform.transform.rotation.y = q.y();
-    //     transform.transform.rotation.z = q.z();
-    //     transform.transform.rotation.w = q.w();
-
-    //     // 发布变换
-    //     map_odom_broadcaster_->sendTransform(transform);
-    //     // RCLCPP_INFO(this->get_logger(), "static tf pub!");
-    // }
-
-    void HandleOdomBase(const nav_msgs::msg::Odometry::SharedPtr msg) {
-        geometry_msgs::msg::TransformStamped transform;
-
-        // 使用当前最新时间戳
-        transform.header.stamp = this->now();
-        transform.header.frame_id = "odom";
-        transform.child_frame_id = "livox_frame";
-
-        // 位置数据
-        transform.transform.translation.x = msg->pose.pose.position.x;
-        transform.transform.translation.y = msg->pose.pose.position.y;
-        transform.transform.translation.z = msg->pose.pose.position.z;
-
-        // 方向数据（自动归一化）
-        tf2::Quaternion q(
-            msg->pose.pose.orientation.x, msg->pose.pose.orientation.y,
-            msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
-        q.normalize();
-
-        transform.transform.rotation.x = q.x();
-        transform.transform.rotation.y = q.y();
-        transform.transform.rotation.z = q.z();
-        transform.transform.rotation.w = q.w();
-
-        // 发布变换
-        odom_base_broadcaster_->sendTransform(transform);
-
-        RCLCPP_INFO(this->get_logger(), "odom and base_link tf pub!");
     }
 
     void PubBaseInMapcbk() {
@@ -241,11 +173,9 @@ class TfManager : public rclcpp::Node {
     }
 
     // 成员变量
-    std::shared_ptr<tf2_ros::TransformBroadcaster> odom_base_broadcaster_;
     std::shared_ptr<tf2_ros::TransformBroadcaster>
         map_fake_base_broadcaster_;  // 新增
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_broadcaster_;
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_base_sub_;
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
