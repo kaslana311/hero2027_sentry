@@ -113,7 +113,7 @@ RelocalizationNode::RelocalizationNode()
     pub_cur_scan_ =
         this->create_publisher<sensor_msgs::msg::PointCloud2>("/cur_scan", 1);
     timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(500),
+        std::chrono::milliseconds(20),
         std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
 }
 

@@ -599,10 +599,10 @@ int main(int argc, char **argv) {
                 rclcpp::Time(static_cast<uint64_t>(laserCloudTime * 1e9));
             terrainCloud2.header.frame_id = "odom";
             try {
-                // 等待并查找从odom到livox_frame的转换
+                // 等待并查找从odom到lidar_link的转换
                 geometry_msgs::msg::TransformStamped transform =
                     tf_buffer->lookupTransform(
-                        "livox_frame", "odom", rclcpp::Time(0),
+                        "lidar_link", "odom", rclcpp::Time(0),
                         rclcpp::Duration::from_seconds(1.0));
 
                 // 转换点云

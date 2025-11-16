@@ -21,7 +21,7 @@ class GlobalPlanningObs : public rclcpp::Node {
     GlobalPlanningObs() : Node("global_planning_obs") {
         // 参数声明
         this->declare_parameter("map_frame_id", "map");
-        this->declare_parameter("lidar_frame_id", "livox_frame");
+        this->declare_parameter("lidar_frame_id", "lidar_link");
         this->declare_parameter("base_frame_id", "base_footprint");
         this->declare_parameter("resolution", 0.1);
         this->declare_parameter("leaf_size", 0.2);
