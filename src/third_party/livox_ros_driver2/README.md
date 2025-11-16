@@ -432,7 +432,7 @@ For more infomation about the HAP config, please refer to:
     <arg name="rviz_enable" default="true"/>
     <arg name="rosbag_enable" default="false"/>
     <arg name="cmdline_arg" default="$(arg bd_list)"/>
-    <arg name="msg_frame_id" default="livox_frame"/>
+    <arg name="msg_frame_id" default="lidar_link"/>
     <arg name="lidar_bag" default="true"/>
     <arg name="imu_bag" default="true"/>
     <!--user configure parameters for ros end--> 
@@ -479,7 +479,7 @@ For more infomation about the HAP config, please refer to:
     <arg name="rviz_enable" default="true"/>
     <arg name="rosbag_enable" default="false"/>
     <arg name="cmdline_arg" default="$(arg bd_list)"/>
-    <arg name="msg_frame_id" default="livox_frame"/>
+    <arg name="msg_frame_id" default="lidar_link"/>
     <arg name="lidar_bag" default="true"/>
     <arg name="imu_bag" default="true"/>
     <!--user configure parameters for ros end--> 
@@ -524,7 +524,7 @@ For more infomation about the HAP config, please refer to:
 
 ### 6.1 launch with "livox_lidar_rviz_HAP.launch" but no point cloud display on the grid?
 
-Please check the "Global Options - Fixed Frame" field in the RViz "Display" pannel. Set the field value to "livox_frame" and check the "PointCloud2" option in the pannel.
+Please check the "Global Options - Fixed Frame" field in the RViz "Display" pannel. Set the field value to "lidar_link" and check the "PointCloud2" option in the pannel.
 
 ### 6.2 launch with command "ros2 launch livox_lidar_rviz_HAP_launch.py" but cannot open shared object file "liblivox_sdk_shared.so" ?
 

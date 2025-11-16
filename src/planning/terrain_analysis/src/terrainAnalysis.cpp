@@ -727,7 +727,7 @@ int main(int argc, char **argv) {
 
             // publish points with elevation
             // 发两个点云信息，一个在odom系下，给terrain_map_ext用于进一步结算
-            // 一个在livox_frame系下用于局部地图处理
+            // 一个在lidar_link系下用于局部地图处理
             sensor_msgs::msg::PointCloud2 terrainCloud2;
             pcl::toROSMsg(*terrainCloudElev, terrainCloud2);
             terrainCloud2.header.stamp =
@@ -736,10 +736,10 @@ int main(int argc, char **argv) {
             pubLaserCloudToExt->publish(terrainCloud2);
 
             try {
-                // 等待并查找从odom到livox_frame的转换
+                // 等待并查找从odom到lidar_link的转换
                 geometry_msgs::msg::TransformStamped transform =
                     tf_buffer->lookupTransform(
-                        "livox_frame", "odom", rclcpp::Time(0),
+                        "lidar_link", "odom", rclcpp::Time(0),
                         rclcpp::Duration::from_seconds(1.0));
 
                 // 转换点云

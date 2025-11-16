@@ -2,7 +2,7 @@
   ros__parameters:
     map:
       map_frame_id: map             # 地图map坐标系
-      lidar_frame_id: livox_frame  # 雷达坐标系
+      lidar_frame_id: lidar_link  # 雷达坐标系
       base_frame_id: base_link # 底盘坐标系
       resolution: 0.1         # 表示地图的分辨率（单位：米），这里设置为0.1米。每个栅格单元代表0.1米的区域。分辨率越高（值越小），地图越精细，但计算负担更大。
       expansionCoefficient: 2.0  #障碍物膨胀倍数，建议是整数倍，例如：1.0，2.0，3.0等
