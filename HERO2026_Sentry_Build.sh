@@ -93,10 +93,12 @@ colcon_build_pkg() {
 safe_source_install() {
   local f="$WS_ROOT/install/setup.bash"
   if [ -f "$f" ]; then
-    # shellcheck disable=SC1090
     info "source $f"
-    # shell is running this script; use . so subsequent commands see env
+    # 避免 set -u 导致未定义变量报错
+    set +u
+    # shellcheck disable=SC1090
     . "$f"
+    set -u
   else
     warn "未找到 $f（跳过 source）"
   fi
