@@ -14,7 +14,7 @@ find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_eigen REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 find_package(OpenMP REQUIRED)
@@ -24,7 +24,7 @@ include_directories(include ${small_gicp_INCLUDE_DIRS})
 # 添加可执行文件
 add_executable(relocalization_node src/relocalization_node.cpp)
 
-ament_target_dependencies(relocalization_node rclcpp geometry_msgs nav_msgs tf2 tf2_ros Eigen3 sensor_msgs pcl_conversions OpenMP tf2_geometry_msgs)
+ament_target_dependencies(relocalization_node rclcpp geometry_msgs nav_msgs tf2 tf2_ros Eigen3 sensor_msgs pcl_conversions OpenMP tf2_eigen)
 
 # 链接PCL
 target_link_libraries(relocalization_node ${PCL_LIBRARIES} ${small_gicp_LIBRARIES} OpenMP::OpenMP_CXX)
