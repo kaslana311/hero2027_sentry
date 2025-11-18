@@ -94,8 +94,7 @@ class TfManager : public rclcpp::Node {
         geometry_msgs::msg::TransformStamped static_transform;
         static_transform.header.stamp = now();
         static_transform.header.frame_id =
-            get_parameter("lidar_frame_id")
-                .as_string();  // lidar_link
+            get_parameter("lidar_frame_id").as_string();  // lidar_link
         static_transform.child_frame_id =
             get_parameter("base_frame_id").as_string();  // 子坐标系：base_link
 
