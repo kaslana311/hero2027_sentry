@@ -1,21 +1,16 @@
 #include "relocalization_node.hpp"
 
 #include <pcl/filters/passthrough.h>
-// Limit namespace leakage to this translation unit only
 using namespace small_gicp;
-
 RelocalizationNode::RelocalizationNode()
     : Node("relocalization_node"),
       global_map_(new pcl::PointCloud<pcl::PointXYZ>),
+      result_t_(Eigen::Isometry3d::Identity()),
       cur_scan_(new pcl::PointCloud<pcl::PointXYZ>),
       accumulated_cloud(new pcl::PointCloud<pcl::PointXYZ>) {
     RCLCPP_INFO(this->get_logger(), "RelocalizationNode init");
-    this->declare_parameter("init_x", 0.0);
-    this->declare_parameter("init_y", 0.0);
-    this->declare_parameter("init_z", 0.0);
-    this->declare_parameter("init_yaw", 0.0);
-    this->declare_parameter("init_pitch", 0.0);
-    this->declare_parameter("init_roll", 0.0);
+    this->declare_parameter("init_pose",
+                            std::vector<double>{0., 0., 0., 0., 0., 0.});
 
     this->declare_parameter(
         "pcd_path",
@@ -32,6 +27,7 @@ RelocalizationNode::RelocalizationNode()
     this->declare_parameter("max_fail_before_fallback",
                             max_fail_before_fallback_);
     this->declare_parameter("fallback_policy", fallback_policy_);
+
     //------------
     this->declare_parameter("fitness_threshold", fitness_threshold_);
     this->declare_parameter("num_neighbors", 20);
@@ -41,13 +37,7 @@ RelocalizationNode::RelocalizationNode()
     this->declare_parameter("smgicp_num_threads", 5);
     this->declare_parameter("smgicp_max_dist_sq", 3.0);
     //初始位姿设定
-    init_x_ = this->get_parameter("init_x").as_double();
-    init_y_ = this->get_parameter("init_y").as_double();
-    init_z_ = this->get_parameter("init_z").as_double();
-    init_yaw_ = this->get_parameter("init_yaw").as_double();
-    init_pitch_ = this->get_parameter("init_pitch").as_double();
-    init_roll_ = this->get_parameter("init_roll").as_double();
-    // this->get_parameter("init_pose", init_poses);
+    this->get_parameter("init_pose", init_pose_);
     //先验地图路径
     pcd_path_ = this->get_parameter("pcd_path").as_string();
 
@@ -73,11 +63,22 @@ RelocalizationNode::RelocalizationNode()
     smgicp_local_leaf_size_ =
         this->get_parameter("smgicp_local_leaf_size").as_double();
     nebhor_num = this->get_parameter("num_neighbors").as_int();
-    //-----------------
-    pose_estimation_ = CreateTfMatrix(init_x_, init_y_, init_z_, init_yaw_,
-                                      init_pitch_, init_roll_);
+
+    if (!init_pose_.empty() && init_pose_.size() >= 6) {
+        result_t_.translation() << init_pose_[0], init_pose_[1], init_pose_[2];
+        result_t_.linear() =
+            Eigen::AngleAxisd(init_pose_[5], Eigen::Vector3d::UnitZ()) *
+            Eigen::AngleAxisd(init_pose_[4], Eigen::Vector3d::UnitY()) *
+            Eigen::AngleAxisd(init_pose_[3], Eigen::Vector3d::UnitX())
+                .toRotationMatrix();
+    }
+    this->pose_estimation_ = result_t_.matrix();  // pose_est yuce ,res,pub
     std::cout << "pose_estimation:\n" << pose_estimation_ << std::endl;
     std::cout << "pcd_path:" << pcd_path_ << std::endl;
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
+    tf_broadcaster_ =
+        std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
     InitGlobalMap(pcd_path_);  //加载地图
     //先验地图处理
     target_ = small_gicp::voxelgrid_sampling_omp<
@@ -102,22 +103,33 @@ RelocalizationNode::RelocalizationNode()
         "/cloud_registered", 1,
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
                   std::placeholders::_1));
-
-    sub_init_pose_ = this->create_subscription<
-        geometry_msgs::msg::PoseWithCovarianceStamped>(
-        "/initialpose", 1,
-        std::bind(&RelocalizationNode::InitPoseCallback, this,
-                  std::placeholders::_1));
-
-    pub_map_to_odom_ =
-        this->create_publisher<nav_msgs::msg::Odometry>("/map_to_odom", 1);
-    pub_cur_scan_ =
-        this->create_publisher<sensor_msgs::msg::PointCloud2>("/cur_scan", 1);
+    std::cout << "running relocazation" << std::endl;
     timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(500),
+        std::chrono::milliseconds(1000),
         std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
+}
+void RelocalizationNode::publishTransform() {
+    if (result_t_.matrix().isZero()) {
+        return;
+    }
+    geometry_msgs::msg::TransformStamped transform_stamped;
+    transform_stamped.header.stamp =
+        this->now() + rclcpp::Duration::from_seconds(0.1);
+    transform_stamped.header.frame_id = "map";
+    transform_stamped.child_frame_id = "odom";
 
-    std::cout << "new" << std::endl;
+    const Eigen::Vector3d translation = result_t_.translation();
+    const Eigen::Quaterniond rotation(result_t_.rotation());
+
+    transform_stamped.transform.translation.x = translation.x();
+    transform_stamped.transform.translation.y = translation.y();
+    transform_stamped.transform.translation.z = translation.z();
+    transform_stamped.transform.rotation.x = rotation.x();
+    transform_stamped.transform.rotation.y = rotation.y();
+    transform_stamped.transform.rotation.z = rotation.z();
+    transform_stamped.transform.rotation.w = rotation.w();
+
+    tf_broadcaster_->sendTransform(transform_stamped);
 }
 void RelocalizationNode::SaveCurScanCallback(
     const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
@@ -125,12 +137,14 @@ void RelocalizationNode::SaveCurScanCallback(
     if (this->scan_count >= 10) return;
     std::lock_guard<std::mutex> lock(mtx);
     pcl::fromROSMsg(*msg, *cur_scan_);
+    //滤波
     PassThroughFilter(cur_scan_, cur_scan_, 0.0, 3.5, -9.2, 5.3, -3.2, 24.7);
     *accumulated_cloud += *cur_scan_;
     this->scan_count++;
     //至少积累10帧才进行匹配
     if (this->scan_count == 10) has_scan_ = true;
 }
+
 void RelocalizationNode::PassThroughFilter(
     pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
     pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out, double min_z, double max_z,
@@ -152,24 +166,13 @@ void RelocalizationNode::PassThroughFilter(
     pass.setFilterLimits(min_x, max_x);
     pass.filter(*cloud_out);
 }
-void RelocalizationNode::InitPoseCallback(
-    const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
-    geometry_msgs::msg::Pose pose = msg->pose.pose;
-    pose_estimation_ = PoseToMat(pose);
-    // pose_estimation_ = PoseToMat();
-    std::cout << "pose_estimation:\n" << pose_estimation_ << std::endl;
 
-    // 重置配准状态，重新开始配准
-    registration_success_ = false;
-    RCLCPP_INFO(this->get_logger(),
-                "Received new initial pose, restarting registration...");
-}
-
-bool RelocalizationNode::GlobalLocalization() {
+void RelocalizationNode::GlobalLocalizationTimerCallback() {
+    if (registration_success_) return;
     if (!has_scan_) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
                              "no scan msg");
-        return false;
+        return;
     }
     rclcpp::Time begin_icp_time = this->now();
 
@@ -183,13 +186,13 @@ bool RelocalizationNode::GlobalLocalization() {
         yaw_seeds.push_back(-a);
     }
 
-    double best_fitness = std::numeric_limits<double>::infinity();
+    double best_fitness = 0.1;
     Eigen::Matrix4d best_T = pose_estimation_;
     for (double dyaw : yaw_seeds) {
         Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
         double f = 1e9;
         Eigen::Isometry3d res =
-            SmallIcpRegistration(accumulated_cloud, pose_estimation_, f);
+            SmallIcpRegistration(accumulated_cloud, seed, f);
         if (f < best_fitness) {
             best_fitness = f;
             best_T = res.matrix();
@@ -216,20 +219,17 @@ bool RelocalizationNode::GlobalLocalization() {
                     RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
                     PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
                     YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
-        nav_msgs::msg::Odometry map_to_odom;
+
         Eigen::Matrix4d T_pub = best_T;
         if (enforce_rp_zero_) {
             ZeroRollPitchKeepYaw(T_pub);
         }
-        map_to_odom.pose.pose = MatToPose(T_pub);
-        map_to_odom.header.stamp = this->now();
-        map_to_odom.header.frame_id = "map";
 
-        pub_map_to_odom_->publish(map_to_odom);
-        pose_estimation_ = T_pub;
+        result_t_.matrix() = T_pub;
+        publishTransform();
         registration_success_ = true;  // 设置配准成功标志
         registration_fail_count_ = 0;  // 成功后清零
-        return true;
+        return;
     } else {
         RCLCPP_WARN(this->get_logger(),
                     "registration rejected (fitness=%.5f, dtrans=%.3f, "
@@ -245,46 +245,22 @@ bool RelocalizationNode::GlobalLocalization() {
                         "Registration failed over %d times, publishing "
                         "fallback (%s)!",
                         max_fail_before_fallback_, fallback_policy_.c_str());
-            nav_msgs::msg::Odometry map_to_odom;
             if (fallback_policy_ == "identity") {
-                map_to_odom.pose.pose = MatToPose(Eigen::Matrix4d::Identity());
+                // todo
             } else {
-                map_to_odom.pose.pose = MatToPose(
-                    CreateTfMatrix(init_x_, init_y_, init_z_, init_yaw_,
-                                   init_pitch_, init_roll_));
+                // todo
             }
-            map_to_odom.header.stamp = this->now();
-            map_to_odom.header.frame_id = "map";
-            pub_map_to_odom_->publish(map_to_odom);
+            publishTransform();
             registration_success_ = true;
             registration_fail_count_ = 0;  // 重置计数
         }
-        return false;
+        return;
     }
 }
-
-void RelocalizationNode::GlobalLocalizationTimerCallback() {
-    if (!registration_success_) {  // 如果配准还未成功，继续尝试
-        GlobalLocalization();
-    }
-}
-
-// std::vector<Eigen::Vector3d>
-// RelocalizationNode::ConvertPointCloudToEigenVector(
-//     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
-//     std::vector<Eigen::Vector3d> eigen_vectors;
-//     eigen_vectors.reserve(cloud->size());  // 预留空间以提高性能
-
-//     for (const auto& point : *cloud) {
-//         eigen_vectors.emplace_back(point.x, point.y, point.z);
-//     }
-
-//     return eigen_vectors;
-// }
-
+// converged return res,false return pre
 Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
-    const Eigen::Matrix4d& initial, double& fitness) {
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan, Eigen::Matrix4d pre,
+    double& fitness) {
     // 扫描点云处理
     this->source_ = small_gicp::voxelgrid_sampling_omp<
         pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
@@ -297,7 +273,7 @@ Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
     //初始位姿估计
 
     Eigen::Isometry3d init_T_target_source;
-    init_T_target_source.matrix() = initial;
+    init_T_target_source.matrix() = pre;  //复制预测转换
     if (!source_ || !source_tree_) {
         return init_T_target_source;
     }
@@ -314,9 +290,6 @@ Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
         std::cout << "fitness" << fitness << std::endl;
         std::cout << "Number of inlier source points:" << num_inliers
                   << std::endl;
-
-        // Eigen::Matrix<double, 6, 6> H = result.H;  // Final Hessian matrix
-        // (6x6)
         return T;
     } else {
         std::cout << "Gicp registration not converged" << std::endl;
@@ -324,106 +297,36 @@ Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
     }
 }
 
-// //
-// 配准的输入源是当前的scan，camera_init系下的，配准对象为，参考系为map系，但点云是FOV视角中的
-// Eigen::Matrix4d RelocalizationNode::IcpRegistration(
-//     const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
-//     const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_map,
-//     const Eigen::Matrix4d& initial, double scale, double& fitness) {
-//     pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
-//     // icp.setInputSource(VoxelDownSamping(pc_scan, 0.1 * scale));
-//     // icp.setInputTarget(VoxelDownSamping(pc_map, 0.4 * scale));
-//     icp.setInputSource(pc_scan);
-//     icp.setInputTarget(pc_map);
-//     pcl::PointCloud<pcl::PointXYZ> Final;
-//     icp.setMaximumIterations(50);          // 最大迭代次数
-//     icp.setTransformationEpsilon(1e-8);    // 变换矩阵的容差
-//     icp.setEuclideanFitnessEpsilon(1e-6);  // 欧几里得适应度容差
-//     icp.align(Final, initial.cast<float>());
-//     // icp.align(Final);
-
-//     if (icp.hasConverged()) {
-//         std::cout << "ICP has converged!" << std::endl;
-//         std::cout << "Fitness score: " << icp.getFitnessScore() << std::endl;
-//         std::cout << "Transformation matrix:\n"
-//                   << icp.getFinalTransformation() << std::endl;
-//         fitness = icp.getFitnessScore();
-//         return icp.getFinalTransformation().cast<double>();
-//     } else {
-//         std::cout << "ICP did not converge." << std::endl;
-//         return initial;
-//     }
-// }
-
 bool RelocalizationNode::InitGlobalMap(std::string map_path) {
     // 耗时
     if (pcl::io::loadPCDFile<pcl::PointXYZ>(map_path, *global_map_) == -1) {
         PCL_ERROR("Couldn't read file scans.pcd \n");
         return false;
     }
-    return true;
-}
-
-Eigen::Matrix4d RelocalizationNode::PoseToMat(
-    const geometry_msgs::msg::Pose& pose) {
-    Eigen::Matrix4d mat = Eigen::Matrix4d::Identity();
-    mat(0, 3) = pose.position.x;
-    mat(1, 3) = pose.position.y;
-    mat(2, 3) = pose.position.z;
-
-    tf2::Quaternion q(pose.orientation.x, pose.orientation.y,
-                      pose.orientation.z, pose.orientation.w);
-    tf2::Matrix3x3 m(q);
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            mat(i, j) = m[i][j];
+    Eigen::Affine3d odom_to_lidar_odom;
+    while (true) {
+        try {
+            auto tf_stamped = tf_buffer_->lookupTransform(
+                "base_footprint", "front_mid360", this->now(),
+                rclcpp::Duration::from_seconds(1.0));
+            odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
+            RCLCPP_INFO_STREAM(
+                this->get_logger(),
+                "odom_to_lidar_odom: translation = "
+                    << odom_to_lidar_odom.translation().transpose()
+                    << ", rpy = "
+                    << odom_to_lidar_odom.rotation()
+                           .eulerAngles(0, 1, 2)
+                           .transpose());
+            break;
+        } catch (tf2::TransformException& ex) {
+            RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...",
+                        ex.what());
+            rclcpp::sleep_for(std::chrono::seconds(1));
         }
     }
-    return mat;
-}
-
-geometry_msgs::msg::Pose RelocalizationNode::MatToPose(
-    const Eigen::Matrix4d& mat) {
-    geometry_msgs::msg::Pose pose;
-
-    // 提取位置信息
-    pose.position.x = mat(0, 3);
-    pose.position.y = mat(1, 3);
-    pose.position.z = mat(2, 3);
-
-    // 提取旋转矩阵
-    tf2::Matrix3x3 m(mat(0, 0), mat(0, 1), mat(0, 2), mat(1, 0), mat(1, 1),
-                     mat(1, 2), mat(2, 0), mat(2, 1), mat(2, 2));
-
-    // 将旋转矩阵转换为四元数
-    tf2::Quaternion q;
-    m.getRotation(q);
-
-    // 设置四元数到pose中
-    pose.orientation.x = q.x();
-    pose.orientation.y = q.y();
-    pose.orientation.z = q.z();
-    pose.orientation.w = q.w();
-
-    return pose;
-}
-
-double RelocalizationNode::Deg2Rad(double deg) { return deg * M_PI / 180.0; }
-// 欧拉角转旋转矩阵
-Eigen::Matrix4d RelocalizationNode::CreateTfMatrix(double x, double y, double z,
-                                                   double yaw, double pitch,
-                                                   double roll) {
-    yaw = Deg2Rad(yaw);
-    pitch = Deg2Rad(pitch);
-    roll = Deg2Rad(roll);
-    Eigen::Matrix3d R;
-    R = Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
-        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
-        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());
-    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
-    T.block<3, 3>(0, 0) = R;
-    T.block<3, 1>(0, 3) = Eigen::Vector3d(x, y, z);
-    return T;
+    pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
+    return true;
 }
 
 int main(int argc, char** argv) {
