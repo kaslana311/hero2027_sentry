@@ -83,9 +83,9 @@ int main(int argc, char** argv) {
     hp_watcher->start();
 
     // 创建并启动独立自瞄状态广播节点
-    auto gimbal_serial_node =
-        std::make_shared<GimbalSerialNode>(node, blackboard);
-    gimbal_serial_node->start();  // 启动线程
+    // auto gimbal_serial_node =
+    //     std::make_shared<GimbalSerialNode>(node, blackboard);
+    // gimbal_serial_node->start();  // 启动线程
 
     // 启动敌方哨兵血量监控进程
     // auto sentry_watcher = std::make_shared<sentry_attack_watcher>(blackboard,
