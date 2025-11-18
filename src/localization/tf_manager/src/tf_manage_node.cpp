@@ -28,8 +28,8 @@ class TfManager : public rclcpp::Node {
             std::vector<double>{0.0, 0.0, 0.0});  // 旋转角度（弧度）
 
         // 初始化三个独立的TF广播器
-        map_odom_broadcaster_ =
-            std::make_shared<tf2_ros::TransformBroadcaster>(this);
+        // map_odom_broadcaster_ =
+        //     std::make_shared<tf2_ros::TransformBroadcaster>(this);
         odom_base_broadcaster_ =
             std::make_shared<tf2_ros::TransformBroadcaster>(this);
         map_fake_base_broadcaster_ =
@@ -42,17 +42,17 @@ class TfManager : public rclcpp::Node {
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable();
 
         // 订阅低频map->odom变换
-        map_odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-            "/map_to_odom", qos,
-            [this](const nav_msgs::msg::Odometry::SharedPtr msg) {
-                // HandleMapOdom(msg);
-                std::lock_guard<std::mutex> lock(mutex_);
-                last_odom_msg_ = msg;
-                has_valid_data_ = true;  // 标记已有有效数据
-                RCLCPP_INFO(this->get_logger(),
-                            "Received new map_to_odom "
-                            "data!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            });
+        // map_odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+        //     "/map_to_odom", qos,
+        //     [this](const nav_msgs::msg::Odometry::SharedPtr msg) {
+        //         // HandleMapOdom(msg);
+        //         std::lock_guard<std::mutex> lock(mutex_);
+        //         last_odom_msg_ = msg;
+        //         has_valid_data_ = true;  // 标记已有有效数据
+        //         RCLCPP_INFO(this->get_logger(),
+        //                     "Received new map_to_odom "
+        //                     "data!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        //     });
 
         // 订阅高频odom->base_link变换
         // odom_base_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -61,9 +61,10 @@ class TfManager : public rclcpp::Node {
         //       HandleOdomBase(msg);
         //     });
 
-        timer_ =
-            this->create_wall_timer(std::chrono::milliseconds(50),
-                                    std::bind(&TfManager::TimerCallback, this));
+        // timer_ =
+        //     this->create_wall_timer(std::chrono::milliseconds(50),
+        //                             std::bind(&TfManager::TimerCallback,
+        //                             this));
 
         // 初始化TF2缓冲区和监听器
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(
@@ -193,46 +194,47 @@ class TfManager : public rclcpp::Node {
         RCLCPP_INFO(this->get_logger(), "odom and base_link tf pub!");
     }
 
-    void TimerCallback() {
-        std::lock_guard<std::mutex> lock(mutex_);
+    // void TimerCallback() {
+    //     std::lock_guard<std::mutex> lock(mutex_);
 
-        if (!has_valid_data_) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(),
-                                 5000,  // 降低警告频率为5秒一次
-                                 "Waiting for initial map_to_odom data...");
-            return;
-        }
+    //     if (!has_valid_data_) {
+    //         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(),
+    //                              5000,  // 降低警告频率为5秒一次
+    //                              "Waiting for initial map_to_odom data...");
+    //         return;
+    //     }
 
-        auto transform = geometry_msgs::msg::TransformStamped();
+    //     auto transform = geometry_msgs::msg::TransformStamped();
 
-        // 始终使用最新数据，若没有新数据则复用旧数据
-        transform.header.stamp = this->now();  // 关键点：使用当前时间戳
-        transform.header.frame_id = "map";
-        transform.child_frame_id = "odom";
+    //     // 始终使用最新数据，若没有新数据则复用旧数据
+    //     transform.header.stamp = this->now();  // 关键点：使用当前时间戳
+    //     transform.header.frame_id = "map";
+    //     transform.child_frame_id = "odom";
 
-        transform.transform.translation.x =
-            last_odom_msg_->pose.pose.position.x;
-        transform.transform.translation.y =
-            last_odom_msg_->pose.pose.position.y;
-        transform.transform.translation.z =
-            last_odom_msg_->pose.pose.position.z;
+    //     transform.transform.translation.x =
+    //         last_odom_msg_->pose.pose.position.x;
+    //     transform.transform.translation.y =
+    //         last_odom_msg_->pose.pose.position.y;
+    //     transform.transform.translation.z =
+    //         last_odom_msg_->pose.pose.position.z;
 
-        // transform.transform.rotation = last_odom_msg_->pose.pose.orientation;
-        tf2::Quaternion q(last_odom_msg_->pose.pose.orientation.x,
-                          last_odom_msg_->pose.pose.orientation.y,
-                          last_odom_msg_->pose.pose.orientation.z,
-                          last_odom_msg_->pose.pose.orientation.w);
-        q.normalize();
+    //     // transform.transform.rotation =
+    //     last_odom_msg_->pose.pose.orientation; tf2::Quaternion
+    //     q(last_odom_msg_->pose.pose.orientation.x,
+    //                       last_odom_msg_->pose.pose.orientation.y,
+    //                       last_odom_msg_->pose.pose.orientation.z,
+    //                       last_odom_msg_->pose.pose.orientation.w);
+    //     q.normalize();
 
-        transform.transform.rotation.x = q.x();
-        transform.transform.rotation.y = q.y();
-        transform.transform.rotation.z = q.z();
-        transform.transform.rotation.w = q.w();
+    //     transform.transform.rotation.x = q.x();
+    //     transform.transform.rotation.y = q.y();
+    //     transform.transform.rotation.z = q.z();
+    //     transform.transform.rotation.w = q.w();
 
-        map_odom_broadcaster_->sendTransform(transform);
+    //     map_odom_broadcaster_->sendTransform(transform);
 
-        RCLCPP_INFO(this->get_logger(), "map and odom tf pub!");
-    }
+    //     RCLCPP_INFO(this->get_logger(), "map and odom tf pub!");
+    // }
 
     void PubBaseInMapcbk() {
         try {
