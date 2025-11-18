@@ -9,8 +9,10 @@
 #include "cruiser_node.hpp"
 #include "feasibility_calculate_node.hpp"
 #include "geometry_msgs/msg/point_stamped.hpp"
+#include "nlohmann/json.hpp"
 #include "serial_interfaces/msg/gimbaldecision.hpp"
 
+using json = nlohmann::json;
 using namespace std::literals;
 
 /**

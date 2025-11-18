@@ -316,7 +316,7 @@ class AttackNavNode : public StatefulActionNode {
 };
 
 /**
- * @brief 自瞄控制节点 更新黑板参数便于定时器取用
+ * @brief 自瞄控制节点, 从行为树获取参数并发布给云台
  */
 class AutoAimManagerNode : public ConditionNode {
    public:
@@ -328,14 +328,20 @@ class AutoAimManagerNode : public ConditionNode {
             throw RuntimeError("Missing ROS2 node in blackboard");
         }
         node_ = node_result;
+
+        // 初始化发布者，使用指定的QoS
+        rclcpp::QoS qos_profile(rclcpp::KeepLast(1));
+        qos_profile.transient_local();
+        qos_profile.reliable();
+        gimbal_pub_ =
+            node_->create_publisher<serial_interfaces::msg::Gimbaldecision>(
+                "gimbal_decision", qos_profile);
     }
 
     static PortsList providedPorts() {
         return {
             InputPort<uint8_t>("is_auto_aim", "是否自瞄"),
             InputPort<uint8_t>("auto_aim_mode", "自瞄模式"),
-            // InputPort<std::vector<serial_interfaces::msg::Target>>("targets",
-            // "目标优先级数组"),
             InputPort<std::string>("targets", "目标优先级数组（JSON 格式）"),
             InputPort<uint8_t>("is_gimbal_patrol", "是否巡逻"),
             InputPort<float>("yaw_degrees", "目标角度"),
@@ -343,19 +349,27 @@ class AutoAimManagerNode : public ConditionNode {
     }
 
     BT::NodeStatus tick() override {
-        uint8_t is_auto_aim, auto_aim_mode, is_gimbal_patrol, is_reached;
-        float yaw_degrees;
-        std::string targets_str;
-        std::vector<serial_interfaces::msg::Target> targets;
+        bool updated = false;
+        serial_interfaces::msg::Gimbaldecision msg;
 
-        // 从端口获取所有输入并写入黑板
-        if (getInput("is_auto_aim", is_auto_aim)) {
-            config().blackboard->set("is_auto_aim", is_auto_aim);
+        // 从端口获取所有输入并与上一次的值比较
+        uint8_t is_auto_aim;
+        if (getInput("is_auto_aim", is_auto_aim) &&
+            is_auto_aim != last_msg_.is_auto_aim) {
+            last_msg_.is_auto_aim = is_auto_aim;
+            updated = true;
         }
-        if (getInput("auto_aim_mode", auto_aim_mode)) {
-            config().blackboard->set("auto_aim_mode", auto_aim_mode);
+
+        uint8_t auto_aim_mode;
+        if (getInput("auto_aim_mode", auto_aim_mode) &&
+            auto_aim_mode != last_msg_.auto_aim_mode) {
+            last_msg_.auto_aim_mode = auto_aim_mode;
+            updated = true;
         }
-        if (getInput("targets", targets_str)) {
+
+        std::string targets_str;
+        if (getInput("targets", targets_str) && !targets_str.empty()) {
+            std::vector<serial_interfaces::msg::Target> targets;
             try {
                 // 解析 JSON 字符串
                 json j = json::parse(targets_str);
@@ -367,24 +381,42 @@ class AutoAimManagerNode : public ConditionNode {
                     target.priority = el["priority"].get<uint8_t>();
                     targets.push_back(target);
                 }
+
+                if (targets != last_msg_.targets) {
+                    last_msg_.targets = targets;
+                    updated = true;
+                }
             } catch (const std::exception& e) {
                 RCLCPP_ERROR(node_->get_logger(), "Error parsing targets: %s",
                              e.what());
                 return BT::NodeStatus::FAILURE;
             }
+        }
 
-            // 将 targets 写入黑板
-            config().blackboard->set("targets", targets);
-            targets.clear();
+        uint8_t is_gimbal_patrol;
+        if (getInput("is_gimbal_patrol", is_gimbal_patrol) &&
+            is_gimbal_patrol != last_msg_.is_gimbal_patrol) {
+            last_msg_.is_gimbal_patrol = is_gimbal_patrol;
+            updated = true;
         }
-        if (getInput("is_gimbal_patrol", is_gimbal_patrol)) {
-            config().blackboard->set("is_gimbal_patrol", is_gimbal_patrol);
+
+        float yaw_degrees;
+        if (getInput("yaw_degrees", yaw_degrees) &&
+            yaw_degrees != last_msg_.yaw_degrees) {
+            last_msg_.yaw_degrees = yaw_degrees;
+            updated = true;
         }
-        if (getInput("yaw_degrees", yaw_degrees)) {
-            config().blackboard->set("yaw_degrees", yaw_degrees);
+
+        uint8_t is_reached;
+        if (getInput("is_reached", is_reached) &&
+            is_reached != last_msg_.is_reached) {
+            last_msg_.is_reached = is_reached;
+            updated = true;
         }
-        if (getInput("is_reached", is_reached)) {
-            config().blackboard->set("is_reached", is_reached);
+
+        // 如果有数据更新，则发布消息
+        if (updated) {
+            gimbal_pub_->publish(last_msg_);
         }
 
         return NodeStatus::SUCCESS;
@@ -392,4 +424,7 @@ class AutoAimManagerNode : public ConditionNode {
 
    private:
     rclcpp::Node::SharedPtr node_;
+    rclcpp::Publisher<serial_interfaces::msg::Gimbaldecision>::SharedPtr
+        gimbal_pub_;
+    serial_interfaces::msg::Gimbaldecision last_msg_;  // 存储上一次的消息状态
 };
