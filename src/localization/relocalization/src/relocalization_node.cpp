@@ -120,7 +120,7 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
                   std::placeholders::_1));
     std::cout << "running relocazation" << std::endl;
     timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(20),
+        std::chrono::milliseconds(1000),
         std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
 }
 void RelocalizationNode::publishTransform() {
@@ -161,6 +161,7 @@ void RelocalizationNode::SaveCurScanCallback(
     //至少积累10帧才进行匹配
     if (this->scan_count == max_scan_count_) has_scan_ = true;
 }
+
 void RelocalizationNode::PassThroughFilter(
     pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
     pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out, double min_z, double max_z,
@@ -182,12 +183,6 @@ void RelocalizationNode::PassThroughFilter(
     pass.setFilterLimits(min_x, max_x);
     pass.filter(*cloud_out);
 }
-void RelocalizationNode::InitPoseCallback(
-    const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
-    geometry_msgs::msg::Pose pose = msg->pose.pose;
-    pose_estimation_ = PoseToMat(pose);
-    // pose_estimation_ = PoseToMat();
-    std::cout << "pose_estimation:\n" << pose_estimation_ << std::endl;
 
     // 重置配准状态，重新开始配准
     registration_success_ = false;
