@@ -114,7 +114,6 @@ class ChassisNode : public rclcpp::Node {
 
     void CmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
     void HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg);
-    size_t FindFrameHeader(const std::vector<uint8_t>& data);
     void ChassisCmdTimerCallback();
     void RefreeTimerCallback();
     void RefreePubTimerCallback();
