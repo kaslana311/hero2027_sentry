@@ -40,9 +40,10 @@ class ChassisNode : public rclcpp::Node {
 
    private:
     BoostAsio boost_asio_;
-    rclcpp::TimerBase::SharedPtr chassis_cmd_timer;
-    rclcpp::TimerBase::SharedPtr referee_timer;
-    rclcpp::TimerBase::SharedPtr referee_pub_timer;
+    // 修改：为每个定时器使用独立的、有意义的变量名
+    rclcpp::TimerBase::SharedPtr chassis_cmd_timer_;
+    rclcpp::TimerBase::SharedPtr referee_read_timer_;
+    rclcpp::TimerBase::SharedPtr referee_pub_timer_;
 
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr
         vel_subscription_;
@@ -57,9 +58,9 @@ class ChassisNode : public rclcpp::Node {
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr
         wheel_odom_vel_pub_;
 
-    // 为平衡不同的发送接收频率，创建发送接收回调组
-    rclcpp::CallbackGroup::SharedPtr refree_cb_group_;
-    rclcpp::CallbackGroup::SharedPtr chassis_cmd_cb_group_;
+    // 修改：为高频读写创建专用的回调组
+    rclcpp::CallbackGroup::SharedPtr read_cb_group_;
+    rclcpp::CallbackGroup::SharedPtr write_cb_group_;
 
     cmd_protocol::ProtocolBuilder cmd_builder;
     refree_protocol::ProtocolParser referee_parser;
@@ -75,9 +76,7 @@ class ChassisNode : public rclcpp::Node {
     int save_interval_ms_ = 5000;  // 保存间隔(毫秒)，默认5秒
     std::string save_path_ = "./referee_data/";  // 保存数据的文件夹路径
 
-    // 底盘转速控制相关变量
-    std::mutex spin_speed_mutex_;  // 保护转速参数的互斥锁
-    int spin_speed_;               // 当前设置的转速
+    // 修改：移除 spin_speed_ 和其互斥锁
     std::atomic<bool>
         is_danger_mode_;  // 是否处于危险模式（使用原子变量避免竞争）
 

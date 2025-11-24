@@ -54,68 +54,72 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     RCLCPP_INFO(this->get_logger(), "底盘串口节点初始化成功，文件描述符: %d",
                 static_cast<int>(native_handle));
 
-    // 创建回调组
-    refree_cb_group_ = this->create_callback_group(
-        rclcpp::CallbackGroupType::MutuallyExclusive);
-    chassis_cmd_cb_group_ = this->create_callback_group(
-        rclcpp::CallbackGroupType::MutuallyExclusive);
-        
-    rclcpp::SubscriptionOptions refree_sub_options;
-    refree_sub_options.callback_group = refree_cb_group_;
-    rclcpp::PublisherOptions refree_pub_options;
-    refree_pub_options.callback_group = refree_cb_group_;
-    rclcpp::SubscriptionOptions chassis_cmd_sub_options;
-    chassis_cmd_sub_options.callback_group = chassis_cmd_cb_group_;
+    // --- 修改部分：回调组和定时器、订阅者、发布者初始化 ---
 
-    // 创建发送给底盘控制命令的定时器
-    chassis_cmd_timer = this->create_wall_timer(
+    // 1. 为高频串口读取创建一个专用的回调组
+    read_cb_group_ = this->create_callback_group(
+        rclcpp::CallbackGroupType::MutuallyExclusive);
+    // 2. 为高频串口写入创建一个专用的回调组
+    write_cb_group_ = this->create_callback_group(
+        rclcpp::CallbackGroupType::MutuallyExclusive);
+    // 3. 其他低频的ROS订阅和发布将使用默认回调组，无需特殊设置
+
+    // 创建发送给底盘控制命令的定时器 (100Hz)
+    chassis_cmd_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(10),
         std::bind(&ChassisNode::ChassisCmdTimerCallback, this),
-        chassis_cmd_cb_group_);
-    // 创建来自底盘裁判系统的定时器
-    referee_timer = this->create_wall_timer(
+        write_cb_group_);  // 使用写入专用组
+
+    // 创建来自底盘裁判系统数据处理的定时器 (100Hz)
+    referee_read_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(10),
-        std::bind(&ChassisNode::RefreeTimerCallback, this), refree_cb_group_);
-    // 创建裁判系统广播定时器
-    referee_pub_timer = this->create_wall_timer(
+        std::bind(&ChassisNode::RefreeTimerCallback, this),
+        read_cb_group_);  // 使用读取专用组
+
+    // 创建裁判系统广播定时器 (10Hz)
+    referee_pub_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(100),
-        std::bind(&ChassisNode::RefreePubTimerCallback, this),
-        refree_cb_group_);
+        std::bind(&ChassisNode::RefreePubTimerCallback, this)
+        // 不指定回调组，使用默认组
+    );
 
     // 发布裁判系统信息给决策节点
     refree_pub_ = this->create_publisher<serial_interfaces::msg::Refree>(
-        "refree_msg", 1, refree_pub_options);
+        "refree_msg", 10);  // 使用默认组
     // 触发式消息发送
     trigger_pub_ = this->create_publisher<geometry_msgs::msg::Point>(
-        "trigger_msg", 1, refree_pub_options);
+        "trigger_msg", 10);  // 使用默认组
     // 轮式里程计速度发布器（用于 EKF 融合）
     wheel_odom_vel_pub_ =
         this->create_publisher<geometry_msgs::msg::TwistStamped>(
-            "/wheel_odom_velocity", 10, refree_pub_options);
+            "/wheel_odom_velocity", 10);  // 使用默认组
 
     reach_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
         "arrived_at_goal", 10,
-        std::bind(&ChassisNode::ReachCallback, this, std::placeholders::_1),
-        chassis_cmd_sub_options);
+        std::bind(&ChassisNode::ReachCallback, this, std::placeholders::_1)
+        // 不指定回调组，使用默认组
+    );
 
     // 订阅血量危险状态消息
     hp_danger_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
-        "hp_danger_status", 1,
-        std::bind(&ChassisNode::HpDangerCallback, this, std::placeholders::_1));
+        "hp_danger_status", 10,
+        std::bind(&ChassisNode::HpDangerCallback, this, std::placeholders::_1)
+        // 不指定回调组，使用默认组
+    );
 
     start_time_ = this->now();
     // 创建订阅者
     vel_subscription_ = this->create_subscription<geometry_msgs::msg::Twist>(
-        "cmd_vel_nav2_result", 1,
-        std::bind(&ChassisNode::CmdVelCallback, this, std::placeholders::_1),
-        chassis_cmd_sub_options);
+        "cmd_vel_nav2_result", 10,
+        std::bind(&ChassisNode::CmdVelCallback, this, std::placeholders::_1)
+        // 不指定回调组，使用默认组
+    );
 
     // 初始化随机数生成器
     random_engine_ = std::mt19937(std::random_device()());
     spin_speed_distribution_ = std::uniform_int_distribution<int>(3600, 4800);
 
     // 初始化转速参数
-    spin_speed_ = 1200;  // 默认转速
     is_danger_mode_ = false;
 
     // 注册串口
@@ -152,50 +156,31 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
 
 // 血量危险状态回调函数
 void ChassisNode::HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg) {
-    if (msg->data &&
-        !is_danger_mode_
-             .load())  // 原子读操作，如果已有线程存在读取设置好的ture，非true即flase
-    {
+    if (msg->data && !is_danger_mode_.load()) {
         RCLCPP_WARN(this->get_logger(),
                     "收到血量危险信号，启动底盘高速随机转动模式！");
 
         // 设置危险模式标志
-        is_danger_mode_.store(true);  // 原子写
+        is_danger_mode_.store(true);
 
         // 创建独立线程处理危险模式
         std::thread danger_thread([this]() {
-            auto start_time = std::chrono::steady_clock::now();
-            int time_elapsed = 0;
-
             // 立即生成第一个随机转速
-            {
-                std::lock_guard<std::mutex> lock(spin_speed_mutex_);
-                spin_speed_ = spin_speed_distribution_(random_engine_);
-                RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%d",
-                            spin_speed_);
-            }
+            ctrl_info_t_data.w = spin_speed_distribution_(random_engine_);
+            RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%d",
+                        ctrl_info_t_data.w);
 
-            // 运行6秒，每2秒更新一次转速
-            while (time_elapsed < 6000) {  // 6000毫秒 = 6秒
-                // 睡眠2秒
+            // 运行6秒，每1.5秒更新一次转速
+            for (int i = 0; i < 4; ++i) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-                time_elapsed += 1500;
-
-                // 生成新的随机转速
-                {
-                    std::lock_guard<std::mutex> lock(spin_speed_mutex_);
-                    spin_speed_ = spin_speed_distribution_(random_engine_);
-                    RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%d",
-                                spin_speed_);
-                }
+                ctrl_info_t_data.w = spin_speed_distribution_(random_engine_);
+                RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%d",
+                            ctrl_info_t_data.w);
             }
 
             // 恢复默认转速
-            {
-                std::lock_guard<std::mutex> lock(spin_speed_mutex_);
-                spin_speed_ = 3600;
-                RCLCPP_INFO(this->get_logger(), "危险模式结束，恢复默认转速");
-            }
+            ctrl_info_t_data.w = 3600;
+            RCLCPP_INFO(this->get_logger(), "危险模式结束，恢复默认转速");
 
             // 重置危险模式标志
             is_danger_mode_.store(false);
@@ -264,14 +249,17 @@ void ChassisNode::RefreePubTimerCallback() {
     // std::cout << "比赛类型: " << static_cast<int>(game_info_t_data.game_type)
     //           << std::endl;
     // std::cout << "比赛阶段: "
-    //           << static_cast<int>(game_info_t_data.game_progress) << std::endl;
-    // std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time << " 秒"
+    //           << static_cast<int>(game_info_t_data.game_progress) <<
+    //           std::endl;
+    // std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time << "
+    // 秒"
     //           << std::endl;
     // std::cout << "机器人ID: " << static_cast<int>(robot_info_t_data.robot_id)
     //           << std::endl;
     // std::cout << "当前血量: " << robot_info_t_data.remain_HP << std::endl;
     // std::cout << "17mm弹药剩余: "
-    //           << bullet_remaining_t_data.bullet_remaining_num_17mm << std::endl;
+    //           << bullet_remaining_t_data.bullet_remaining_num_17mm <<
+    //           std::endl;
     // std::cout << "堡垒上允许发弹："
     //           << bullet_remaining_t_data.projectile_allowance_fortress
     //           << std::endl;
