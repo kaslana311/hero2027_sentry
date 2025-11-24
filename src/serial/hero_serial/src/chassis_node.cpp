@@ -36,9 +36,6 @@ void ChassisNode::VelOdometry_Callback(void* data) {
     wheel_vel_msg.twist.angular.z = 0.0;
 
     wheel_odom_vel_pub_->publish(wheel_vel_msg);
-
-    // RCLCPP_INFO(this->get_logger(), "发布轮式速度: vx=%.3f, vy=%.3f",
-    //             wheel_vel_msg.twist.linear.x, wheel_vel_msg.twist.linear.y);
 }
 
 ChassisNode ::ChassisNode() : Node("chassis_node") {
@@ -56,13 +53,13 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
 
     RCLCPP_INFO(this->get_logger(), "底盘串口节点初始化成功，文件描述符: %d",
                 static_cast<int>(native_handle));
-    RCLCPP_INFO(this->get_logger(), "底盘串口节点初始化成功");
 
     // 创建回调组
     refree_cb_group_ = this->create_callback_group(
         rclcpp::CallbackGroupType::MutuallyExclusive);
     chassis_cmd_cb_group_ = this->create_callback_group(
         rclcpp::CallbackGroupType::MutuallyExclusive);
+        
     rclcpp::SubscriptionOptions refree_sub_options;
     refree_sub_options.callback_group = refree_cb_group_;
     rclcpp::PublisherOptions refree_pub_options;
@@ -80,7 +77,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         std::chrono::milliseconds(10),
         std::bind(&ChassisNode::RefreeTimerCallback, this), refree_cb_group_);
     // 创建裁判系统广播定时器
-    chassis_cmd_timer = this->create_wall_timer(
+    referee_pub_timer = this->create_wall_timer(
         std::chrono::milliseconds(100),
         std::bind(&ChassisNode::RefreePubTimerCallback, this),
         refree_cb_group_);
@@ -109,7 +106,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     start_time_ = this->now();
     // 创建订阅者
     vel_subscription_ = this->create_subscription<geometry_msgs::msg::Twist>(
-        "final_cmd_vel", 1,
+        "cmd_vel_nav2_result", 1,
         std::bind(&ChassisNode::CmdVelCallback, this, std::placeholders::_1),
         chassis_cmd_sub_options);
 
@@ -210,52 +207,40 @@ void ChassisNode::HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg) {
 }
 
 void ChassisNode::ReachCallback(const std_msgs::msg::Bool::SharedPtr msg) {
-    has_arrived_ = msg->data;
+    ctrl_info_t_data.is_tyro = msg->data;
 }
 
 void ChassisNode::CmdVelCallback(
     const geometry_msgs::msg::Twist::SharedPtr msg) {
-    vel_x_mms = msg->linear.x * MPS_TO_MMPS;
-    vel_y_mms = msg->linear.y * MPS_TO_MMPS;
-}
-
-size_t ChassisNode::FindFrameHeader(const std::vector<uint8_t>& data) {
-    if (data.size() < 4) return -1;
-    for (size_t i = 0; i <= data.size() - 4; ++i) {
-        if (data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x80 &&
-            data[i + 3] == 0x7F) {
-            return i;
-        }
-    }
-    return -1;
+    ctrl_info_t_data.x = msg->linear.y * MPS_TO_MMPS * (-1);
+    ctrl_info_t_data.y = msg->linear.x * MPS_TO_MMPS;
 }
 
 void ChassisNode::ChassisCmdTimerCallback() {
     // 获取当前转速参数（线程安全）
-    int current_spin_speed;
-    {
-        std::lock_guard<std::mutex> lock(spin_speed_mutex_);
-        current_spin_speed = spin_speed_;
-    }
+    // int current_spin_speed;
+    // {
+    //     std::lock_guard<std::mutex> lock(spin_speed_mutex_);
+    //     current_spin_speed = spin_speed_;
+    // }
     // 如果到了
-    if (has_arrived_) {
-        // RCLCPP_INFO(this->get_logger(), "到了，小陀螺速度：%d",
-        // current_spin_speed);
-        ctrl_info_t_data.is_tyro = 1;
-    } else {
-        // RCLCPP_INFO(this->get_logger(), "没到，小陀螺速度：%d",
-        // current_spin_speed);
-        if (vel_x_mms <= 0.05 && vel_y_mms <= 0.05) {
-            ctrl_info_t_data.is_tyro = 1;
-        } else {
-            ctrl_info_t_data.is_tyro = 0;
-        }
-    }
+    // if (has_arrived_) {
+    //     // RCLCPP_INFO(this->get_logger(), "到了，小陀螺速度：%d",
+    //     // current_spin_speed);
+    //     ctrl_info_t_data.is_tyro = 1;
+    // } else {
+    //     // RCLCPP_INFO(this->get_logger(), "没到，小陀螺速度：%d",
+    //     // current_spin_speed);
+    //     if (vel_x_mms <= 0.05 && vel_y_mms <= 0.05) {
+    //         ctrl_info_t_data.is_tyro = 1;
+    //     } else {
+    //         ctrl_info_t_data.is_tyro = 0;
+    //     }
+    // }
+    RCLCPP_INFO(this->get_logger(), "fasong");
 
     // 更新cmd_builder的转速参数
-    ctrl_info_t_data.x = vel_x_mms;           // 更新线速度x
-    ctrl_info_t_data.y = vel_y_mms;           // 更新线速度y
-    ctrl_info_t_data.w = current_spin_speed;  // 更新转速
+    // ctrl_info_t_data.w = current_spin_speed;  // 更新转速
     Send_Cmd_Packet(serial_dev_, tx_buffer, sizeof(tx_buffer), 0);
 }
 
