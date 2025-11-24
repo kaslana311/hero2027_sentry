@@ -54,8 +54,6 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     RCLCPP_INFO(this->get_logger(), "底盘串口节点初始化成功，文件描述符: %d",
                 static_cast<int>(native_handle));
 
-    // --- 修改部分：回调组和定时器、订阅者、发布者初始化 ---
-
     // 1. 为高频串口读取创建一个专用的回调组
     read_cb_group_ = this->create_callback_group(
         rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -202,30 +200,7 @@ void ChassisNode::CmdVelCallback(
 }
 
 void ChassisNode::ChassisCmdTimerCallback() {
-    // 获取当前转速参数（线程安全）
-    // int current_spin_speed;
-    // {
-    //     std::lock_guard<std::mutex> lock(spin_speed_mutex_);
-    //     current_spin_speed = spin_speed_;
-    // }
-    // 如果到了
-    // if (has_arrived_) {
-    //     // RCLCPP_INFO(this->get_logger(), "到了，小陀螺速度：%d",
-    //     // current_spin_speed);
-    //     ctrl_info_t_data.is_tyro = 1;
-    // } else {
-    //     // RCLCPP_INFO(this->get_logger(), "没到，小陀螺速度：%d",
-    //     // current_spin_speed);
-    //     if (vel_x_mms <= 0.05 && vel_y_mms <= 0.05) {
-    //         ctrl_info_t_data.is_tyro = 1;
-    //     } else {
-    //         ctrl_info_t_data.is_tyro = 0;
-    //     }
-    // }
     RCLCPP_INFO(this->get_logger(), "fasong");
-
-    // 更新cmd_builder的转速参数
-    // ctrl_info_t_data.w = current_spin_speed;  // 更新转速
     Send_Cmd_Packet(serial_dev_, tx_buffer, sizeof(tx_buffer), 0);
 }
 
