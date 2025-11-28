@@ -98,17 +98,26 @@ RelocalizationNode::RelocalizationNode()
     register_->rejector.max_dist_sq = smgicp_max_dist_sq_;
     register_->optimizer.max_iterations = smgicp_max_iterations_;
 
+    this->pub_gp = this->create_callback_group(
+        rclcpp::CallbackGroupType::MutuallyExclusive);
+    this->lc_gp = this->create_callback_group(
+        rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto sub_options = rclcpp::SubscriptionOptions();
+    sub_options.callback_group = lc_gp;
+
     sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "registered_scan", 1,
+        "/cloud_registered", 1,
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
-                  std::placeholders::_1));
+                  std::placeholders::_1),
+        sub_options);
     std::cout << "running relocazation" << std::endl;
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(500),
-        std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
+        std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this),
+        lc_gp);
     timer_pub = this->create_wall_timer(
         std::chrono::milliseconds(100),
-        std::bind(&RelocalizationNode::publishTransform, this));
+        std::bind(&RelocalizationNode::publishTransform, this), pub_gp);
 }
 void RelocalizationNode::publishTransform() {
     if (!this->registration_success_) {
@@ -335,29 +344,7 @@ bool RelocalizationNode::InitGlobalMap(std::string map_path) {
         PCL_ERROR("Couldn't read file scans.pcd \n");
         return false;
     }
-    Eigen::Affine3d odom_to_lidar_odom;
-    while (true) {
-        try {
-            auto tf_stamped = tf_buffer_->lookupTransform(
-                "base_footprint", "front_mid360", this->now(),
-                rclcpp::Duration::from_seconds(1.0));
-            odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
-            RCLCPP_INFO_STREAM(
-                this->get_logger(),
-                "odom_to_lidar_odom: translation = "
-                    << odom_to_lidar_odom.translation().transpose()
-                    << ", rpy = "
-                    << odom_to_lidar_odom.rotation()
-                           .eulerAngles(0, 1, 2)
-                           .transpose());
-            break;
-        } catch (tf2::TransformException& ex) {
-            RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...",
-                        ex.what());
-            rclcpp::sleep_for(std::chrono::seconds(1));
-        }
-    }
-    pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
+
     return true;
 }
 
