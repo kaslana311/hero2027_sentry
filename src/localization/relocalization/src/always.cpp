@@ -1,6 +1,6 @@
-#include <pcl/filters/passthrough.h>
+#include "always.hpp"
 
-#include "relocalization_node.hpp"
+#include <pcl/filters/passthrough.h>
 using namespace small_gicp;
 RelocalizationNode::RelocalizationNode()
     : Node("relocalization_node"),
@@ -104,7 +104,8 @@ RelocalizationNode::RelocalizationNode()
         rclcpp::CallbackGroupType::MutuallyExclusive);
     auto sub_options = rclcpp::SubscriptionOptions();
     sub_options.callback_group = lc_gp;
-
+    crop.setMin(Eigen::Vector4f(0.3, 0.3, -0.2, 1.0));
+    crop.setMax(Eigen::Vector4f(27.0, 14.0, 3.5, 1.0));
     sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "/cloud_registered", 1,
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
@@ -146,31 +147,21 @@ void RelocalizationNode::publishTransform() {
     transform_stamped.transform.rotation.w = rotation.w();
 
     tf_broadcaster_->sendTransform(transform_stamped);
-    // if (!first_lidar_pos) {
-    //   try {
-    //     transform_stampedlidarodom = tf_buffer_->lookupTransform(
-    //       "odom", "front_mid360", this->now(),
-    //       rclcpp::Duration::from_seconds(0.5));
-    //     this->transform_stampedlidarodom.child_frame_id = "lidar_odom";
-    //     first_lidar_pos = true;
-    //   } catch (tf2::TransformException & ex) {
-    //     RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s. Returning
-    //     identity.", ex.what());
-    //   }
-    // }
-    // if (first_lidar_pos) {
-    //   transform_stampedlidarodom.header.stamp = this->now() +
-    //   rclcpp::Duration::from_seconds(0.1);
-    //   tf_broadcaster_->sendTransform(transform_stampedlidarodom);
-    // }
 }
 void RelocalizationNode::SaveCurScanCallback(
     const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     //累计10帧
-    std::lock_guard<std::mutex> lock(mtx);
     pcl::fromROSMsg(*msg, *cur_scan_);
-    //滤波
-    PassThroughFilter(cur_scan_, cur_scan_, 0.0, 3.5, -9.2, 5.3, -3.2, 24.7);
+    Eigen::Matrix4d odom_to_map_mat;
+    {
+        std::lock_guard<std::mutex> lock(mtx1);
+        odom_to_map_mat = result_t_.matrix();
+    }
+    // 3. 使用 CropBox 直接滤波
+    crop.setInputCloud(cur_scan_);
+    // 设置地图边界 (Map系下的坐标)
+    crop.setTransform(Eigen::Affine3f(odom_to_map_mat.cast<float>()));
+    crop.filter(*cur_scan_);
     *accumulated_cloud += *cur_scan_;
     this->scan_count++;
     //至少积累10帧才进行匹配
@@ -216,7 +207,6 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
         yaw_seeds.push_back(+a);
         yaw_seeds.push_back(-a);
     }
-    std::lock_guard<std::mutex> lock(mtx);
     double best_fitness = 0.03;
     Eigen::Matrix4d best_T = result_t_.matrix();
     if (this->registration_success_)

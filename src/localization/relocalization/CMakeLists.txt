@@ -22,7 +22,7 @@ find_package(small_gicp REQUIRED)
 find_package(pcl_conversions REQUIRED)
 include_directories(include ${small_gicp_INCLUDE_DIRS})
 # 添加可执行文件
-add_executable(relocalization_node src/relocalization_node.cpp)
+add_executable(relocalization_node src/always.cpp)
 
 ament_target_dependencies(relocalization_node rclcpp geometry_msgs nav_msgs tf2 tf2_ros Eigen3 sensor_msgs pcl_conversions OpenMP tf2_eigen)
 
