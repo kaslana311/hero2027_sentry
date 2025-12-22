@@ -99,7 +99,15 @@ namespace rog_map {
 
         void updateProbMap(const PointCloud &cloud, const Pose &pose);
     //   std::deque<std::vector< Vec3i>> time_map;
-      std::map<int,std::chrono::steady_clock::time_point> time_stamp_lists;
+    struct Vec3iCompare {
+    bool operator()(const Vec3i& a, const Vec3i& b) const {
+    if (a.x() != b.x()) return a.x() < b.x();
+    if (a.y() != b.y()) return a.y() < b.y();
+    return a.z() < b.z();
+  }
+};
+      std::map<Vec3i,std::chrono::steady_clock::time_point, Vec3iCompare> time_stamp_lists;
+      std::vector<Vec3f> res_pc_list;
     //   void time_map_clear(const Vec3f & pos, const int & hash_id);
     protected:
         rog_map::Config cfg_;
