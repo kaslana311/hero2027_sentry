@@ -37,6 +37,7 @@
 #ifndef ROG_MAP_ROS_HPP
 #define ROG_MAP_ROS_HPP
 
+#include <pcl/filters/voxel_grid.h>
 #include <rog_map/rog_map.h>
 #include <tf2_ros/transform_broadcaster.h>
 
@@ -45,7 +46,6 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <super_utils/color_msg_utils.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
-
 namespace rog_map
 {
 using namespace super_utils;
@@ -115,6 +115,15 @@ class ROGMapROS : public ROGMap
     }
     PointCloud temp_pc;
     pcl::fromROSMsg(*cloud_msg, temp_pc);
+    // std::cout << GREEN << " -- [ROG INFO] Point cloud received, points num: " << temp_pc.size()
+    //           << RESET << std::endl;
+    // vox_flt.setInputCloud(temp_pc.makeShared());
+    // vox_flt.setLeafSize(0.1f, 0.1f, 0.1f);
+
+    // vox_flt.filter(temp_pc);
+    // std::cout << GREEN
+    //           << " -- [ROG INFO] Point cloud after voxel filter, points num: " << temp_pc.size()
+    //           << RESET << std::endl;
     rc_.updete_lock.lock();
     rc_.pc = temp_pc;
     rc_.pc_pose = std::make_pair(robot_state_.p, robot_state_.q);
@@ -158,8 +167,8 @@ class ROGMapROS : public ROGMap
 
     updateProbMap(temp_pc, temp_pose);
     /************ */
-    // Vec3f box_max = robot_state_.p + cfg_.visualization_range / 2;
-    // Vec3f box_min = robot_state_.p - cfg_.visualization_range / 2;
+    // Vec3f box_max = robot_state_.p + cfg_.half_local_update_box_d;
+    // Vec3f box_min = robot_state_.p - cfg_.half_local_update_box_d;
     vec_E<Vec3f> occ_map;
     auto localMap_start_time = std::chrono::steady_clock::now();
     // boundBoxByLocalMap(box_min, box_max);
@@ -176,6 +185,7 @@ class ROGMapROS : public ROGMap
     if (!occ_map.empty()) {
       vecEVec3fToPC2(occ_map, cloud_msg);
       cloud_msg.header.stamp = send_time;
+
       cost_pub_.cost_pc_pub->publish(cloud_msg);
     }
     auto cloud_end_time = std::chrono::steady_clock::now();
@@ -196,22 +206,24 @@ class ROGMapROS : public ROGMap
   {
     occ_map.reserve(time_stamp_lists.size());
     for (auto it = time_stamp_lists.begin(); it != time_stamp_lists.end(); ++it) {
-      Vec3i id_g;
-      hashIdToGlobalIndex(it->first, id_g);
+      Vec3i id_g = it->first;
       Vec3f pos;
       globalIndexToPos(id_g, pos);
       occ_map.push_back(pos);
     }
+    // occ_map.insert(occ_map.end(), res_pc_list.begin(), res_pc_list.end());
+    // res_pc_list.clear();
   }
   void vecEVec3fToPC2(const vec_E<Vec3f> & points, sensor_msgs::msg::PointCloud2 & cloud)
   {
     // 设置header信息
-    pcl::PointCloud<pcl::PointXYZ> pcl_cloud;
+    pcl::PointCloud<pcl::PointXYZI> pcl_cloud;
     pcl_cloud.resize(points.size());
     for (long unsigned int i = 0; i < points.size(); i++) {
       pcl_cloud[i].x = static_cast<float>(points[i][0]);
       pcl_cloud[i].y = static_cast<float>(points[i][1]);
       pcl_cloud[i].z = static_cast<float>(points[i][2]);
+      pcl_cloud[i].intensity = 1.0;  // 设置强度值
     }
     pcl::toROSMsg(pcl_cloud, cloud);
     cloud.header.stamp = nh_->get_clock()->now();
@@ -258,6 +270,7 @@ public:
   }
 
 private:
+  pcl::VoxelGrid<pcl::PointXYZI> vox_flt;
 };
 }  // namespace rog_map
 #endif  // ROG_MAP_ROS_HPP

@@ -4,13 +4,13 @@ rog_map:
   # 膨胀分辨率
   inflation_resolution: 0.1
   # 膨胀步数
-  inflation_step: 2
+  inflation_step: 1
   # 是否启用未知区域膨胀
   unk_inflation_en: false
   # 未知区域膨胀步数
   unk_inflation_step: 1
   # 地图尺寸 [长, 宽, 高] (单位：米)
-  map_size: [ 15,15,2 ] #
+  map_size: [ 30,30,2 ] #
   # 如果禁用地图滚动，则应设置地图原点 [x, y, z] (单位：米)。
   fix_map_origin: [ -4.0,-9.9,0.25 ] # 相对于odom的移动
   # 是否启用边界提取
@@ -37,7 +37,7 @@ rog_map:
     # ESDF分辨率
     resolution: 0.1
     # ESDF在里程计周围的局部更新范围 [长, 宽, 高] (单位：米)。
-    local_update_box: [ 10,10,6 ]
+    local_update_box: [ 50,50,6 ]
 
   # ROS回调配置
   # 如果 [enable = true]，ROG-Map 将主动接收ROS话题作为输入。
@@ -52,21 +52,21 @@ rog_map:
     odom_timeout: 2.0
 
   # 可视化配置
-  visualization:
-    # 是否启用可视化
-    enable: true
-    # 启用时，使用 rqt_reconfigure 动态调整可视化参数。
-    use_dynamic_reconfigure: false
-    # 可视化的时间触发频率 [Hz]，如果设置为0，则不会按时间触发可视化。
-    time_rate: 2
-    # 可视化的帧触发频率 [Hz]，如果设置为0，则不会按帧触发可视化。
-    frame_rate: 0
-    # 以里程计为中心的可视化范围 [长, 宽, 高] (单位：米)。
-    range: [ 10,10,2 ]
-    # 可视化发布的坐标系ID
-    frame_id: "odom"
-    # 是否发布未知区域地图
-    pub_unknown_map_en: false
+  # visualization:
+  #   # 是否启用可视化
+  #   enable: true
+  #   # 启用时，使用 rqt_reconfigure 动态调整可视化参数。
+  #   use_dynamic_reconfigure: false
+  #   # 可视化的时间触发频率 [Hz]，如果设置为0，则不会按时间触发可视化。
+  #   time_rate: 2
+  #   # 可视化的帧触发频率 [Hz]，如果设置为0，则不会按帧触发可视化。
+  #   frame_rate: 0
+  #   # 以里程计为中心的可视化范围 [长, 宽, 高] (单位：米)。
+  #   range: [ 20,20,2 ]
+  #   # 可视化发布的坐标系ID
+  #   frame_id: "odom"
+  #   # 是否发布未知区域地图
+  #   pub_unknown_map_en: false
 
   # 输入点云的强度过滤阈值。如果点强度小于此值，该点将被忽略（以避免像灰尘这样的噪声）。
   intensity_thresh: -10
@@ -80,9 +80,9 @@ rog_map:
     # 批量更新大小
     batch_update_size: 1
     # 局部更新范围 [长, 宽, 高] (单位：米)。
-    local_update_box: [ 10,10,2 ]
+    local_update_box: [ 30,30,2 ]
     # 光线投射的范围 [最小距离, 最大距离] (单位：米)。
-    ray_range: [0.5, 100 ]
+    ray_range: [0.0, 100 ]
 
     # 概率参数
     p_min: 0.12
