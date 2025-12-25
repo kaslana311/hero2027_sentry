@@ -290,22 +290,22 @@ void ProbMap::updateOccPointCloud(const PointCloud& input_cloud) {
 
 void ProbMap::slideAllMap(const rog_map::Vec3f& pos) {
   mapSliding(pos);
-  inf_map_->mapSliding(pos);
-  if (cfg_.frontier_extraction_en) {
-    fcnt_map_->mapSliding(pos);
-  }
-  if (cfg_.esdf_en) {
-    esdf_map_->mapSliding(pos);
-  }
+  // inf_map_->mapSliding(pos);
+  // if (cfg_.frontier_extraction_en) {
+  //   fcnt_map_->mapSliding(pos);
+  // }
+  // if (cfg_.esdf_en) {
+  //   esdf_map_->mapSliding(pos);
+  // }
 }
 
 void ProbMap::updateProbMap(const PointCloud& cloud, const Pose& pose) {
   TimeConsuming tc("updateMap", false);
+  auto start_time = std::chrono::steady_clock::now();
 
   for (auto it = time_stamp_lists.begin(); it != time_stamp_lists.end();) {
-    if (std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - it->second)
-            .count() <= 300) {
+    ++(it->second);
+    if (it->second <= 6) {
       ++it;
       continue;
     }
@@ -319,6 +319,13 @@ void ProbMap::updateProbMap(const PointCloud& cloud, const Pose& pose) {
     missPointUpdate(pos, hash_id, 1);
     if (!isOccupied(id_g)) it = time_stamp_lists.erase(it);
   }
+  auto end_time = std::chrono::steady_clock::now();
+  double duration_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+                           end_time - start_time)
+                           .count();
+  std::cout << "Miss point update duration: " << duration_ms << " us"
+            << std::endl;
+  auto t2_start = std::chrono::steady_clock::now();
   const Vec3f& pos = pose.first;
   time_consuming_[4] = cloud.size();
   if (cfg_.map_sliding_en && !insideLocalMap(pos) &&
@@ -351,27 +358,38 @@ void ProbMap::updateProbMap(const PointCloud& cloud, const Pose& pose) {
        (pos - local_map_origin_d_).norm() > cfg_.map_sliding_thresh)) {
     slideAllMap(pos);
   }
-
+  auto t2_end = std::chrono::steady_clock::now();
+  double t2_duration_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(t2_end - t2_start)
+          .count();
+  std::cout << "Sliding map duration: " << t2_duration_ms << " ms" << std::endl;
   updateLocalBox(pos);
   TimeConsuming t_raycast("raycast", false);
   raycastProcess(cloud, pos);
   time_consuming_[1] = t_raycast.stop();
   raycast_data_.batch_update_counter++;
+  auto t3_start = std::chrono::steady_clock::now();
   if (raycast_data_.batch_update_counter >= cfg_.batch_update_size) {
     raycast_data_.batch_update_counter = 0;
-    time_consuming_[5] = raycast_data_.update_cache_id_g.size();
+    // time_consuming_[5] = raycast_data_.update_cache_id_g.size();
     TimeConsuming t_update("update", false);
     probabilisticMapFromCache();
     time_consuming_[2] = t_update.stop();
     map_empty_ = false;
   }
+  auto t3_end = std::chrono::steady_clock::now();
+  double t3_duration_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(t3_end - t3_start)
+          .count();
+  std::cout << "Update map durationccccccccc: " << t3_duration_ms << " ms"
+            << std::endl;
   inf_map_->getInflationNumAndTime(time_consuming_[6], time_consuming_[3]);
   time_consuming_[0] = tc.stop();
 
   /* Update ESDF map */
-  if (cfg_.esdf_en) {
-    esdf_map_->updateESDF3D(pos);
-  }
+  // if (cfg_.esdf_en) {
+  //   esdf_map_->updateESDF3D(pos);
+  // }
 
   /* For the first frame, clear all unknown around the robot */
   static bool first = true;
@@ -575,17 +593,16 @@ void ProbMap::probabilisticMapFromCache() {
   //    float ret = occupancy_buffer_[addr];
   //    std::cout << "ret: " << ret << std::endl;
   auto time = std::chrono::steady_clock::now();
-  while (!raycast_data_.update_cache_id_g.empty()) {
+  Vec3i id_g;
+  while (raycast_data_.update_cache_id_g.try_pop(id_g)) {
     Vec3f pos;
-    Vec3i id_g = raycast_data_.update_cache_id_g.front();
-    raycast_data_.update_cache_id_g.pop();
     Vec3i id_l;
     globalIndexToLocalIndex(id_g, id_l);
     int hash_id = getLocalIndexHash(id_l);
     globalIndexToPos(id_g, pos);
     if (raycast_data_.hit_cnt[hash_id] > 0) {
       hitPointUpdate(pos, hash_id, raycast_data_.hit_cnt[hash_id]);
-      time_stamp_lists[id_g] = time;
+      time_stamp_lists[id_g] = 0;
     } else {
       missPointUpdate(pos, hash_id,
                       raycast_data_.operation_cnt[hash_id] -
@@ -687,6 +704,7 @@ void ProbMap::missPointUpdate(const Vec3f& pos, const int& hash_id,
 void ProbMap::raycastProcess(const PointCloud& input_cloud,
                              const Vec3f& cur_odom) {
   // bounding box of updated region
+  auto start_time = std::chrono::steady_clock::now();
   raycast_data_.cache_box_min = cur_odom;
   raycast_data_.cache_box_max = cur_odom;
   Vec3f raycast_box_min, raycast_box_max;
@@ -702,85 +720,94 @@ void ProbMap::raycastProcess(const PointCloud& input_cloud,
   int grid_y =
       static_cast<int>((raycast_box_max[1] - raycast_box_min[1]) / resolution);
   struct hif {
-    std::atomic<float> min_z{1e9f};
-  };
-  std::vector<hif> min_hmap(grid_x * grid_y);
+    float min_z{1e9};
+    int count{0};
+  } min_hmap[grid_x * grid_y];
+  for (auto& p : input_cloud) {
+    if (p.z > cur_odom.z() + 0.3)
+      continue;  // 高于车底盘0.3m的都不会当作地面点云
+    if (p.x <= raycast_box_min[0] || p.x >= raycast_box_max[0] ||
+        p.y <= raycast_box_min[1] || p.y >= raycast_box_max[1]) {
+      continue;
+    }
+    int idx = static_cast<int>((p.x - raycast_box_min[0]) / resolution);
+    int idy = static_cast<int>((p.y - raycast_box_min[1]) / resolution);
+
+    int index = idy * grid_x + idx;
+    if (index < 0 || index >= grid_x * grid_y) {
+      continue;  // safety check
+    }
+    min_hmap[index].count++;
+    if (p.z < min_hmap[index].min_z) {
+      min_hmap[index].min_z = p.z;
+    }
+  }
+
+  /// Step 1; Raycast and add to update cache.d
+  size_t cloud_in_size = input_cloud.size();
 
   tbb::parallel_for(
-      tbb::blocked_range<size_t>(0, input_cloud.size()),
+      tbb::blocked_range(size_t(0), cloud_in_size, 1000),
       [&](const tbb::blocked_range<size_t>& r) {
-        for (size_t i = r.begin(); i != r.end(); ++i) {
-          const auto& p = input_cloud[i];
-          if (p.x <= raycast_box_min[0] || p.x >= raycast_box_max[0] ||
-              p.y <= raycast_box_min[1] || p.y >= raycast_box_max[1])
-            continue;
-
-          int idx = static_cast<int>((p.x - raycast_box_min[0]) / resolution);
-          int idy = static_cast<int>((p.y - raycast_box_min[1]) / resolution);
-          int index = idy * grid_x + idx;
-
-          float current_z = p.z;
-          float old_z = min_hmap[index].min_z.load(std::memory_order_relaxed);
-          while (current_z < old_z &&
-                 !min_hmap[index].min_z.compare_exchange_weak(old_z, current_z))
-            ;
-        }
-      });
-
-  struct LocalData {
-    std::vector<Vec3f> cloud;
-    Vec3f b_min = Vec3f::Constant(std::numeric_limits<double>::max());
-    Vec3f b_max = Vec3f::Constant(std::numeric_limits<double>::lowest());
-    std::unordered_map<int, std::pair<Vec3i, int>>
-        hits;                          // hash_id -> {id_g, hit_count}
-    std::unordered_map<int, int> ops;  // hash_id -> total_op_count
-  };
-
-  tbb::combinable<LocalData> tls;
-
-  tbb::parallel_for(
-      tbb::blocked_range<size_t>(0, input_cloud.size()),
-      [&](const tbb::blocked_range<size_t>& r) {
-        auto& ld = tls.local();
-        for (size_t i = r.begin(); i != r.end(); ++i) {
+        // 1.1) intensity filter
+        int local_cnt{0};
+        // BoxPair& my_box = local_boxes.local();
+        for (size_t i = r.begin(); i < r.end(); ++i) {
           const auto& pcl_p = input_cloud[i];
-
           if (cfg_.intensity_thresh > 0 &&
-              pcl_p.intensity < cfg_.intensity_thresh)
+              pcl_p.intensity < cfg_.intensity_thresh) {
             continue;
+          }
+
+          // 1.2) temporal filter
+          if (local_cnt++ % cfg_.point_filt_num) {
+            continue;
+          }
           int ix =
               static_cast<int>((pcl_p.x - raycast_box_min[0]) / resolution);
           int iy =
               static_cast<int>((pcl_p.y - raycast_box_min[1]) / resolution);
-          if (ix <= 0 || ix >= grid_x || iy <= 0 || iy >= grid_y) continue;
-          if (pcl_p.z < min_hmap[iy * grid_x + ix].min_z.load() + 0.02)
+          if (ix <= 0 || ix >= grid_x || iy <= 0 || iy >= grid_y) {
             continue;
+          }
+          int index = iy * grid_x + ix;
 
+          if (pcl_p.z < min_hmap[index].min_z + 0.005) {
+            continue;  //过滤地面点云
+          }
           Vec3f p(pcl_p.x, pcl_p.y, pcl_p.z);
-          bool update_hit{true};
+          Vec3i pt_id_g;
 
+          bool update_hit{true};
+          // 1.3) filter for virtual ceil and ground
           if (p.z() > cfg_.virtual_ceil_height) {
             update_hit = false;
-            p = cur_odom + (p - cur_odom).normalized() *
-                               (cfg_.virtual_ceil_height - cur_odom.z()) /
-                               (p.z() - cur_odom.z());
+            // find the intersect point with the ceil
+            const double dz = p.z() - cur_odom.z();
+            const double pc = cfg_.virtual_ceil_height - cur_odom.z();
+            p = cur_odom + (p - cur_odom).normalized() * pc / dz;
           } else if (p.z() < cfg_.virtual_ground_height) {
             update_hit = false;
-            p = cur_odom + (p - cur_odom).normalized() *
-                               (cfg_.virtual_ground_height - cur_odom.z()) /
-                               (p.z() - cur_odom.z());
+            // find the intersect point with the ground
+            const double dz = p.z() - cur_odom.z();
+            const double pc = cfg_.virtual_ground_height - cur_odom.z();
+            p = cur_odom + (p - cur_odom).normalized() * pc / dz;
           }
 
-          // 1.4) 距离过滤
+          // 1.4) bounding box filter
+          // raycasting max
           const double sqr_dis = (p - cur_odom).squaredNorm();
           if (sqr_dis > cfg_.sqr_raycast_range_max) {
-            p = (cfg_.raycast_range_max / sqrt(sqr_dis)) * (p - cur_odom) +
-                cur_odom;
+            double k = cfg_.raycast_range_max / sqrt(sqr_dis);
+            p = k * (p - cur_odom) + cur_odom;
             update_hit = false;
           }
-          if (sqr_dis < cfg_.sqr_raycast_range_min) continue;
 
-          // 局部地图边界检查
+          if (sqr_dis < cfg_.sqr_raycast_range_min) {
+            continue;
+          }
+
+          // local map bound
           if (((p - raycast_box_min).minCoeff() < 0) ||
               ((p - raycast_box_max).maxCoeff() > 0)) {
             p = lineBoxIntersectPoint(p, cur_odom, raycast_box_min,
@@ -788,102 +815,49 @@ void ProbMap::raycastProcess(const PointCloud& input_cloud,
             update_hit = false;
           }
 
-          // 更新局部缓存
-          ld.b_min = ld.b_min.cwiseMin(p);
-          ld.b_max = ld.b_max.cwiseMax(p);
-          ld.cloud.push_back(p);
-
           if (update_hit) {
-            Vec3i pt_id_g;
             posToGlobalIndex(p, pt_id_g);
-            int hash_id = getHashIndexFromGlobalIndex(pt_id_g);
-            ld.ops[hash_id]++;
-            ld.hits[hash_id].first = pt_id_g;
-            ld.hits[hash_id].second++;
+            insertUpdateCandidate(pt_id_g, true);
+          }
+          Vec3f raycast_start =
+              (p - cur_odom).normalized() * cfg_.raycast_range_min + cur_odom;
+          auto local_raycast = raycast_data_.raycaster;
+          local_raycast.setInput(raycast_start, p);
+          Vec3f ray_pt;
+          while (local_raycast.step(ray_pt)) {
+            Vec3i cur_ray_id_g;
+            posToGlobalIndex(ray_pt, cur_ray_id_g);
+            if (!insideLocalMap(cur_ray_id_g)) {
+              break;
+            }
+            insertUpdateCandidate(cur_ray_id_g, false);
           }
         }
       });
 
-  // --- 阶段 C: 合并数据 (串行 Reduce) ---
-  auto raycasting_cloud = vec_Vec3f{};
-  tls.combine_each([&](LocalData& ld) {
-    raycasting_cloud.insert(raycasting_cloud.end(), ld.cloud.begin(),
-                            ld.cloud.end());
-    raycast_data_.cache_box_min =
-        raycast_data_.cache_box_min.cwiseMin(ld.b_min);
-    raycast_data_.cache_box_max =
-        raycast_data_.cache_box_max.cwiseMax(ld.b_max);
-
-    for (auto& [hash_id, data] : ld.hits) {
-      if (raycast_data_.operation_cnt[hash_id] == 0)
-        raycast_data_.update_cache_id_g.push(data.first);
-      raycast_data_.hit_cnt[hash_id] += data.second;
-    }
-    for (auto& [hash_id, count] : ld.ops) {
-      raycast_data_.operation_cnt[hash_id] += count;
-    }
-  });
-  if (cfg_.raycasting_en) {
-    // 定义射线投射的局部统计结构
-    struct RayLocalData {
-      std::unordered_map<int, std::pair<Vec3i, int>>
-          misses;                        // hash_id -> {id_g, miss_count}
-      std::unordered_map<int, int> ops;  // hash_id -> op_count
-    };
-
-    tbb::combinable<RayLocalData> ray_tls;
-
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, raycasting_cloud.size()),
-        [&](const tbb::blocked_range<size_t>& r) {
-          auto& ld = ray_tls.local();
-          // 为每个线程创建一个独立的 Raycaster 副本，避免状态竞争
-          auto local_raycaster = raycast_data_.raycaster;
-
-          for (size_t i = r.begin(); i != r.end(); ++i) {
-            const auto& p = raycasting_cloud[i];
-            Vec3f ray_dir = (p - cur_odom).normalized();
-            Vec3f raycast_start = ray_dir * cfg_.raycast_range_min + cur_odom;
-
-            local_raycaster.setInput(raycast_start, p);
-
-            Vec3f ray_pt;
-            while (local_raycaster.step(ray_pt)) {
-              Vec3i cur_ray_id_g;
-              posToGlobalIndex(ray_pt, cur_ray_id_g);
-
-              if (!insideLocalMap(cur_ray_id_g)) break;
-
-              int hash_id = getHashIndexFromGlobalIndex(cur_ray_id_g);
-
-              ld.ops[hash_id]++;
-              // 记录 miss (is_hit = false)
-              ld.misses[hash_id].first = cur_ray_id_g;
-              ld.misses[hash_id].second++;
-            }
-          }
-        });
-
-    ray_tls.combine_each([&](RayLocalData& ld) {
-      // 合并操作数
-      for (auto& [hash_id, count] : ld.ops) {
-        if (raycast_data_.operation_cnt[hash_id] == 0) {
-          raycast_data_.update_cache_id_g.push(ld.misses[hash_id].first);
-        }
-        raycast_data_.operation_cnt[hash_id] += count;
-      }
-    });
-  }
+  auto end_time = std::chrono::steady_clock::now();
+  double duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           end_time - start_time)
+                           .count();
+  std::cout << "Raycast duration: " << duration_ms << " ms" << std::endl;
 }
 
 void ProbMap::insertUpdateCandidate(const Vec3i& id_g, bool is_hit) {
   const auto& hash_id = getHashIndexFromGlobalIndex(id_g);
-  raycast_data_.operation_cnt[hash_id]++;
-  if (raycast_data_.operation_cnt[hash_id] == 1) {
+  int* op_ptr = &raycast_data_.operation_cnt[hash_id];
+
+  // 2. 原子自增并返回旧值 (线程安全，无需 lock)
+  // __ATOMIC_RELAXED 是性能最高的内存顺序，适用于这种简单的计数
+  int prev_cnt = __atomic_fetch_add(op_ptr, 1, __ATOMIC_RELAXED);
+
+  // 3. 只有第一个发现它是 0 的线程才负责将索引推入队列
+  if (prev_cnt == 0) {
     raycast_data_.update_cache_id_g.push(id_g);
   }
+
   if (is_hit) {
-    raycast_data_.hit_cnt[hash_id]++;
+    int* hit_ptr = &raycast_data_.hit_cnt[hash_id];
+    __atomic_fetch_add(hit_ptr, 1, __ATOMIC_RELAXED);
   }
 }
 
@@ -925,8 +899,9 @@ void ProbMap::resetLocalMap() {
   double unk_value = (cfg_.l_free + cfg_.l_occ) / 2.0;
   // Clear local map
   std::fill(occupancy_buffer_.begin(), occupancy_buffer_.end(), unk_value);
-  while (!raycast_data_.update_cache_id_g.empty()) {
-    raycast_data_.update_cache_id_g.pop();
+  Vec3i id_g;
+  while (raycast_data_.update_cache_id_g.try_pop(id_g)) {
+    // raycast_data_.update_cache_id_g.pop();
   }
   raycast_data_.batch_update_counter = 0;
   std::fill(raycast_data_.operation_cnt.begin(),
