@@ -29,7 +29,9 @@
 #include <rog_map/free_cnt_map.h>
 #include <rog_map/esdf_map.h>
 #include <rog_map/rog_map_core/raycaster.h>
-
+#include <tbb/concurrent_hash_map.h>
+#include <tbb/concurrent_vector.h>
+#include <tbb/concurrent_queue.h>
 
 namespace rog_map {
     using super_utils::Pose;
@@ -99,15 +101,14 @@ namespace rog_map {
 
         void updateProbMap(const PointCloud &cloud, const Pose &pose);
     //   std::deque<std::vector< Vec3i>> time_map;
-    struct Vec3iCompare {
-    bool operator()(const Vec3i& a, const Vec3i& b) const {
+    struct handle{
+        bool operator()(const Vec3i& a, const Vec3i& b) const {
     if (a.x() != b.x()) return a.x() < b.x();
     if (a.y() != b.y()) return a.y() < b.y();
     return a.z() < b.z();
-  }
-};
-      std::map<Vec3i,std::chrono::steady_clock::time_point, Vec3iCompare> time_stamp_lists;
-      std::vector<Vec3f> res_pc_list;
+    }};
+    // tbb::concurrent_hash_map<Vec3i, std::chrono::steady_clock::time_point, handle> time_map;
+      std::map<Vec3i,int,handle> time_stamp_lists;
     //   void time_map_clear(const Vec3f & pos, const int & hash_id);
     protected:
         rog_map::Config cfg_;
@@ -120,12 +121,13 @@ namespace rog_map {
         bool map_empty_{true};
         struct RaycastData {
             raycaster::RayCaster raycaster;
-            std::queue<Vec3i> update_cache_id_g;
-            std::vector<uint16_t> operation_cnt;
-            std::vector<uint16_t> hit_cnt;
+            tbb::concurrent_queue<Vec3i> update_cache_id_g;
+            tbb::concurrent_vector<int> operation_cnt;
+            tbb::concurrent_vector<int> hit_cnt;
             Vec3f cache_box_max, cache_box_min, local_update_box_max, local_update_box_min;
             int batch_update_counter{0};
             std::mutex raycast_range_mtx;
+
         } raycast_data_;
 
         vector<double> time_consuming_;
