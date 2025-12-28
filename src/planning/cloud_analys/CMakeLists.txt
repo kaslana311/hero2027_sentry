@@ -14,9 +14,10 @@ find_package(tf2_ros REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(pcl_ros REQUIRED)
 include_directories(include )
 add_executable(cloud_analys_node src/s.cpp)
-ament_target_dependencies(cloud_analys_node rclcpp PCL tf2_ros nav_msgs sensor_msgs pcl_conversions)
+ament_target_dependencies(cloud_analys_node rclcpp PCL tf2_ros nav_msgs sensor_msgs pcl_conversions pcl_ros)
 install(TARGETS
   cloud_analys_node
   DESTINATION lib/${PROJECT_NAME}
