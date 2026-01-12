@@ -39,6 +39,10 @@
 
 // #include <small_gicp/pcl/pcl_registration.hpp>
 using namespace small_gicp;
+struct Grid {
+    pcl::PointXYZ farthestPoint;
+    double maxDistance = -1.0;
+};
 class RelocalizationNode : public rclcpp::Node {
    public:
     RelocalizationNode();
@@ -72,7 +76,7 @@ class RelocalizationNode : public rclcpp::Node {
     bool has_global_map_ = false;
     bool has_scan_ = false;
     bool registration_success_ = false;
-
+    int max_scan_count_ = 10;  //累计点云帧数目阈值
     // Gates and policies (populated from ROS parameters at runtime)
     double gate_yaw_deg_ = 5.0;    // yaw 门限（度）
     double gate_roll_deg_ = 5.0;   // roll 门限（度）
@@ -111,6 +115,11 @@ class RelocalizationNode : public rclcpp::Node {
     Eigen::Matrix4d pose_estimation_;
     std::vector<double> init_pose_;
 
+    // tdt
+    double gridSizeDegrees = 0.1;  // 0.1°*0.1°
+    std::map<std::pair<int, int>, Grid> gridMap;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr TDTresult;
+    void TDThandle();
     //---------------------inline func----------------------------//
     // Helpers for constrained registration and gating
     static inline double NormalizeAngle(double a) {

@@ -7,7 +7,8 @@ RelocalizationNode::RelocalizationNode()
       global_map_(new pcl::PointCloud<pcl::PointXYZ>),
       result_t_(Eigen::Isometry3d::Identity()),
       cur_scan_(new pcl::PointCloud<pcl::PointXYZ>),
-      accumulated_cloud(new pcl::PointCloud<pcl::PointXYZ>) {
+      accumulated_cloud(new pcl::PointCloud<pcl::PointXYZ>),
+      TDTresult(new pcl::PointCloud<pcl::PointXYZ>) {
     RCLCPP_INFO(this->get_logger(), "RelocalizationNode init");
     this->declare_parameter("init_pose",
                             std::vector<double>{0., 0., 0., 0., 0., 0.});
@@ -134,7 +135,7 @@ void RelocalizationNode::publishTransform() {
 void RelocalizationNode::SaveCurScanCallback(
     const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     //累计10帧
-    if (this->scan_count >= 10) return;
+    if (this->scan_count >= max_scan_count_) return;
     std::lock_guard<std::mutex> lock(mtx);
     pcl::fromROSMsg(*msg, *cur_scan_);
     //滤波
@@ -175,7 +176,7 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
         return;
     }
     rclcpp::Time begin_icp_time = this->now();
-
+    TDThandle();
     // 小范围多 yaw 初始值搜索
     const double yaw_gate = gate_yaw_deg_ * M_PI / 180.0;
     const double yaw_step = std::max(0.5, yaw_search_step_deg_) * M_PI / 180.0;
@@ -191,8 +192,7 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     for (double dyaw : yaw_seeds) {
         Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
         double f = 1e9;
-        Eigen::Isometry3d res =
-            SmallIcpRegistration(accumulated_cloud, seed, f);
+        Eigen::Isometry3d res = SmallIcpRegistration(TDTresult, seed, f);
         if (f < best_fitness) {
             best_fitness = f;
             best_T = res.matrix();
@@ -245,17 +245,16 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
                         "Registration failed over %d times, publishing "
                         "fallback (%s)!",
                         max_fail_before_fallback_, fallback_policy_.c_str());
-            if (fallback_policy_ == "identity") {
-                // todo
-            } else {
-                // todo
-            }
             publishTransform();
             registration_success_ = true;
             registration_fail_count_ = 0;  // 重置计数
         }
-        return;
     }
+    //重头来过
+    this->TDTresult->clear();
+    this->accumulated_cloud->clear();
+    this->scan_count = 0;
+    this->has_scan_ = false;
 }
 // converged return res,false return pre
 Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
@@ -303,32 +302,36 @@ bool RelocalizationNode::InitGlobalMap(std::string map_path) {
         PCL_ERROR("Couldn't read file scans.pcd \n");
         return false;
     }
-    Eigen::Affine3d odom_to_lidar_odom;
-    while (true) {
-        try {
-            auto tf_stamped = tf_buffer_->lookupTransform(
-                "base_footprint", "front_mid360", this->now(),
-                rclcpp::Duration::from_seconds(1.0));
-            odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
-            RCLCPP_INFO_STREAM(
-                this->get_logger(),
-                "odom_to_lidar_odom: translation = "
-                    << odom_to_lidar_odom.translation().transpose()
-                    << ", rpy = "
-                    << odom_to_lidar_odom.rotation()
-                           .eulerAngles(0, 1, 2)
-                           .transpose());
-            break;
-        } catch (tf2::TransformException& ex) {
-            RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...",
-                        ex.what());
-            rclcpp::sleep_for(std::chrono::seconds(1));
-        }
-    }
-    pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
     return true;
 }
+void RelocalizationNode::TDThandle() {
+    for (const auto& point : *this->accumulated_cloud) {
+        double azimuth = std::atan2(point.y, point.x);
+        double elevation = std::atan2(
+            point.z, std::sqrt(point.x * point.x + point.y * point.y));
 
+        int azimuthIndex =
+            static_cast<int>(floor(azimuth * 180.0 / M_PI / gridSizeDegrees));
+        int elevationIndex =
+            static_cast<int>(floor(elevation * 180.0 / M_PI / gridSizeDegrees));
+
+        double distance = std::sqrt(point.x * point.x + point.y * point.y +
+                                    point.z * point.z);
+
+        auto& grid = gridMap[std::make_pair(azimuthIndex, elevationIndex)];
+        if (distance > grid.maxDistance) {
+            grid.farthestPoint = point;
+            grid.maxDistance = distance;
+        }
+    }
+    //然后把gripMap中的数据转换为点云
+
+    for (const auto& item : gridMap) {
+        if (item.second.maxDistance > 0.0) {
+            TDTresult->push_back(item.second.farthestPoint);
+        }
+    }
+}
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<RelocalizationNode>();
