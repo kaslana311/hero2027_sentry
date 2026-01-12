@@ -9,16 +9,28 @@
 // #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <yaml-cpp/yaml.h>
 
 #include <cloud_analys/eigen_alias.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <opencv2/opencv.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include "pcl_ros/transforms.hpp"
 
 using namespace analy_utils;
-
+template <typename T>
+T yaml_get_value(const YAML::Node & node, const std::string & key)
+{
+  try {
+    return node[key].as<T>();
+  } catch (YAML::Exception & e) {
+    std::stringstream ss;
+    ss << "Failed to parse YAML tag '" << key << "' for reason: " << e.msg;
+    throw YAML::Exception(e.mark, ss.str());
+  }
+}
 class Handler : public rclcpp::Node
 {
   struct ROSCallback
@@ -157,15 +169,15 @@ class Handler : public rclcpp::Node
   void CloudAnalys(pcl::PointCloud<pcl::PointXYZ> & cloud, Pose & pose)
   {
     std::cout << "cloud size " << cloud.size() << std::endl;
-    std::cout << "robot pose " << pose.first.transpose() << std::endl;
+    // std::cout << "robot pose " << pose.first.transpose() << std::endl;
     double min_x = pose.first[0] - half_map_size;
-    min_x = std::max(min_x, 0.0);
+    min_x = std::max(min_x, map_origin[0]);
     double max_x = pose.first[0] + half_map_size;
-    max_x = std::min(max_x, global_map_size_x);
+    max_x = std::min(max_x, global_map_size_x + map_origin[0]);
     double min_y = pose.first[1] - half_map_size;
-    min_y = std::max(min_y, 0.0);
+    min_y = std::max(min_y, map_origin[1]);
     double max_y = pose.first[1] + half_map_size;
-    max_y = std::min(max_y, global_map_size_y);
+    max_y = std::min(max_y, global_map_size_y + map_origin[1]);
     auto cptr = cloud.makeShared();
     pass_filter_.setInputCloud(cptr);
     pass_filter_.setFilterFieldName("x");
@@ -184,7 +196,7 @@ class Handler : public rclcpp::Node
     //遗忘若干帧没有观测到的障碍物
     for (auto it = pub_list.begin(); it != pub_list.end();) {
       (it->second)++;
-      if (it->second > 5) {
+      if (it->second > frame_save) {
         global_map_[it->first] = 0;
         it = pub_list.erase(it);
         continue;
@@ -194,8 +206,8 @@ class Handler : public rclcpp::Node
     std::fill_n(min_hmap, Map_SIZE_D * Map_SIZE_D, 1e6);
     //得到最低高度图
     for (auto & point : cptr->points) {
-      int xi = static_cast<int>((point.x - min_x) / resolution);
-      int idy = static_cast<int>((point.y - min_y) / resolution);
+      int xi = static_cast<int>((point.x - min_x) / high_analys_resolution);
+      int idy = static_cast<int>((point.y - min_y) / high_analys_resolution);
       int index_l = xi + idy * Map_SIZE_D;
       if (point.z < min_hmap[index_l]) {
         min_hmap[index_l] = point.z;
@@ -208,8 +220,8 @@ class Handler : public rclcpp::Node
       int idy = static_cast<int>((point.y - min_y) / resolution);
       int index_l = xi + idy * Map_SIZE_D;
       if (point.z > min_hmap[index_l] + heighter_than_ground_threshold) {
-        int idx_g = static_cast<int>((point.x) / resolution);
-        int idy_g = static_cast<int>((point.y) / resolution);
+        int idx_g = static_cast<int>((point.x - map_origin[0]) / resolution);
+        int idy_g = static_cast<int>((point.y - map_origin[1]) / resolution);
         if (idx_g < 0 || idx_g >= global_map_xi || idy_g < 0 || idy_g >= global_map_yi) {
           continue;
         }
@@ -222,8 +234,8 @@ class Handler : public rclcpp::Node
         }
       }
     }
-    int px = static_cast<int>((pose.first[0]) / resolution);
-    int py = static_cast<int>((pose.first[1]) / resolution);
+    int px = static_cast<int>((pose.first[0] - map_origin[0]) / resolution);
+    int py = static_cast<int>((pose.first[1] - map_origin[1]) / resolution);
     Vec2i start_idx = Vec2i{px, py};
     //射线处理，移除移动障碍物之前的轨迹
     RayHandle(start_idx, obs_list_);
@@ -241,8 +253,8 @@ class Handler : public rclcpp::Node
       int idx = item.first % global_map_xi;
       int idy = item.first / global_map_xi;
       pcl::PointXYZ pt;
-      pt.x = idx * resolution;
-      pt.y = idy * resolution;
+      pt.x = idx * resolution + map_origin[0];
+      pt.y = idy * resolution + map_origin[1];
       pt.z = 0.2f;
 
       // visit[item.first] = true;
@@ -281,9 +293,14 @@ class Handler : public rclcpp::Node
         if (x0 < 0 || x0 >= global_map_xi || y0 < 0 || y0 >= global_map_yi) break;
 
         int index = x0 + y0 * global_map_xi;
+
+        //非本次循环观测到的障碍物，经过了另外一个障碍物所在的射线，我们认为不是障碍物
         if (global_map_[index] != 0) {
-          global_map_[index] = 0;
-          pub_list.erase(index);
+          auto it = pub_list.find(index);
+          if (it->second != 0) {
+            global_map_[index] = 0;
+            pub_list.erase(it);
+          }
         }
 
         e2 = err;
@@ -303,7 +320,7 @@ public:
   Handler() : Node("cloud_analys_node")
   {
     const rclcpp::QoS qos(rclcpp::QoS(1).best_effort().keep_last(1).durability_volatile());
-    Map_SIZE_D = static_cast<int>(half_map_size * 2 / resolution);
+    Map_SIZE_D = static_cast<int>(half_map_size * 2 / high_analys_resolution);
     min_hmap = new double[Map_SIZE_D * Map_SIZE_D];
     std::fill_n(min_hmap, Map_SIZE_D * Map_SIZE_D, 100.0);
     // max_hmap = new double[Map_SIZE_D * Map_SIZE_D];
@@ -314,8 +331,8 @@ public:
     this->declare_parameter<double>("resolution", 0.05);
     this->declare_parameter<double>("heighter_than_ground_threshold", 0.02);
     this->declare_parameter<double>("higher_than_car_threshold", 0.5);
-    this->declare_parameter<double>("global_map_size_x", 30.0);
-    this->declare_parameter<double>("global_map_size_y", 30.0);
+    this->declare_parameter<int>("frame_save", 10);
+    this->declare_parameter<std::string>("map_yaml_path", "");
     this->get_parameter("odom_topic", odom_topic);
     this->get_parameter("cloud_topic", cloud_topic);
     this->get_parameter("half_map_size", half_map_size);
@@ -324,9 +341,9 @@ public:
     this->get_parameter("higher_than_car_threshold", higher_than_car_threshold);
     this->get_parameter("global_map_size_x", global_map_size_x);
     this->get_parameter("global_map_size_y", global_map_size_y);
-    global_map_xi = static_cast<int>(global_map_size_x / resolution);
-    global_map_yi = static_cast<int>(global_map_size_y / resolution);
-    global_map_ = new unsigned char[static_cast<int>(global_map_xi * global_map_yi)];
+    this->get_parameter("frame_save", frame_save);
+    this->get_parameter("map_yaml_path", yaml_path);
+    ReadMapYaml();
     cost_pub_.cost_pc_pub =
       this->create_publisher<sensor_msgs::msg::PointCloud2>("rog_map/inf_occ", qos);
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
@@ -356,31 +373,74 @@ private:
   double half_map_size{10.0};
   bool map_empty_{true};
   double odom_timeout{0.1};
-  double global_map_size_x, global_map_size_y;
+
   unsigned char * global_map_;
   double *min_hmap, *max_hmap;
   tf2::Transform tf_t;
-  int global_map_xi, global_map_yi;
+
   bool tf_set = false;
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
   int Map_SIZE_D;
   std::string odom_topic = "lidar_odometry", cloud_topic = "registered_scan";
+  double high_analys_resolution = 0.05;
   double resolution{0.05};
   double heighter_than_ground_threshold{0.02};
+  int frame_save = 10;
   //   double lower_than_car_threshold{0.35};
-  double higher_than_car_threshold{0.5};
+  double higher_than_car_threshold{0.25};
   geometry_msgs::msg::TransformStamped tf_stamped;
   std::vector<Vec2i> obs_list_;
-  std::map<int, int> pub_list;
+  std::map<int, int> pub_list;  //索引+未观测到的累计帧数
   pcl::PassThrough<pcl::PointXYZ> pass_filter_;
+  //map info
+  std::string yaml_path;
+  double global_map_size_x, global_map_size_y;
+  int global_map_xi, global_map_yi;
+  std::vector<double> map_origin{0.0, 0.0, 0.0};  //左下角点云坐标
+  double yaml_resolution{0.05};
+  std::string pgm_path;
+  void ReadMapYaml()
+  {
+    //读取yaml文件，获取地图信息
+    try {
+      std::cout << " -- [ROS] Loading map from yaml file: " << yaml_path << std::endl;
+      YAML::Node config = YAML::LoadFile(yaml_path);
+      map_origin = yaml_get_value<std::vector<double>>(config, "origin");
+      yaml_resolution = yaml_get_value<double>(config, "resolution");
+      int index = yaml_path.find_last_of("/");
+
+      pgm_path = yaml_path.substr(0, index + 1) + yaml_get_value<std::string>(config, "image");
+      cv::Mat map_img = cv::imread(pgm_path, cv::IMREAD_UNCHANGED);
+      if (!map_img.empty()) {
+        global_map_size_x = map_img.cols * yaml_resolution;
+        global_map_size_y = map_img.rows * yaml_resolution;
+        global_map_xi = static_cast<int>(global_map_size_x / resolution);
+        global_map_yi = static_cast<int>(global_map_size_y / resolution);
+        global_map_ = new unsigned char[static_cast<int>(global_map_xi * global_map_yi)];
+        std::cout << " -- [ROS] Map loaded: size_x=" << global_map_size_x
+                  << ", size_y=" << global_map_size_y << ", xi=" << global_map_xi
+                  << ", yi=" << global_map_yi << std::endl;
+        //初始化全局地图
+        return;
+      }
+      std::cerr << " -- [ROS ERROR] Failed to load map image file: " << pgm_path << std::endl;
+    } catch (YAML::Exception & e) {
+      std::cerr << " -- [ROS ERROR] Failed to load map yaml file: " << yaml_path
+                << ", reason: " << e.msg << std::endl;
+      global_map_size_x = 30.0;
+      global_map_size_y = 30.0;
+      global_map_xi = static_cast<int>(global_map_size_x / resolution);
+      global_map_yi = static_cast<int>(global_map_size_y / resolution);
+      global_map_ = new unsigned char[static_cast<int>(global_map_xi * global_map_yi)];
+    }
+  }
 };
 
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<Handler>();
-  node->set_parameter(rclcpp::Parameter("use_sim_time", true));
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
