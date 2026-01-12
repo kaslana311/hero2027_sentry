@@ -6,6 +6,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 set(CMAKE_BUILD_TYPE "RELEASE")
 add_compile_options(-O3)
+# set (CMAKE_BUILD_TYPE "Debug")
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -15,9 +16,12 @@ find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
-include_directories(include )
+find_package(OpenCV REQUIRED)
+find_package(yaml-cpp REQUIRED)
+include_directories(include ${YAML_CPP_INCLUDE_DIRS})
 add_executable(cloud_analys_node src/s.cpp)
-ament_target_dependencies(cloud_analys_node rclcpp PCL tf2_ros nav_msgs sensor_msgs pcl_conversions pcl_ros)
+ament_target_dependencies(cloud_analys_node rclcpp PCL tf2_ros nav_msgs sensor_msgs pcl_conversions pcl_ros OpenCV )
+target_link_libraries(cloud_analys_node  ${YAML_CPP_LIBRARIES})
 install(TARGETS
   cloud_analys_node
   DESTINATION lib/${PROJECT_NAME}
