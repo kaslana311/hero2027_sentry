@@ -46,6 +46,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Lidar.msg"
   "msg/Bullet.msg"
   "msg/Cmdbuffer.msg"
+  "msg/MincoTrajectory.msg"
   "srv/Fromsolve.srv"
   "srv/Solve.srv"
   "srv/Armor.srv"
