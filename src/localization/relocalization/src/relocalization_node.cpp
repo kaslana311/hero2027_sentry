@@ -37,6 +37,19 @@ RelocalizationNode::RelocalizationNode()
     this->declare_parameter("smgicp_max_iterations", 50);
     this->declare_parameter("smgicp_num_threads", 5);
     this->declare_parameter("smgicp_max_dist_sq", 3.0);
+    this->declare_parameter("f_min_x", -3.2);
+    this->declare_parameter("f_min_y", -9.2);
+    this->declare_parameter("f_min_z", 0.0);
+    this->declare_parameter("f_max_x", 24.3);
+    this->declare_parameter("f_max_y", 5.3);
+    this->declare_parameter("f_max_z", 3.5);
+    fparams.min_x = this->get_parameter("f_min_x").as_double();
+    fparams.min_y = this->get_parameter("f_min_y").as_double();
+    fparams.min_z = this->get_parameter("f_min_z").as_double();
+    fparams.max_x = this->get_parameter("f_max_x").as_double();
+    fparams.max_y = this->get_parameter("f_max_y").as_double();
+    fparams.max_z = this->get_parameter("f_max_z").as_double();
+
     //初始位姿设定
     this->get_parameter("init_pose", init_pose_);
     //先验地图路径
@@ -141,7 +154,9 @@ void RelocalizationNode::SaveCurScanCallback(
     std::lock_guard<std::mutex> lock(mtx);
     pcl::fromROSMsg(*msg, *cur_scan_);
     //滤波
-    PassThroughFilter(cur_scan_, cur_scan_, 0.0, 3.5, -9.2, 5.3, -3.2, 24.7);
+    PassThroughFilter(cur_scan_, cur_scan_, fparams.min_z, fparams.max_z,
+                      fparams.min_y, fparams.max_y, fparams.min_x,
+                      fparams.max_x);
     *accumulated_cloud += *cur_scan_;
     this->scan_count++;
     //至少积累10帧才进行匹配
@@ -188,8 +203,8 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
         yaw_seeds.push_back(+a);
         yaw_seeds.push_back(-a);
     }
-
-    double best_fitness = 0.1;
+    static bool first = true;
+    double best_fitness = 0.03;
     Eigen::Matrix4d best_T = pose_estimation_;
     for (double dyaw : yaw_seeds) {
         Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
@@ -198,9 +213,11 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
         if (f < best_fitness) {
             best_fitness = f;
             best_T = res.matrix();
+            if (first) break;
         }
     }
-    //此时得到了最好的变换关系
+    first = false;
+    //此时得到了最好的变幻关系
     rclcpp::Time end_icp_time = this->now();
     RCLCPP_INFO(this->get_logger(), "Registration time: %f, best fitness: %f",
                 (end_icp_time - begin_icp_time).seconds(), best_fitness);

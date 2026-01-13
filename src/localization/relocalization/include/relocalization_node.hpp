@@ -43,6 +43,14 @@ struct Grid {
     pcl::PointXYZ farthestPoint;
     double maxDistance = -1.0;
 };
+struct fliter_params{
+	double min_x;
+	double max_x;
+	double max_y;
+	double min_y;
+	double min_z;
+	double max_z;
+};
 class RelocalizationNode : public rclcpp::Node {
    public:
     RelocalizationNode();
@@ -72,7 +80,7 @@ class RelocalizationNode : public rclcpp::Node {
 
     rclcpp::TimerBase::SharedPtr timer_;
     pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_ = nullptr;  // global_load
-
+    fliter_params fparams;
     bool has_global_map_ = false;
     bool has_scan_ = false;
     bool registration_success_ = false;
