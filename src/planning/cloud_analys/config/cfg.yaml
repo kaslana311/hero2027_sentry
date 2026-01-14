@@ -11,3 +11,4 @@
     # global_map_size_y: 30.0
     frame_save: 10
     map_yaml_path: "/home/z/ros_ws/src/pb2025_sentry_nav/pb2025_nav_bringup/map/simulation/rmuc_2025.yaml"
+    deep_map_path: "/home/z/ros_ws/src/pb2025_sentry_nav/cloud_analys/cloud_handle_tool/bin/high_map.png"

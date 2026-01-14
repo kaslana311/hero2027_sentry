@@ -6,6 +6,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 set(CMAKE_BUILD_TYPE "RELEASE")
 add_compile_options(-O3)
+add_compile_definitions(DEBUG)
 # set (CMAKE_BUILD_TYPE "Debug")
 # find dependencies
 find_package(ament_cmake REQUIRED)
