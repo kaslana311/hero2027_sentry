@@ -26,15 +26,22 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(interfaces REQUIRED)
-
 
 # 依赖包（IntensityVoxelLayer 所在的包）
 find_package(pb_nav2_plugins REQUIRED)
 
+# interfaces 依赖（用于 MINCO 轨迹消息）
+find_package(interfaces REQUIRED)
+
+# rog_map ESDF 依赖
+find_package(rog_map REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(PCL REQUIRED)
+
+# rog_map 需要的编译宏定义
+add_definitions(-DORIGIN_AT_CORNER)
+add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
 
 # 设置库名称
 set(library_name ${PROJECT_NAME}_core)
@@ -71,6 +78,7 @@ ament_target_dependencies(${library_name}
   pluginlib
   pb_nav2_plugins
   interfaces
+  rog_map
   pcl_conversions
 )
 
@@ -127,6 +135,7 @@ ament_export_dependencies(
   Eigen3
   OpenCV
   pb_nav2_plugins
+  rog_map
   pcl_conversions
 )
 

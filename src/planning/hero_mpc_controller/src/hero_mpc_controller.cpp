@@ -47,6 +47,7 @@
 #include <algorithm>
 #include <cmath>
 #include <rclcpp/logging.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "nav2_core/exceptions.hpp"
 #include "pluginlib/class_list_macros.hpp"
@@ -88,7 +89,7 @@ void HeroMpcController::configure(
 
     // 速度约束参数
     declare_parameter_if_not_declared(node, plugin_name_ + ".max_velocity",
-                                      rclcpp::ParameterValue(2.5));
+                                      rclcpp::ParameterValue(2.0));
     declare_parameter_if_not_declared(node, plugin_name_ + ".max_omega",
                                       rclcpp::ParameterValue(1.5));
     declare_parameter_if_not_declared(node, plugin_name_ + ".max_acceleration",
@@ -251,10 +252,34 @@ geometry_msgs::msg::TwistStamped HeroMpcController::computeVelocityCommands(
     }
 
     // 步骤 2: 获取当前机器人状态
-    // 从 pose 获取位置和航向
-    double x = pose.pose.position.x;
-    double y = pose.pose.position.y;
-    double yaw = tf2::getYaw(pose.pose.orientation);
+    // [修订] 统一转换到 map 坐标系
+    geometry_msgs::msg::PoseStamped robot_pose_map;
+
+    // 如果输入的 pose 不是 map 系，则进行转换
+    // 为了满足“不做任何等待延迟”，我们查询最新的 TF (TimePointZero)
+    if (pose.header.frame_id != "map") {
+        try {
+            // lookupTransform(target_frame, source_frame, time)
+            auto transform = tf_->lookupTransform("map", pose.header.frame_id,
+                                                  tf2::TimePointZero);
+            tf2::doTransform(pose, robot_pose_map, transform);
+        } catch (const tf2::TransformException& ex) {
+            // 降级处理：仅在无法转换时报错，并使用原始 pose
+            // (防止此时没有任何输入给 MPC)
+            RCLCPP_ERROR_THROTTLE(
+                logger_, *clock_, 1000,
+                "[%s] 无法将机器人姿态转换到 map 坐标系 (TF Error: %s)",
+                plugin_name_.c_str(), ex.what());
+            robot_pose_map = pose;
+        }
+    } else {
+        robot_pose_map = pose;
+    }
+
+    // 从 robot_pose_map 获取位置和航向
+    double x = robot_pose_map.pose.position.x;
+    double y = robot_pose_map.pose.position.y;
+    double yaw = tf2::getYaw(robot_pose_map.pose.orientation);
 
     // 坐标系转换: 将机器人坐标系速度转换为世界坐标系速度
     // Nav2 提供的 velocity 是机器人坐标系下的速度 (base_link)
@@ -400,8 +425,8 @@ void HeroMpcController::mincoTrajectoryCallback(
     size_t num_segments = msg->durations.size();
 
     // 验证数据完整性
-    // 每段有 2 维 x 4 系数 = 8 个数据
-    size_t expected_coeffs = num_segments * 2 * 4;
+    // 每段有 2 维 x 6 系数 = 12 个数据 (S=3 五次多项式)
+    size_t expected_coeffs = num_segments * 2 * 6;
     if (msg->coefficients.size() != expected_coeffs) {
         RCLCPP_ERROR(logger_, "[%s] 轨迹系数数量不匹配: 期望 %zu，实际 %zu",
                      plugin_name_.c_str(), expected_coeffs,
@@ -415,26 +440,30 @@ void HeroMpcController::mincoTrajectoryCallback(
     minco_segments_.reserve(num_segments);
 
     // 解析多项式系数
-    // 系数顺序: [段0_x_c3, 段0_x_c2, 段0_x_c1, 段0_x_c0,
-    //           段0_y_c3, 段0_y_c2, 段0_y_c1, 段0_y_c0,
-    //           段1_x_c3, ...]
+    // 系数顺序: [段0_x_c5, 段0_x_c4, 段0_x_c3, 段0_x_c2, 段0_x_c1, 段0_x_c0,
+    //           段0_y_c5, 段0_y_c4, 段0_y_c3, 段0_y_c2, 段0_y_c1, 段0_y_c0,
+    //           段1_x_c5, ...]
     traj_total_duration_ = 0.0;
     for (size_t i = 0; i < num_segments; ++i) {
         MincoSegment seg;
         seg.duration = msg->durations[i];
 
-        // X 维度系数 [c3, c2, c1, c0]
-        size_t base_idx = i * 8;
-        seg.x_coeffs[0] = msg->coefficients[base_idx + 0];  // c3
-        seg.x_coeffs[1] = msg->coefficients[base_idx + 1];  // c2
-        seg.x_coeffs[2] = msg->coefficients[base_idx + 2];  // c1
-        seg.x_coeffs[3] = msg->coefficients[base_idx + 3];  // c0
+        // X 维度系数 [c5, c4, c3, c2, c1, c0]
+        size_t base_idx = i * 12;
+        seg.x_coeffs[0] = msg->coefficients[base_idx + 0];  // c5
+        seg.x_coeffs[1] = msg->coefficients[base_idx + 1];  // c4
+        seg.x_coeffs[2] = msg->coefficients[base_idx + 2];  // c3
+        seg.x_coeffs[3] = msg->coefficients[base_idx + 3];  // c2
+        seg.x_coeffs[4] = msg->coefficients[base_idx + 4];  // c1
+        seg.x_coeffs[5] = msg->coefficients[base_idx + 5];  // c0
 
-        // Y 维度系数 [c3, c2, c1, c0]
-        seg.y_coeffs[0] = msg->coefficients[base_idx + 4];  // c3
-        seg.y_coeffs[1] = msg->coefficients[base_idx + 5];  // c2
-        seg.y_coeffs[2] = msg->coefficients[base_idx + 6];  // c1
-        seg.y_coeffs[3] = msg->coefficients[base_idx + 7];  // c0
+        // Y 维度系数 [c5, c4, c3, c2, c1, c0]
+        seg.y_coeffs[0] = msg->coefficients[base_idx + 6];   // c5
+        seg.y_coeffs[1] = msg->coefficients[base_idx + 7];   // c4
+        seg.y_coeffs[2] = msg->coefficients[base_idx + 8];   // c3
+        seg.y_coeffs[3] = msg->coefficients[base_idx + 9];   // c2
+        seg.y_coeffs[4] = msg->coefficients[base_idx + 10];  // c1
+        seg.y_coeffs[5] = msg->coefficients[base_idx + 11];  // c0
 
         minco_segments_.push_back(seg);
         traj_total_duration_ += seg.duration;
@@ -490,24 +519,35 @@ TrajectoryState HeroMpcController::sampleTrajectory(double t) const {
 }
 
 double HeroMpcController::evaluatePolynomial(
-    const std::array<double, 4>& coeffs, double t) {
-    // p(t) = c3*t^3 + c2*t^2 + c1*t + c0
+    const std::array<double, 6>& coeffs, double t) {
+    // p(t) = c5*t^5 + c4*t^4 + c3*t^3 + c2*t^2 + c1*t + c0
     // 使用 Horner 方法提高数值稳定性和效率
-    // p(t) = ((c3*t + c2)*t + c1)*t + c0
-    return ((coeffs[0] * t + coeffs[1]) * t + coeffs[2]) * t + coeffs[3];
+    // p(t) = ((((c5*t + c4)*t + c3)*t + c2)*t + c1)*t + c0
+    return ((((coeffs[0] * t + coeffs[1]) * t + coeffs[2]) * t + coeffs[3]) *
+                t +
+            coeffs[4]) *
+               t +
+           coeffs[5];
 }
 
 double HeroMpcController::evaluatePolynomialDerivative(
-    const std::array<double, 4>& coeffs, double t) {
-    // p'(t) = 3*c3*t^2 + 2*c2*t + c1
-    // = (3*c3*t + 2*c2)*t + c1
-    return (3.0 * coeffs[0] * t + 2.0 * coeffs[1]) * t + coeffs[2];
+    const std::array<double, 6>& coeffs, double t) {
+    // p'(t) = 5*c5*t^4 + 4*c4*t^3 + 3*c3*t^2 + 2*c2*t + c1
+    // 使用 Horner: (((5*c5*t + 4*c4)*t + 3*c3)*t + 2*c2)*t + c1
+    return (((5.0 * coeffs[0] * t + 4.0 * coeffs[1]) * t + 3.0 * coeffs[2]) *
+                t +
+            2.0 * coeffs[3]) *
+               t +
+           coeffs[4];
 }
 
 double HeroMpcController::evaluatePolynomialSecondDerivative(
-    const std::array<double, 4>& coeffs, double t) {
-    // p''(t) = 6*c3*t + 2*c2
-    return 6.0 * coeffs[0] * t + 2.0 * coeffs[1];
+    const std::array<double, 6>& coeffs, double t) {
+    // p''(t) = 20*c5*t^3 + 12*c4*t^2 + 6*c3*t + 2*c2
+    // 使用 Horner: ((20*c5*t + 12*c4)*t + 6*c3)*t + 2*c2
+    return ((20.0 * coeffs[0] * t + 12.0 * coeffs[1]) * t + 6.0 * coeffs[2]) *
+               t +
+           2.0 * coeffs[3];
 }
 
 bool HeroMpcController::findSegment(double t, size_t& segment_index,

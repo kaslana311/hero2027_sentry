@@ -12,7 +12,7 @@
  * 3. 高效查询：预计算 ESDF 后，getDistance/getGradient 为纯内存操作
  *
  * MIT License
- * Created by Lihan Chen, 2025
+ * Created by Jinbo Liu, 2025
  */
 
 #ifndef PB_MINCO_SMOOTHER__COSTMAP_ESDF_ADAPTER_HPP_
@@ -181,11 +181,10 @@ class CostmapESDFAdapter : public ESDFInterface {
                 unsigned int global_idx = (my_min + y) * stride + (mx_min + x);
                 unsigned char cost = char_map[global_idx];
 
-                // 【关键决策】只将 LETHAL_OBSTACLE (254) 视为障碍物
-                // 不包含 INSCRIBED_INFLATED_OBSTACLE (253)
-                // 原因：优化器的 safe_distance 已经包含了机器人半径，
-                //       如果这里也包含膨胀层，会导致双重膨胀
-                if (cost == nav2_costmap_2d::LETHAL_OBSTACLE) {
+                // 将内切圆范围内的代价都视为硬障碍 (>= 253)
+                // 253 (INSCRIBED_INFLATED_OBSTACLE): 机器人中心碰到此处 =
+                // 边缘撞墙 254 (LETHAL_OBSTACLE): 障碍物本身 255
+                if (cost >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
                     obstacle_img_.at<uchar>(y, x) = 0;  // 障碍物（前景）
                 } else {
                     obstacle_img_.at<uchar>(y, x) = 255;  // 自由空间（背景）
@@ -196,23 +195,58 @@ class CostmapESDFAdapter : public ESDFInterface {
         // 【重要】尽早释放锁！后续的 EDT 计算不需要访问 Costmap
         lock.unlock();
 
-        // ========== Step 4: 计算 ESDF (Euclidean Distance Transform)
-        // ========== 使用 OpenCV 的距离变换，速度极快（100x100 通常 < 1ms）
-        cv::distanceTransform(obstacle_img_, distance_img_, cv::DIST_L2,
+        // ========== Step 4: 计算有符号 ESDF (Euclidean Signed Distance Field)
+        // ==========
+        // 之前的实现只计算了非负距离（非零点到零点的距离），导致障碍物内部距离为
+        // 0 且无梯度。 现在我们将计算真正的 Signed Distance：
+        // - 自由空间：距离 > 0 (dist_out)
+        // - 障碍物内部：距离 < 0 (-dist_in)
+
+        // 1. 计算 "到障碍物的距离" (Outside Distance)
+        // distance_img_out: 自由空间正值，障碍物为 0
+        cv::Mat distance_img_out;
+        cv::distanceTransform(obstacle_img_, distance_img_out, cv::DIST_L2,
                               cv::DIST_MASK_PRECISE);
 
-        // ========== Step 5: 将结果存储到一维数组，便于快速查询 ==========
+        // 2. 计算 "到自由空间的距离" (Inside Distance)
+        // 需要反转二值图：障碍物变 255 (背景)，自由空间变 0 (前景)
+        cv::Mat inv_obstacle_img;
+        cv::bitwise_not(obstacle_img_, inv_obstacle_img);
+
+        cv::Mat distance_img_in;
+        cv::distanceTransform(inv_obstacle_img, distance_img_in, cv::DIST_L2,
+                              cv::DIST_MASK_PRECISE);
+
+        // ========== Step 5: 合并结果并存储 ==========
         // 复用 vector，避免频繁分配
         esdf_map_.resize(local_size_x_ * local_size_y_);
 
         for (unsigned int y = 0; y < local_size_y_; ++y) {
             for (unsigned int x = 0; x < local_size_x_; ++x) {
-                // distance_img_ 存储的是像素距离，需要乘以分辨率转换为米
-                float dist_pixels = distance_img_.at<float>(y, x);
-                float dist_meters = dist_pixels * resolution_;
-                // 截断到最大距离，节省存储空间并避免数值问题
-                esdf_map_[y * local_size_x_ + x] =
-                    std::min(dist_meters, static_cast<float>(max_distance_));
+                float dist_out = distance_img_out.at<float>(y, x);
+                float dist_in = distance_img_in.at<float>(y, x);
+
+                float final_dist_meters;
+
+                if (dist_out > 0) {
+                    // 在自由空间：使用外距离
+                    final_dist_meters = dist_out * resolution_;
+                } else {
+                    // 在障碍物内：使用内距离的负值
+                    // 注意：在边界处 dist_out=0, dist_in 可能 > 0。
+                    // 为了保持连续性（0界面），我们取负值。
+                    // 实际上 obstacle 像素中心是有深度的。
+                    // 这里简化模型：obstacle 像素就算负距离。
+                    final_dist_meters = -dist_in * resolution_;
+                }
+
+                // 截断距离，节省存储空间并避免数值问题
+                // 对于负距离（内部），通常保留梯度以便将点推出障碍物，但过大也无意义
+                final_dist_meters = std::clamp(
+                    final_dist_meters, static_cast<float>(-max_distance_),
+                    static_cast<float>(max_distance_));
+
+                esdf_map_[y * local_size_x_ + x] = final_dist_meters;
             }
         }
 
@@ -225,35 +259,6 @@ class CostmapESDFAdapter : public ESDFInterface {
                      local_origin_y_, resolution_);
 
         return true;
-    }
-
-    /**
-     * @brief 旧版接口：更新整个 Costmap 的 ESDF（保留兼容性）
-     * @param costmap Costmap2D 指针
-     * @deprecated 建议使用 updateSnapshot 以获得更好的性能
-     */
-    void updateESDF(const nav2_costmap_2d::Costmap2D* costmap) {
-        if (!costmap) {
-            RCLCPP_WARN(logger_, "Cannot update ESDF: costmap is null");
-            return;
-        }
-
-        // 构建覆盖整个 Costmap 的虚拟路径点
-        std::vector<Eigen::Vector2d> full_coverage;
-        double ox = costmap->getOriginX();
-        double oy = costmap->getOriginY();
-        double sx = costmap->getSizeInMetersX();
-        double sy = costmap->getSizeInMetersY();
-
-        full_coverage.push_back(Eigen::Vector2d(ox, oy));
-        full_coverage.push_back(Eigen::Vector2d(ox + sx, oy + sy));
-
-        // 临时设置 margin 为 0，因为已经是全覆盖
-        double old_margin = roi_margin_;
-        roi_margin_ = 0.0;
-        updateSnapshot(const_cast<nav2_costmap_2d::Costmap2D*>(costmap),
-                       full_coverage);
-        roi_margin_ = old_margin;
     }
 
     /**

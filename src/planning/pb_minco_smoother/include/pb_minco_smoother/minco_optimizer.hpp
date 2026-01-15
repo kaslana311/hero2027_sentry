@@ -1,13 +1,19 @@
 /**
  * @file minco_optimizer.hpp
- * @brief 2D MINCO 轨迹优化器 - 融合 ESDF 避障
+ * @brief 2D MINCO 轨迹优化器 - 融合 ESDF 避障 (S=3, Quintic Polynomial)
  *
  * 本文件实现了基于 MINCO 的 2D 地面机器人轨迹优化器
+ * 使用 gcopter 库的 MINCO_S3NU 实现（5次多项式，最小化Jerk）
+ *
  * 核心特性：
- * 1. 平滑性代价：最小化 Jerk 能量（MINCO 自带）
+ * 1. 平滑性代价：最小化 Jerk 能量（S=3 MINCO）
  * 2. 避障代价：利用 ESDF 进行软约束避障
  * 3. 动力学约束：速度和加速度软约束
  * 4. 时间优化：同时优化路点位置和时间分配
+ *
+ * S=3 vs S=2 的区别：
+ * - S=2 (Cubic): 3次多项式，最小化加速度，只保证位置/速度连续
+ * - S=3 (Quintic): 5次多项式，最小化Jerk，保证位置/速度/加速度连续
  *
  * 使用方法：
  * 1. 设置 ESDF 接口（GridMapSDF 指针）
@@ -29,9 +35,9 @@
 #include <memory>
 #include <vector>
 
+#include "gcopter/minco.hpp"       // 使用 gcopter 的成熟 MINCO 实现
+#include "gcopter/trajectory.hpp"  // gcopter 的轨迹类
 #include "pb_minco_smoother/lbfgs.hpp"
-#include "pb_minco_smoother/minco.hpp"
-#include "pb_minco_smoother/trajectory.hpp"
 
 namespace pb_minco {
 
@@ -118,22 +124,27 @@ class MincoOptimizer {
 
     /**
      * @brief 初始化优化器并预分配所有运行时缓冲区
-     * @param headState 起始状态 [位置, 速度] (2x2)
-     * @param tailState 终止状态 [位置, 速度] (2x2)
+     * @param headPVA 起始状态 [位置, 速度, 加速度] (2x3)
+     * @param tailPVA 终止状态 [位置, 速度, 加速度] (2x3)
      * @param pieceNum 轨迹段数
      *
      * 此函数会预分配所有运行时需要的内存，之后的 optimize() 调用
      * 以及内部的 costFunction 调用将不再触发动态内存分配
+     *
+     * S=3 MINCO 需要完整的 PVA (位置、速度、加速度) 边界条件，
+     * 用于实现加速度连续的热启动。
      */
-    void initialize(const Eigen::Matrix<double, 2, 2> &headState,
-                    const Eigen::Matrix<double, 2, 2> &tailState,
-                    int pieceNum) {
-        headState_ = headState;
-        tailState_ = tailState;
+    void initialize(const Eigen::Matrix<double, 2, 3> &headPVA,
+                    const Eigen::Matrix<double, 2, 3> &tailPVA, int pieceNum) {
         pieceNum_ = pieceNum;
 
+        // 直接使用传入的 PVA 边界条件
+        headPVA_ = headPVA;
+        tailPVA_ = tailPVA;
+
         // 初始化 MINCO（内部也会预分配缓冲区）
-        minco_.setConditions(headState, tailState, pieceNum);
+        // 使用 gcopter 的 MINCO_S3NU，需要 PVA 边界条件
+        minco_.setConditions(headPVA_, tailPVA_, pieceNum);
 
         // 计算决策变量维度
         // 路点：(N-1) * 2
@@ -143,27 +154,29 @@ class MincoOptimizer {
         totalDim_ = dimPoints_ + dimTimes_;
 
         // ========== 预分配所有运行时缓冲区 ==========
+        // S=3 (Quintic) 多项式有 6 个系数，所以梯度矩阵大小为 6N x 2
+
         // computeCostAndGradient 使用的缓冲区
         points_.resize(2, pieceNum - 1);
         times_.resize(pieceNum);
 
-        // 平滑性代价梯度缓冲区
-        gradC_smooth_.resize(4 * pieceNum, 2);
+        // 平滑性代价梯度缓冲区 (6N x 2 for S=3)
+        gradC_smooth_.resize(6 * pieceNum, 2);
         gradT_smooth_.resize(pieceNum);
 
-        // 避障代价梯度缓冲区
-        gradC_obstacle_.resize(4 * pieceNum, 2);
+        // 避障代价梯度缓冲区 (6N x 2 for S=3)
+        gradC_obstacle_.resize(6 * pieceNum, 2);
         gradT_obstacle_.resize(pieceNum);
 
-        // 动力学可行性代价梯度缓冲区
-        gradC_feas_.resize(4 * pieceNum, 2);
+        // 动力学可行性代价梯度缓冲区 (6N x 2 for S=3)
+        gradC_feas_.resize(6 * pieceNum, 2);
         gradT_feas_.resize(pieceNum);
 
         // 时间代价梯度缓冲区
         gradT_time_.resize(pieceNum);
 
-        // 合并后的总梯度缓冲区
-        totalGradC_.resize(4 * pieceNum, 2);
+        // 合并后的总梯度缓冲区 (6N x 2 for S=3)
+        totalGradC_.resize(6 * pieceNum, 2);
         totalGradT_.resize(pieceNum);
 
         // 梯度传播输出缓冲区
@@ -234,8 +247,9 @@ class MincoOptimizer {
 
     /**
      * @brief 获取优化后的轨迹
+     * @note S=3 使用 5 次多项式，返回 Trajectory<5, 2> 类型
      */
-    void getTrajectory(Trajectory<3> &traj) const {
+    void getTrajectory(Trajectory<5, 2> &traj) const {
         minco_.getTrajectory(traj);
     }
 
@@ -260,6 +274,56 @@ class MincoOptimizer {
                                Eigen::VectorXd &grad) {
         MincoOptimizer *opt = static_cast<MincoOptimizer *>(instance);
         return opt->computeCostAndGradient(x, grad);
+    }
+
+    /**
+     * @brief Smoothed L1 惩罚函数 (Positive Part)
+     *
+     * 当输入 x > 0 时产生惩罚，x <= 0 时无惩罚。
+     * 特点：
+     * - 当 x >= pe 时，f(x) = x - 0.5*pe，df = 1.0（恒定梯度，模拟硬约束）
+     * - 当 0 < x < pe 时，使用三次多项式平滑过渡，保证 C2 连续
+     * - 当 x <= 0 时，f = 0, df = 0
+     *
+     * 相比二次/三次惩罚的优势：
+     * 1. 在约束边界处提供恒定的"推力"（梯度 = 1），不会因接近满足约束而减弱
+     * 2. 更好地模拟硬约束行为，严格保证约束满足
+     *
+     * @param x 违反量（正值表示违反约束）
+     * @param[out] f 惩罚值
+     * @param[out] df 惩罚对 x 的导数
+     */
+    static inline void positiveSmoothedL1(const double &x, double &f,
+                                          double &df) {
+        // 平滑区间宽度（在 [0, pe] 内使用三次多项式过渡）
+        const double pe = 1.0e-2;
+
+        // 三次多项式系数：f(x) = f4c * x^4 + f3c * x^3（确保 f(0)=0, f'(0)=0,
+        // f(pe)=pe-0.5*pe, f'(pe)=1）
+        // 实际采用的形式：f(x) = (f4c * x + f3c) * x^3
+        const double f3c = 1.0 / (pe * pe);
+        const double f4c = -0.5 * f3c / pe;
+
+        // 导数系数：df/dx = d3c * x^2 + d2c * x^3（通过对 f 求导得到）
+        // 实际采用的形式：df = (d3c * x + d2c) * x^2
+        const double d2c = 3.0 * f3c;
+        const double d3c = 4.0 * f4c;
+
+        if (x < pe) {
+            if (x > 0) {
+                // 平滑过渡区：0 < x < pe
+                f = (f4c * x + f3c) * x * x * x;
+                df = (d3c * x + d2c) * x * x;
+            } else {
+                // 无违反：x <= 0
+                f = 0.0;
+                df = 0.0;
+            }
+        } else {
+            // 线性区：x >= pe，恒定梯度
+            f = x - 0.5 * pe;
+            df = 1.0;
+        }
     }
 
     /**
@@ -352,10 +416,11 @@ class MincoOptimizer {
         return smoothCost + obstacleCost + feasibilityCost + timeCost;
     }
     /**
-     * @brief 计算避障代价
+     * @brief 计算避障代价 (使用 Smoothed L1 惩罚)
      *
-     * 在轨迹上进行离散采样，对每个采样点计算避障惩罚
-     * 惩罚函数：当 d < d_safe 时，cost = (d_safe - d)^3
+     * 在轨迹上进行离散采样，对每个采样点计算避障惩罚。
+     * 使用 Smoothed L1 惩罚函数，在违反约束时提供恒定梯度（线性惩罚），
+     * 从而更好地模拟硬约束行为。
      *
      * 使用预分配的 traj_ 和 gradC_obstacle_, gradT_obstacle_ 缓冲区
      * 调用前需确保 gradC_obstacle_ 和 gradT_obstacle_ 已 setZero()
@@ -364,7 +429,13 @@ class MincoOptimizer {
      * 为解决窄路/急弯场景下的"挤牙膏效应"和"轨迹扭曲"问题，引入以下优化：
      * 1. 正交梯度投影：剔除沿轨迹切线方向的梯度分量，只保留横向推力
      * 2. 梯度归一化与增强：在势能谷底强制提供明确的推力方向
-     * 3. 二次惩罚函数：相比三次惩罚，在边界处提供更强的梯度
+     * 3. Smoothed L1 惩罚：在边界处提供恒定梯度，避免梯度消失
+     *
+     * ========== S=3 (Quintic) 多项式说明 ==========
+     * 5次多项式: p(t) = c0 + c1*t + c2*t^2 + c3*t^3 + c4*t^4 + c5*t^5
+     * gcopter 的 b 矩阵存储: [c0, c1, c2, c3, c4, c5] (低阶在前)
+     * Trajectory 类使用 .reverse()，所以 getPos 期望高阶在前
+     * 因此 ∂p/∂c_j 对应 t^j (j = 0, 1, ..., 5)
      */
     void computeObstacleCost(double &cost) {
         cost = 0.0;
@@ -398,17 +469,16 @@ class MincoOptimizer {
 
                 double dist = esdf_->getDistance(pos.x(), pos.y());
 
-                // 如果距离小于安全距离，添加惩罚
-                if (dist < dSafe) {
-                    double diff = dSafe - dist;
+                // 计算违反量：violation = d_safe - d
+                // violation > 0 表示违反约束（距离不足）
+                double violaPos = dSafe - dist;
 
-                    // ========== 使用二次惩罚函数 ==========
-                    // 相比三次惩罚 (diff^3)，二次惩罚在边界处梯度更大
-                    // 避免了"梯度消失"导致轨迹贴边走的问题
-                    double penalty = diff * diff;  // 二次惩罚: (d_safe - d)^2
-                    double dPenalty_dDist =
-                        -2.0 * diff;  // 导数: -2 * (d_safe - d)
+                // 使用 Smoothed L1 惩罚
+                double penalty, dPenalty_dViolation;
+                positiveSmoothedL1(violaPos, penalty, dPenalty_dViolation);
 
+                // 如果有惩罚（violation > 0）
+                if (penalty > 0.0) {
                     cost += penalty * dt;
 
                     // 获取原始 ESDF 梯度
@@ -461,21 +531,29 @@ class MincoOptimizer {
                         // 如果原始梯度也为零，则无法确定推力方向，跳过
                     }
 
-                    // 计算最终的位置梯度
+                    // ========== 链式法则计算位置梯度 ==========
+                    // ∂Cost/∂pos = ∂penalty/∂violation * ∂violation/∂dist *
+                    // ∂dist/∂pos
+                    //            = dPenalty_dViolation * (-1.0) *
+                    //            gradOrthogonal
+                    // 乘以积分权重 dt
                     Eigen::Vector2d gradPos =
-                        dPenalty_dDist * gradOrthogonal * dt;
+                        dPenalty_dViolation * (-1.0) * gradOrthogonal * dt;
 
-                    // 计算位置对系数的雅可比矩阵
-                    // p(t) = c0 + c1*t + c2*t^2 + c3*t^3
-                    // ∂p/∂c_j = t^(3-j)
-                    double t_powers[4] = {1.0, t, t * t, t * t * t};
-                    for (int j = 0; j < 4; ++j) {
-                        gradC_obstacle_.row(4 * i + j) +=
-                            t_powers[3 - j] * gradPos.transpose();
+                    // ========== S=3 (Quintic) 多项式梯度计算 ==========
+                    // 5次多项式: p(t) = c0 + c1*t + c2*t^2 + c3*t^3 + c4*t^4 +
+                    // c5*t^5 gcopter 存储 b = [c0, c1, c2, c3, c4, c5]^T
+                    // (低阶在前) ∂p/∂c_j = t^j
+                    double t_powers[6] = {1.0,           t,
+                                          t * t,         t * t * t,
+                                          t * t * t * t, t * t * t * t * t};
+                    for (int j = 0; j < 6; ++j) {
+                        gradC_obstacle_.row(6 * i + j) +=
+                            t_powers[j] * gradPos.transpose();
                     }
 
-                    // ========== 时间梯度使用正交化后的梯度 ==========
-                    // 这样时间优化也不会受到纵向推力的干扰
+                    // ========== 时间梯度 ==========
+                    // 使用正交化后的梯度，这样时间优化也不会受到纵向推力的干扰
                     gradT_obstacle_(i) +=
                         gradPos.dot(vel) * (static_cast<double>(k) / K);
                     gradT_obstacle_(i) += penalty / K;  // 积分的时间项
@@ -484,12 +562,20 @@ class MincoOptimizer {
         }
     }
     /**
-     * @brief 计算动力学可行性代价
+     * @brief 计算动力学可行性代价 (使用 Smoothed L1 惩罚)
      *
-     * 对超过限制的速度和加速度添加软约束惩罚
+     * 对超过限制的速度和加速度添加软约束惩罚。
+     * 使用 Smoothed L1 惩罚函数，在违反约束时提供恒定梯度，
+     * 从而更好地模拟硬约束行为，严格保证动力学可行性。
      *
      * 使用预分配的 traj_ 和 gradC_feas_, gradT_feas_ 缓冲区
      * 调用前需确保 gradC_feas_ 和 gradT_feas_ 已 setZero()
+     *
+     * ========== S=3 (Quintic) 多项式说明 ==========
+     * 位置: p(t) = c0 + c1*t + c2*t^2 + c3*t^3 + c4*t^4 + c5*t^5
+     * 速度: v(t) = c1 + 2*c2*t + 3*c3*t^2 + 4*c4*t^3 + 5*c5*t^4
+     * 加速度: a(t) = 2*c2 + 6*c3*t + 12*c4*t^2 + 20*c5*t^3
+     * Jerk: j(t) = 6*c3 + 24*c4*t + 60*c5*t^2
      */
     void computeFeasibilityCost(double &cost) {
         cost = 0.0;
@@ -513,56 +599,86 @@ class MincoOptimizer {
             for (int k = 0; k <= K; ++k) {
                 double t = k * dt;
 
-                // 速度约束
+                // ========== 速度约束 ==========
                 Eigen::Vector2d vel = piece.getVel(t);
                 double vSqr = vel.squaredNorm();
-                if (vSqr > vMax2) {
-                    double vNorm = std::sqrt(vSqr);
-                    double diff = vNorm - vMax;
-                    double penalty = diff * diff * diff;
-                    double dPenalty_dV = 3.0 * diff * diff;
 
-                    cost += penalty * dt;
+                // 违反量定义：violation = v² - v_max²
+                // 使用速度平方作为约束，避免开方运算
+                double violaVel = vSqr - vMax2;
 
-                    // ∂v/∂c 的贡献
-                    // v(t) = c1 + 2*c2*t + 3*c3*t^2
-                    Eigen::Vector2d gradVel = dPenalty_dV * vel / vNorm * dt;
-                    double t1 = t, t2 = t * t;
-                    gradC_feas_.row(4 * i + 1) += gradVel.transpose();
-                    gradC_feas_.row(4 * i + 2) +=
+                double velPenalty, dVelPenalty_dViolation;
+                positiveSmoothedL1(violaVel, velPenalty,
+                                   dVelPenalty_dViolation);
+
+                if (velPenalty > 0.0) {
+                    cost += velPenalty * dt;
+
+                    // 链式法则：∂penalty/∂vel = ∂penalty/∂violation *
+                    // ∂violation/∂v²  * ∂v²/∂vel
+                    //           = dVelPenalty_dViolation * 1.0 * 2.0 * vel
+                    Eigen::Vector2d gradVel =
+                        dVelPenalty_dViolation * 2.0 * vel * dt;
+
+                    // ========== S=3 (Quintic) 速度梯度 ==========
+                    // v(t) = c1 + 2*c2*t + 3*c3*t^2 + 4*c4*t^3 + 5*c5*t^4
+                    // ∂v/∂c1 = 1, ∂v/∂c2 = 2t, ∂v/∂c3 = 3t^2,
+                    // ∂v/∂c4 = 4t^3, ∂v/∂c5 = 5t^4
+                    double t1 = t, t2 = t * t, t3 = t * t * t,
+                           t4 = t * t * t * t;
+                    gradC_feas_.row(6 * i + 1) += gradVel.transpose();
+                    gradC_feas_.row(6 * i + 2) +=
                         2.0 * t1 * gradVel.transpose();
-                    gradC_feas_.row(4 * i + 3) +=
+                    gradC_feas_.row(6 * i + 3) +=
                         3.0 * t2 * gradVel.transpose();
+                    gradC_feas_.row(6 * i + 4) +=
+                        4.0 * t3 * gradVel.transpose();
+                    gradC_feas_.row(6 * i + 5) +=
+                        5.0 * t4 * gradVel.transpose();
 
                     // 时间梯度
                     Eigen::Vector2d acc = piece.getAcc(t);
                     gradT_feas_(i) +=
                         gradVel.dot(acc) * (static_cast<double>(k) / K);
-                    gradT_feas_(i) += penalty / K;
+                    gradT_feas_(i) += velPenalty / K;
                 }
 
-                // 加速度约束
+                // ========== 加速度约束 ==========
                 Eigen::Vector2d acc = piece.getAcc(t);
                 double aSqr = acc.squaredNorm();
-                if (aSqr > aMax2) {
-                    double aNorm = std::sqrt(aSqr);
-                    double diff = aNorm - aMax;
-                    double penalty = diff * diff * diff;
-                    double dPenalty_dA = 3.0 * diff * diff;
 
-                    cost += penalty * dt;
+                // 违反量定义：violation = a² - a_max²
+                double violaAcc = aSqr - aMax2;
 
-                    // ∂a/∂c 的贡献
-                    // a(t) = 2*c2 + 6*c3*t
-                    Eigen::Vector2d gradAcc = dPenalty_dA * acc / aNorm * dt;
-                    gradC_feas_.row(4 * i + 2) += 2.0 * gradAcc.transpose();
-                    gradC_feas_.row(4 * i + 3) += 6.0 * t * gradAcc.transpose();
+                double accPenalty, dAccPenalty_dViolation;
+                positiveSmoothedL1(violaAcc, accPenalty,
+                                   dAccPenalty_dViolation);
+
+                if (accPenalty > 0.0) {
+                    cost += accPenalty * dt;
+
+                    // 链式法则：∂penalty/∂acc = dAccPenalty_dViolation * 2.0 *
+                    // acc
+                    Eigen::Vector2d gradAcc =
+                        dAccPenalty_dViolation * 2.0 * acc * dt;
+
+                    // ========== S=3 (Quintic) 加速度梯度 ==========
+                    // a(t) = 2*c2 + 6*c3*t + 12*c4*t^2 + 20*c5*t^3
+                    // ∂a/∂c2 = 2, ∂a/∂c3 = 6t, ∂a/∂c4 = 12t^2, ∂a/∂c5 = 20t^3
+                    double t1 = t, t2 = t * t, t3 = t * t * t;
+                    gradC_feas_.row(6 * i + 2) += 2.0 * gradAcc.transpose();
+                    gradC_feas_.row(6 * i + 3) +=
+                        6.0 * t1 * gradAcc.transpose();
+                    gradC_feas_.row(6 * i + 4) +=
+                        12.0 * t2 * gradAcc.transpose();
+                    gradC_feas_.row(6 * i + 5) +=
+                        20.0 * t3 * gradAcc.transpose();
 
                     // 时间梯度
                     Eigen::Vector2d jer = piece.getJer(t);
                     gradT_feas_(i) +=
                         gradAcc.dot(jer) * (static_cast<double>(k) / K);
-                    gradT_feas_(i) += penalty / K;
+                    gradT_feas_(i) += accPenalty / K;
                 }
             }
         }
@@ -654,12 +770,12 @@ class MincoOptimizer {
     // 配置参数
     MincoOptimizerConfig config_;
 
-    // MINCO 求解器
-    MINCO_S2NU minco_;
+    // MINCO 求解器 (使用 gcopter 的 S=3 实现)
+    minco::MINCO_S3NU minco_;
 
-    // 边界条件
-    Eigen::Matrix<double, 2, 2> headState_;
-    Eigen::Matrix<double, 2, 2> tailState_;
+    // 边界条件 (PVA: 位置、速度、加速度)
+    Eigen::Matrix<double, 2, 3> headPVA_;
+    Eigen::Matrix<double, 2, 3> tailPVA_;
 
     // 维度信息
     int pieceNum_ = 0;
@@ -676,23 +792,23 @@ class MincoOptimizer {
     Eigen::Matrix2Xd points_;  ///< 路点缓冲区 (2 x (N-1))
     Eigen::VectorXd times_;    ///< 时间缓冲区 (N)
 
-    // 平滑性代价梯度缓冲区
-    Eigen::MatrixX2d gradC_smooth_;  ///< 系数梯度 (4N x 2)
+    // 平滑性代价梯度缓冲区 (S=3: 6N x 2)
+    Eigen::MatrixX2d gradC_smooth_;  ///< 系数梯度 (6N x 2)
     Eigen::VectorXd gradT_smooth_;   ///< 时间梯度 (N)
 
-    // 避障代价梯度缓冲区
-    Eigen::MatrixX2d gradC_obstacle_;  ///< 系数梯度 (4N x 2)
+    // 避障代价梯度缓冲区 (S=3: 6N x 2)
+    Eigen::MatrixX2d gradC_obstacle_;  ///< 系数梯度 (6N x 2)
     Eigen::VectorXd gradT_obstacle_;   ///< 时间梯度 (N)
 
-    // 动力学可行性代价梯度缓冲区
-    Eigen::MatrixX2d gradC_feas_;  ///< 系数梯度 (4N x 2)
+    // 动力学可行性代价梯度缓冲区 (S=3: 6N x 2)
+    Eigen::MatrixX2d gradC_feas_;  ///< 系数梯度 (6N x 2)
     Eigen::VectorXd gradT_feas_;   ///< 时间梯度 (N)
 
     // 时间代价梯度缓冲区
     Eigen::VectorXd gradT_time_;  ///< 时间梯度 (N)
 
-    // 合并后的总梯度缓冲区
-    Eigen::MatrixX2d totalGradC_;  ///< 合并后的系数梯度 (4N x 2)
+    // 合并后的总梯度缓冲区 (S=3: 6N x 2)
+    Eigen::MatrixX2d totalGradC_;  ///< 合并后的系数梯度 (6N x 2)
     Eigen::VectorXd totalGradT_;   ///< 合并后的时间梯度 (N)
 
     // 梯度传播输出缓冲区
@@ -700,7 +816,8 @@ class MincoOptimizer {
     Eigen::VectorXd gradTimes_;    ///< 时间梯度 (N)
 
     // 轨迹缓冲区（用于 computeObstacleCost 和 computeFeasibilityCost）
-    Trajectory<3> traj_;  ///< 轨迹缓冲区
+    // S=3 使用 5 次多项式，2D 轨迹
+    Trajectory<5, 2> traj_;  ///< 轨迹缓冲区
 
     // 优化结果缓冲区
     Eigen::Matrix2Xd optPoints_;  ///< 最优路点 (2 x (N-1))

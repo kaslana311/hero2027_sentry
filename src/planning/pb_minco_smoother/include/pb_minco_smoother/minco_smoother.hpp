@@ -34,13 +34,14 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <string>
 #include <vector>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 // 自定义消息
 #include <interfaces/msg/minco_trajectory.hpp>
 
+#include "gcopter/trajectory.hpp"  // 使用 gcopter 的轨迹类
 #include "pb_minco_smoother/costmap_esdf_adapter.hpp"
 #include "pb_minco_smoother/minco_optimizer.hpp"
-#include "pb_minco_smoother/trajectory.hpp"
 
 namespace pb_minco {
 
@@ -233,11 +234,11 @@ class MincoSmoother : public nav2_core::Smoother {
     /**
      * @brief 从 MINCO 轨迹生成 Nav2 路径
      *
-     * @param traj MINCO 轨迹
+     * @param traj MINCO 轨迹 (S=3, 5次多项式, 2D)
      * @param header 路径消息头
      * @return 采样后的 Nav2 路径
      */
-    nav_msgs::msg::Path trajectoryToPath(const Trajectory<3> &traj,
+    nav_msgs::msg::Path trajectoryToPath(const Trajectory<5, 2> &traj,
                                          const std_msgs::msg::Header &header);
 
     /**
@@ -248,37 +249,51 @@ class MincoSmoother : public nav2_core::Smoother {
     /**
      * @brief 发布轨迹可视化
      */
-    void publishTrajectoryVisualization(const Trajectory<3> &traj,
+    void publishTrajectoryVisualization(const Trajectory<5, 2> &traj,
                                         const std_msgs::msg::Header &header);
+
+    /**
+     * @brief 发布中间路点可视化（球形 Marker）
+     *
+     * 使用 MarkerArray 发布均匀时间采样后的中间路点，
+     * 便于观察 MINCO 优化器的输入路点分布。
+     *
+     * @param waypoints 路点矩阵 (2 x N)
+     * @param header 消息头
+     */
+    void publishWaypointsVisualization(const Eigen::Matrix2Xd &waypoints,
+                                       const std_msgs::msg::Header &header);
 
     /**
      * @brief 将 MINCO 轨迹转换为 ROS 消息
      *
-     * @param traj MINCO 轨迹对象
+     * @param traj MINCO 轨迹对象 (S=3, 5次多项式, 2D)
      * @param header 消息头（时间戳和坐标系）
      * @param start_time 轨迹起始绝对时间
      * @return MincoTrajectory 消息
      */
     interfaces::msg::MincoTrajectory trajectoryToMsg(
-        const Trajectory<3> &traj, const std_msgs::msg::Header &header,
+        const Trajectory<5, 2> &traj, const std_msgs::msg::Header &header,
         const rclcpp::Time &start_time);
 
     /**
      * @brief 轨迹投影结果结构体
      *
      * 存储在历史轨迹上查找投影点的结果，包括投影时间、距离、
-     * 以及投影点处的位置和速度信息。
+     * 以及投影点处的位置、速度和加速度信息。
      */
     struct TrajectoryProjectionResult {
         bool valid = false;            ///< 投影是否有效
         double projection_time = 0.0;  ///< 投影点在轨迹上的时间参数
         double distance = 0.0;  ///< 机器人当前位置到投影点的距离
-        Eigen::Vector2d position;  ///< 投影点位置
-        Eigen::Vector2d velocity;  ///< 投影点速度
+        Eigen::Vector2d position;      ///< 投影点位置
+        Eigen::Vector2d velocity;      ///< 投影点速度
+        Eigen::Vector2d acceleration;  ///< 投影点加速度 (S=3 热启动)
 
         TrajectoryProjectionResult()
             : position(Eigen::Vector2d::Zero()),
-              velocity(Eigen::Vector2d::Zero()) {}
+              velocity(Eigen::Vector2d::Zero()),
+              acceleration(Eigen::Vector2d::Zero()) {}
     };
 
     /**
@@ -298,7 +313,7 @@ class MincoSmoother : public nav2_core::Smoother {
      *       因为已经经过的轨迹部分没有参考意义。
      */
     TrajectoryProjectionResult findProjectionOnTrajectory(
-        const Trajectory<3> &traj, const Eigen::Vector2d &robot_pos,
+        const Trajectory<5, 2> &traj, const Eigen::Vector2d &robot_pos,
         const rclcpp::Time &traj_start_time, const rclcpp::Time &current_time);
 
    private:
@@ -365,6 +380,10 @@ class MincoSmoother : public nav2_core::Smoother {
     rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
         trajectory_pub_;
 
+    // 发布器 - 中间路点可视化（球形 Marker）
+    rclcpp_lifecycle::LifecyclePublisher<
+        visualization_msgs::msg::MarkerArray>::SharedPtr waypoints_marker_pub_;
+
     // 发布器 - MINCO 多项式轨迹（用于 Controller 订阅）
     rclcpp_lifecycle::LifecyclePublisher<
         interfaces::msg::MincoTrajectory>::SharedPtr minco_traj_pub_;
@@ -373,7 +392,7 @@ class MincoSmoother : public nav2_core::Smoother {
     uint32_t trajectory_id_counter_ = 0;
 
     // ========== 滚动规划：轨迹缓存 ==========
-    Trajectory<3> last_trajectory_;      ///< 上一条优化后的轨迹
+    Trajectory<5, 2> last_trajectory_;  ///< 上一条优化后的轨迹 (S=3, Quintic)
     rclcpp::Time last_trajectory_time_;  ///< 上一条轨迹的发布时间戳
     bool has_valid_trajectory_ = false;  ///< 是否有有效的历史轨迹
 

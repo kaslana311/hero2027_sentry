@@ -106,15 +106,15 @@ namespace hero_mpc_controller {
  * @struct MincoSegment
  * @brief MINCO 轨迹的单段多项式
  *
- * 每段是三次多项式: p(t) = c3*t^3 + c2*t^2 + c1*t + c0
- * 系数存储顺序: [c3, c2, c1, c0] (从高次到低次)
+ * 每段是五次多项式: p(t) = c5*t^5 + c4*t^4 + c3*t^3 + c2*t^2 + c1*t + c0
+ * 系数存储顺序: [c5, c4, c3, c2, c1, c0] (从高次到低次)
  */
 struct MincoSegment {
-    /// X 维度系数 [c3, c2, c1, c0]
-    std::array<double, 4> x_coeffs;
+    /// X 维度系数 [c5, c4, c3, c2, c1, c0]
+    std::array<double, 6> x_coeffs;
 
-    /// Y 维度系数 [c3, c2, c1, c0]
-    std::array<double, 4> y_coeffs;
+    /// Y 维度系数 [c5, c4, c3, c2, c1, c0]
+    std::array<double, 6> y_coeffs;
 
     /// 该段的持续时间 [s]
     double duration;
@@ -256,41 +256,41 @@ class HeroMpcController : public nav2_core::Controller {
     TrajectoryState sampleTrajectory(double t) const;
 
     /**
-     * @brief 评估三次多项式
+     * @brief 评估五次多项式
      *
-     * p(t) = c[0]*t^3 + c[1]*t^2 + c[2]*t + c[3]
-     * 注意系数顺序: [c3, c2, c1, c0] 即高次在前
+     * p(t) = c[0]*t^5 + c[1]*t^4 + c[2]*t^3 + c[3]*t^2 + c[4]*t + c[5]
+     * 注意系数顺序: [c5, c4, c3, c2, c1, c0] 即高次在前
      *
-     * @param coeffs 多项式系数 [c3, c2, c1, c0]
+     * @param coeffs 多项式系数 [c5, c4, c3, c2, c1, c0]
      * @param t 时间参数
      * @return 多项式值
      */
-    static double evaluatePolynomial(const std::array<double, 4>& coeffs,
+    static double evaluatePolynomial(const std::array<double, 6>& coeffs,
                                      double t);
 
     /**
-     * @brief 评估三次多项式的一阶导数（速度）
+     * @brief 评估五次多项式的一阶导数（速度）
      *
-     * p'(t) = 3*c[0]*t^2 + 2*c[1]*t + c[2]
+     * p'(t) = 5*c5*t^4 + 4*c4*t^3 + 3*c3*t^2 + 2*c2*t + c1
      *
-     * @param coeffs 多项式系数 [c3, c2, c1, c0]
+     * @param coeffs 多项式系数 [c5, c4, c3, c2, c1, c0]
      * @param t 时间参数
      * @return 一阶导数值
      */
     static double evaluatePolynomialDerivative(
-        const std::array<double, 4>& coeffs, double t);
+        const std::array<double, 6>& coeffs, double t);
 
     /**
-     * @brief 评估三次多项式的二阶导数（加速度）
+     * @brief 评估五次多项式的二阶导数（加速度）
      *
-     * p''(t) = 6*c[0]*t + 2*c[1]
+     * p''(t) = 20*c5*t^3 + 12*c4*t^2 + 6*c3*t + 2*c2
      *
-     * @param coeffs 多项式系数 [c3, c2, c1, c0]
+     * @param coeffs 多项式系数 [c5, c4, c3, c2, c1, c0]
      * @param t 时间参数
      * @return 二阶导数值
      */
     static double evaluatePolynomialSecondDerivative(
-        const std::array<double, 4>& coeffs, double t);
+        const std::array<double, 6>& coeffs, double t);
 
     /**
      * @brief 查找给定时间所在的轨迹段
