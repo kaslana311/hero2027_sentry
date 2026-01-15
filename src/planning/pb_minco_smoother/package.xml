@@ -38,7 +38,7 @@
     <depend>pb_nav2_plugins</depend>
 
     <!-- 轨迹消息接口 -->
-    <depend>interfaces</depend>
+    <depend>rmoss_interfaces</depend>
 
     <!-- 测试依赖 -->
     <test_depend>ament_lint_auto</test_depend>

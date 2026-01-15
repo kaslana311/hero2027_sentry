@@ -18,6 +18,7 @@
 #include <nav2_util/geometry_utils.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <rclcpp/logging.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 namespace pb_minco {
 
@@ -57,6 +58,11 @@ void MincoSmoother::configure(
     // 创建 MINCO 多项式轨迹发布器（供 Controller 订阅）
     minco_traj_pub_ = node->create_publisher<interfaces::msg::MincoTrajectory>(
         "~/minco_polynomial_trajectory", rclcpp::QoS(1).reliable());
+
+    // 创建中间路点可视化发布器（MarkerArray）
+    waypoints_marker_pub_ =
+        node->create_publisher<visualization_msgs::msg::MarkerArray>(
+            "~/minco_waypoints_marker", rclcpp::QoS(1));
 
     // 创建 Costmap ESDF 适配器
     // 参数说明：
@@ -215,6 +221,9 @@ void MincoSmoother::activate() {
     if (minco_traj_pub_) {
         minco_traj_pub_->on_activate();
     }
+    if (waypoints_marker_pub_) {
+        waypoints_marker_pub_->on_activate();
+    }
 }
 
 void MincoSmoother::deactivate() {
@@ -225,6 +234,9 @@ void MincoSmoother::deactivate() {
     }
     if (minco_traj_pub_) {
         minco_traj_pub_->on_deactivate();
+    }
+    if (waypoints_marker_pub_) {
+        waypoints_marker_pub_->on_deactivate();
     }
 }
 
@@ -245,6 +257,7 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
         // 1. 确定初始状态 (Head State)
         Eigen::Vector2d head_pos;
         Eigen::Vector2d head_vel;
+        Eigen::Vector2d head_acc;  // S=3 热启动：加速度边界条件
         bool use_projection = false;
 
         // 1.1 获取当前机器人位置
@@ -274,21 +287,23 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
                     proj.distance < params_.trajectory_continuity_threshold) {
                     head_pos = proj.position;
                     head_vel = proj.velocity;
+                    head_acc = proj.acceleration;  // S=3 热启动：继承加速度
                     use_projection = true;
                     RCLCPP_DEBUG(logger_,
                                  "使用投影点作为起点: pos=(%.2f, %.2f), "
-                                 "vel=(%.2f, %.2f)",
+                                 "vel=(%.2f, %.2f), acc=(%.2f, %.2f)",
                                  head_pos.x(), head_pos.y(), head_vel.x(),
-                                 head_vel.y());
+                                 head_vel.y(), head_acc.x(), head_acc.y());
                 }
             }
         }
 
-        // 如果没有有效投影，退化为使用路径第一个点和零速
+        // 如果没有有效投影，退化为使用路径第一个点和零速、零加速
         if (!use_projection) {
             const auto &start_pose = path.poses.front().pose.position;
             head_pos = Eigen::Vector2d(start_pose.x, start_pose.y);
             head_vel = Eigen::Vector2d::Zero();
+            head_acc = Eigen::Vector2d::Zero();  // 静止启动：加速度为零
             RCLCPP_DEBUG(logger_, "使用零速边界条件: pos=(%.2f, %.2f)",
                          head_pos.x(), head_pos.y());
         }
@@ -314,21 +329,28 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
 
         int pieceNum = numWaypoints - 1;
 
-        // 3. 构建边界条件（直接使用已确定的 headState）
-        Eigen::Matrix<double, 2, 2> headState, tailState;
+        // 3. 构建边界条件（S=3 需要 PVA: 位置、速度、加速度）
+        Eigen::Matrix<double, 2, 3> headPVA, tailPVA;
 
-        // 终点边界：位置为路径终点，速度为零
-        tailState.col(0) = waypoints.col(numWaypoints - 1);
-        tailState.col(1) = Eigen::Vector2d::Zero();
+        // 终点边界：位置为路径终点，速度和加速度为零（停止状态）
+        tailPVA.col(0) = waypoints.col(numWaypoints - 1);  // 位置
+        tailPVA.col(1) = Eigen::Vector2d::Zero();          // 速度
+        tailPVA.col(2) = Eigen::Vector2d::Zero();          // 加速度
 
-        // 起点边界
-        headState.col(0) = head_pos;
-        headState.col(1) = head_vel;
+        // 起点边界：使用热启动的 PVA
+        headPVA.col(0) = head_pos;  // 位置
+        headPVA.col(1) = head_vel;  // 速度
+        headPVA.col(2) = head_acc;  // 加速度（投影继承或静止启动）
 
         // 4. 提取中间路点（不包含首尾）
         Eigen::Matrix2Xd innerPoints(2, pieceNum - 1);
         for (int i = 0; i < pieceNum - 1; ++i) {
             innerPoints.col(i) = waypoints.col(i + 1);
+        }
+
+        // 4.1 发布中间路点可视化（便于调试观察均匀时间分配后的路点位置）
+        if (waypoints_marker_pub_) {
+            publishWaypointsVisualization(waypoints, path.header);
         }
 
         // 5. 配置优化器
@@ -378,8 +400,8 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
         }
         // }
 
-        // 7. 初始化优化器
-        optimizer_->initialize(headState, tailState, pieceNum);
+        // 7. 初始化优化器（使用 PVA 边界条件）
+        optimizer_->initialize(headPVA, tailPVA, pieceNum);
 
         // 8. 检查时间限制
         auto elapsed = steady_clock::now() - start_time;
@@ -398,8 +420,8 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
             return true;  // 优化失败，返回原始路径
         }
 
-        // 10. 获取优化后的轨迹
-        Trajectory<3> optimizedTraj;
+        // 10. 获取优化后的轨迹 (S=3, Quintic, 2D)
+        Trajectory<5, 2> optimizedTraj;
         optimizer_->getTrajectory(optimizedTraj);
 
         // 11. 缓存优化后的轨迹（供下次重规划时查找投影点）
@@ -442,7 +464,7 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
 }
 
 nav_msgs::msg::Path MincoSmoother::trajectoryToPath(
-    const Trajectory<3> &traj, const std_msgs::msg::Header &header) {
+    const Trajectory<5, 2> &traj, const std_msgs::msg::Header &header) {
     nav_msgs::msg::Path path;
     path.header = header;
 
@@ -482,13 +504,134 @@ nav_msgs::msg::Path MincoSmoother::trajectoryToPath(
 }
 
 void MincoSmoother::publishTrajectoryVisualization(
-    const Trajectory<3> &traj, const std_msgs::msg::Header &header) {
+    const Trajectory<5, 2> &traj, const std_msgs::msg::Header &header) {
     if (!trajectory_pub_) {
         return;
     }
 
     auto path = trajectoryToPath(traj, header);
     trajectory_pub_->publish(path);
+}
+
+void MincoSmoother::publishWaypointsVisualization(
+    const Eigen::Matrix2Xd &waypoints, const std_msgs::msg::Header &header) {
+    if (!waypoints_marker_pub_) {
+        return;
+    }
+
+    visualization_msgs::msg::MarkerArray marker_array;
+
+    // 首先发布一个 DELETEALL marker 来清除旧的 markers
+    visualization_msgs::msg::Marker delete_marker;
+    delete_marker.header = header;
+    delete_marker.ns = "minco_waypoints";
+    delete_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+    marker_array.markers.push_back(delete_marker);
+
+    int num_waypoints = waypoints.cols();
+
+    // 为每个路点创建球形 Marker
+    for (int i = 0; i < num_waypoints; ++i) {
+        visualization_msgs::msg::Marker marker;
+        marker.header = header;
+        marker.ns = "minco_waypoints";
+        marker.id = i;
+        marker.type = visualization_msgs::msg::Marker::SPHERE;
+        marker.action = visualization_msgs::msg::Marker::ADD;
+
+        // 位置
+        marker.pose.position.x = waypoints(0, i);
+        marker.pose.position.y = waypoints(1, i);
+        marker.pose.position.z = 0.1;  // 稍微抬高以便可见
+        marker.pose.orientation.w = 1.0;
+
+        // 尺寸
+        marker.scale.x = 0.15;
+        marker.scale.y = 0.15;
+        marker.scale.z = 0.15;
+
+        // 颜色：使用渐变色，起点绿色，终点红色
+        double ratio = static_cast<double>(i) / std::max(1, num_waypoints - 1);
+        marker.color.r = static_cast<float>(ratio);
+        marker.color.g = static_cast<float>(1.0 - ratio);
+        marker.color.b = 0.2f;
+        marker.color.a = 0.9f;
+
+        // 生命周期（设为 0 表示永久，直到被删除）
+        marker.lifetime = rclcpp::Duration::from_seconds(0);
+
+        marker_array.markers.push_back(marker);
+    }
+
+    // 添加起点和终点的特殊标记
+    if (num_waypoints >= 2) {
+        // 起点 - 较大的绿色球
+        visualization_msgs::msg::Marker start_marker;
+        start_marker.header = header;
+        start_marker.ns = "minco_waypoints_endpoints";
+        start_marker.id = 0;
+        start_marker.type = visualization_msgs::msg::Marker::SPHERE;
+        start_marker.action = visualization_msgs::msg::Marker::ADD;
+        start_marker.pose.position.x = waypoints(0, 0);
+        start_marker.pose.position.y = waypoints(1, 0);
+        start_marker.pose.position.z = 0.15;
+        start_marker.pose.orientation.w = 1.0;
+        start_marker.scale.x = 0.25;
+        start_marker.scale.y = 0.25;
+        start_marker.scale.z = 0.25;
+        start_marker.color.r = 0.0f;
+        start_marker.color.g = 1.0f;
+        start_marker.color.b = 0.0f;
+        start_marker.color.a = 1.0f;
+        marker_array.markers.push_back(start_marker);
+
+        // 终点 - 较大的红色球
+        visualization_msgs::msg::Marker end_marker;
+        end_marker.header = header;
+        end_marker.ns = "minco_waypoints_endpoints";
+        end_marker.id = 1;
+        end_marker.type = visualization_msgs::msg::Marker::SPHERE;
+        end_marker.action = visualization_msgs::msg::Marker::ADD;
+        end_marker.pose.position.x = waypoints(0, num_waypoints - 1);
+        end_marker.pose.position.y = waypoints(1, num_waypoints - 1);
+        end_marker.pose.position.z = 0.15;
+        end_marker.pose.orientation.w = 1.0;
+        end_marker.scale.x = 0.25;
+        end_marker.scale.y = 0.25;
+        end_marker.scale.z = 0.25;
+        end_marker.color.r = 1.0f;
+        end_marker.color.g = 0.0f;
+        end_marker.color.b = 0.0f;
+        end_marker.color.a = 1.0f;
+        marker_array.markers.push_back(end_marker);
+    }
+
+    // 添加连接线（LINE_STRIP）展示路点顺序
+    visualization_msgs::msg::Marker line_marker;
+    line_marker.header = header;
+    line_marker.ns = "minco_waypoints_line";
+    line_marker.id = 0;
+    line_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+    line_marker.action = visualization_msgs::msg::Marker::ADD;
+    line_marker.pose.orientation.w = 1.0;
+    line_marker.scale.x = 0.03;  // 线宽
+    line_marker.color.r = 0.3f;
+    line_marker.color.g = 0.3f;
+    line_marker.color.b = 1.0f;
+    line_marker.color.a = 0.7f;
+
+    for (int i = 0; i < num_waypoints; ++i) {
+        geometry_msgs::msg::Point p;
+        p.x = waypoints(0, i);
+        p.y = waypoints(1, i);
+        p.z = 0.05;
+        line_marker.points.push_back(p);
+    }
+    marker_array.markers.push_back(line_marker);
+
+    waypoints_marker_pub_->publish(marker_array);
+
+    RCLCPP_DEBUG(logger_, "发布了 %d 个中间路点的可视化 Marker", num_waypoints);
 }
 
 rcl_interfaces::msg::SetParametersResult
@@ -525,7 +668,7 @@ MincoSmoother::dynamicParametersCallback(
 }
 
 interfaces::msg::MincoTrajectory MincoSmoother::trajectoryToMsg(
-    const Trajectory<3> &traj, const std_msgs::msg::Header &header,
+    const Trajectory<5, 2> &traj, const std_msgs::msg::Header &header,
     const rclcpp::Time &start_time) {
     interfaces::msg::MincoTrajectory msg;
 
@@ -543,24 +686,24 @@ interfaces::msg::MincoTrajectory MincoSmoother::trajectoryToMsg(
     }
 
     // 展平系数矩阵
-    // 每段: 2 维 (x, y) × 4 系数 (c3, c2, c1, c0) = 8 个 double
-    // 总计: pieceNum × 8
-    constexpr int DEGREE = 3;                   // 三次多项式
+    // 每段: 2 维 (x, y) × 6 系数 (c5, c4, c3, c2, c1, c0) = 12 个 double
+    // 总计: pieceNum × 12
+    constexpr int DEGREE = 5;                   // 五次多项式
     constexpr int DIM = 2;                      // 2D 轨迹
-    constexpr int COEFFS_PER_DIM = DEGREE + 1;  // 4 个系数
+    constexpr int COEFFS_PER_DIM = DEGREE + 1;  // 6 个系数
 
     msg.coefficients.resize(pieceNum * DIM * COEFFS_PER_DIM);
 
     for (int i = 0; i < pieceNum; ++i) {
-        const auto &coeffMat = traj[i].getCoeffMat();  // 2 x 4 矩阵
+        const auto &coeffMat = traj[i].getCoeffMat();  // 2 x 6 矩阵
         int base_idx = i * DIM * COEFFS_PER_DIM;
 
-        // x 维度的系数 (从高次到低次: c3, c2, c1, c0)
+        // x 维度的系数 (从高次到低次: c5, c4, c3, c2, c1, c0)
         for (int j = 0; j < COEFFS_PER_DIM; ++j) {
             msg.coefficients[base_idx + j] = coeffMat(0, j);
         }
 
-        // y 维度的系数
+        // y 维度的系数 (从高次到低次: c5, c4, c3, c2, c1, c0)
         for (int j = 0; j < COEFFS_PER_DIM; ++j) {
             msg.coefficients[base_idx + COEFFS_PER_DIM + j] = coeffMat(1, j);
         }
@@ -570,7 +713,7 @@ interfaces::msg::MincoTrajectory MincoSmoother::trajectoryToMsg(
 }
 
 MincoSmoother::TrajectoryProjectionResult
-MincoSmoother::findProjectionOnTrajectory(const Trajectory<3> &traj,
+MincoSmoother::findProjectionOnTrajectory(const Trajectory<5, 2> &traj,
                                           const Eigen::Vector2d &robot_pos,
                                           const rclcpp::Time &traj_start_time,
                                           const rclcpp::Time &current_time) {
@@ -652,12 +795,14 @@ MincoSmoother::findProjectionOnTrajectory(const Trajectory<3> &traj,
     result.distance = std::sqrt(min_distance_sq);
     result.position = traj.getPos(best_time);
     result.velocity = traj.getVel(best_time);
+    result.acceleration = traj.getAcc(best_time);  // S=3 热启动：获取加速度
 
     RCLCPP_DEBUG(logger_,
                  "轨迹投影结果: t=%.3f s, dist=%.3f m, pos=(%.2f, %.2f), "
-                 "vel=(%.2f, %.2f)",
+                 "vel=(%.2f, %.2f), acc=(%.2f, %.2f)",
                  result.projection_time, result.distance, result.position.x(),
-                 result.position.y(), result.velocity.x(), result.velocity.y());
+                 result.position.y(), result.velocity.x(), result.velocity.y(),
+                 result.acceleration.x(), result.acceleration.y());
 
     return result;
 }
@@ -994,11 +1139,38 @@ MincoSmoother::PathProcessingResult MincoSmoother::processPath(
 }
 
 void MincoSmoother::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+    // 构造 PoseStamped
+    geometry_msgs::msg::PoseStamped odom_pose;
+    odom_pose.header = msg->header;
+    odom_pose.pose = msg->pose.pose;
+
+    geometry_msgs::msg::PoseStamped map_pose;
+
+    // 尝试转换到 map 坐标系
+    // 我们需要确保与轨迹（通常在 map 系）一致
+    // 采用 TimePointZero 避免阻塞
+    if (odom_pose.header.frame_id != "map" && tf_) {
+        try {
+            auto transform = tf_->lookupTransform(
+                "map", odom_pose.header.frame_id, tf2::TimePointZero);
+            tf2::doTransform(odom_pose, map_pose, transform);
+        } catch (const tf2::TransformException &ex) {
+            // 降级处理
+            RCLCPP_WARN_THROTTLE(
+                logger_, *clock_, 2000,
+                "[MincoSmoother] 无法将机器人姿态转换到 map 坐标系: %s",
+                ex.what());
+            map_pose = odom_pose;
+        }
+    } else {
+        map_pose = odom_pose;
+    }
+
     // 更新 2D 位置缓存（供轨迹投影计算使用）
     {
         std::lock_guard<std::mutex> lock(robot_pos_2d_mutex_);
-        current_robot_pos_2d_.x() = msg->pose.pose.position.x;
-        current_robot_pos_2d_.y() = msg->pose.pose.position.y;
+        current_robot_pos_2d_.x() = map_pose.pose.position.x;
+        current_robot_pos_2d_.y() = map_pose.pose.position.y;
         robot_pos_timestamp_ = clock_->now().seconds();
     }
 }
