@@ -15,6 +15,8 @@
 #include <tf2_ros/transform_listener.h>
 
 #include <Eigen/Dense>
+#include <QObject>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <geometry_msgs/msg/point.hpp>
@@ -36,6 +38,7 @@
 #include <vector>
 
 #include "tf2_eigen/tf2_eigen.hpp"
+#include "util.hpp"
 
 // #include <small_gicp/pcl/pcl_registration.hpp>
 using namespace small_gicp;
@@ -43,20 +46,29 @@ struct Grid {
     pcl::PointXYZ farthestPoint;
     double maxDistance = -1.0;
 };
-struct fliter_params{
-	double min_x;
-	double max_x;
-	double max_y;
-	double min_y;
-	double min_z;
-	double max_z;
+struct fliter_params {
+    double min_x;
+    double max_x;
+    double max_y;
+    double min_y;
+    double min_z;
+    double max_z;
 };
-class RelocalizationNode : public rclcpp::Node {
+class RelocalizationNode : public QObject, public rclcpp::Node {
+    Q_OBJECT
    public:
-    RelocalizationNode();
+    explicit RelocalizationNode(QObject* parent = nullptr);
     ~RelocalizationNode() = default;
+    bool registration_success_ = false;
+   public slots:
+    void onSetAlignSignal(align_res alignResult);  //处理设置结果
+    void OnRetrySet(bool isOk);
+   signals:
+    void alignResultSignal(reloc_res res);  //发送匹配结果
+    void setResultSignal(bool isok);        //反馈设置结果
 
    private:
+    std::atomic<bool> qt_control{false};
     void GlobalLocalizationTimerCallback();  //定位
 
     void SaveCurScanCallback(
@@ -83,7 +95,7 @@ class RelocalizationNode : public rclcpp::Node {
     fliter_params fparams;
     bool has_global_map_ = false;
     bool has_scan_ = false;
-    bool registration_success_ = false;
+
     int max_scan_count_ = 10;  //累计点云帧数目阈值
     // Gates and policies (populated from ROS parameters at runtime)
     double gate_yaw_deg_ = 5.0;    // yaw 门限（度）

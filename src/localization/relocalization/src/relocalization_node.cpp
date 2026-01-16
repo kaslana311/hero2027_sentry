@@ -2,8 +2,9 @@
 
 #include <pcl/filters/passthrough.h>
 using namespace small_gicp;
-RelocalizationNode::RelocalizationNode()
-    : Node("relocalization_node"),
+RelocalizationNode::RelocalizationNode(QObject* parent)
+    : QObject(parent),
+      Node("relocalization_node"),
       global_map_(new pcl::PointCloud<pcl::PointXYZ>),
       result_t_(Eigen::Isometry3d::Identity()),
       cur_scan_(new pcl::PointCloud<pcl::PointXYZ>),
@@ -16,7 +17,7 @@ RelocalizationNode::RelocalizationNode()
     this->declare_parameter(
         "pcd_path",
         "/home/fyk/Projects/ros2_ws/src/relocalization/PCD/voxel2025RMUC.pcd");
-    
+
     // New registration gating and policy parameters
     this->declare_parameter("gate_yaw_deg", gate_yaw_deg_);
     this->declare_parameter("gate_roll_deg", gate_roll_deg_);
@@ -37,19 +38,19 @@ RelocalizationNode::RelocalizationNode()
     this->declare_parameter("smgicp_max_iterations", 50);
     this->declare_parameter("smgicp_num_threads", 5);
     this->declare_parameter("smgicp_max_dist_sq", 3.0);
-    this->declare_parameter("f_min_x",-3.2);
-     this->declare_parameter("f_min_y",-9.2);
-      this->declare_parameter("f_min_z",0.0);
-       this->declare_parameter("f_max_x",24.3);
-       this->declare_parameter("f_max_y",5.3);
-       this->declare_parameter("f_max_z",3.5);
-     fparams.min_x= this->get_parameter("f_min_x").as_double();
-      fparams.min_y= this->get_parameter("f_min_y").as_double();
-       fparams.min_z= this->get_parameter("f_min_z").as_double();
-       fparams.max_x=this->get_parameter("f_max_x").as_double();
-       fparams.max_y=this->get_parameter("f_max_y").as_double();
-       fparams.max_z=this->get_parameter("f_max_z").as_double();
-       
+    this->declare_parameter("f_min_x", -3.2);
+    this->declare_parameter("f_min_y", -9.2);
+    this->declare_parameter("f_min_z", 0.0);
+    this->declare_parameter("f_max_x", 24.3);
+    this->declare_parameter("f_max_y", 5.3);
+    this->declare_parameter("f_max_z", 3.5);
+    fparams.min_x = this->get_parameter("f_min_x").as_double();
+    fparams.min_y = this->get_parameter("f_min_y").as_double();
+    fparams.min_z = this->get_parameter("f_min_z").as_double();
+    fparams.max_x = this->get_parameter("f_max_x").as_double();
+    fparams.max_y = this->get_parameter("f_max_y").as_double();
+    fparams.max_z = this->get_parameter("f_max_z").as_double();
+
     //初始位姿设定
     this->get_parameter("init_pose", init_pose_);
     //先验地图路径
@@ -152,11 +153,13 @@ void RelocalizationNode::SaveCurScanCallback(
     std::lock_guard<std::mutex> lock(mtx);
     pcl::fromROSMsg(*msg, *cur_scan_);
     //滤波
-    PassThroughFilter(cur_scan_, cur_scan_, fparams.min_z, fparams.max_z, fparams.min_y, fparams.max_y, fparams.min_x, fparams.max_x);
+    PassThroughFilter(cur_scan_, cur_scan_, fparams.min_z, fparams.max_z,
+                      fparams.min_y, fparams.max_y, fparams.min_x,
+                      fparams.max_x);
     *accumulated_cloud += *cur_scan_;
     this->scan_count++;
     //至少积累10帧才进行匹配
-    if (this->scan_count == 10) has_scan_ = true;
+    if (this->scan_count == max_scan_count_) has_scan_ = true;
 }
 
 void RelocalizationNode::PassThroughFilter(
@@ -217,42 +220,34 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     rclcpp::Time end_icp_time = this->now();
     RCLCPP_INFO(this->get_logger(), "Registration time: %f, best fitness: %f",
                 (end_icp_time - begin_icp_time).seconds(), best_fitness);
-    //评价可行性
+    reloc_res relocResult;
+
+    relocResult.fitness = best_fitness;
+    relocResult.dtrans = TransDelta(best_T, result_t_.matrix());
+    relocResult.dpitch = PitchDelta(best_T, result_t_.matrix());
+    relocResult.droll = RollDelta(best_T, result_t_.matrix());
+    relocResult.dyaw = YawDelta(best_T, result_t_.matrix());
     const bool fitness_ok = best_fitness < fitness_threshold_;
-    const bool trans_ok = TransDelta(best_T, pose_estimation_) <= gate_trans_m_;
-    const bool yaw_ok = YawDelta(best_T, pose_estimation_) <= yaw_gate;
+    const bool trans_ok = relocResult.dtrans <= gate_trans_m_;
+    const bool yaw_ok = relocResult.dyaw <= yaw_gate;
     const double roll_gate = gate_roll_deg_ * M_PI / 180.0;
     const double pitch_gate = gate_pitch_deg_ * M_PI / 180.0;
-    const bool roll_ok = RollDelta(best_T, pose_estimation_) <= roll_gate;
-    const bool pitch_ok = PitchDelta(best_T, pose_estimation_) <= pitch_gate;
+    const bool roll_ok = relocResult.droll <= roll_gate;
+    const bool pitch_ok = relocResult.dpitch <= pitch_gate;
+    bool judge_ok = fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok;
 
-    if (fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok) {
-        RCLCPP_INFO(this->get_logger(),
-                    "registration can be trusted (fitness=%.5f, dtrans=%.3f, "
-                    "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
-                    best_fitness, TransDelta(best_T, pose_estimation_),
-                    RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                    PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                    YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
-
+    if (judge_ok) {
         Eigen::Matrix4d T_pub = best_T;
         if (enforce_rp_zero_) {
             ZeroRollPitchKeepYaw(T_pub);
         }
-
+        relocResult.isOk = true;
         result_t_.matrix() = T_pub;
-        publishTransform();
-        registration_success_ = true;  // 设置配准成功标志
-        registration_fail_count_ = 0;  // 成功后清零
-        return;
+        if (!qt_control.load()) {
+            publishTransform();
+            registration_success_ = true;  // 设置配准成功标志
+        }
     } else {
-        RCLCPP_WARN(this->get_logger(),
-                    "registration rejected (fitness=%.5f, dtrans=%.3f, "
-                    "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
-                    best_fitness, TransDelta(best_T, pose_estimation_),
-                    RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                    PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                    YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
         registration_fail_count_++;
 
         if (registration_fail_count_ >= max_fail_before_fallback_) {
@@ -263,13 +258,16 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
             publishTransform();
             registration_success_ = true;
             registration_fail_count_ = 0;  // 重置计数
+        } else {                           //重新来过
+            has_scan_ = false;
+            this->scan_count = 0;
         }
+        relocResult.isOk = false;
     }
-    //重头来过
-    this->TDTresult->clear();
+    emit alignResultSignal(relocResult);  //发送配准结果
+
     this->accumulated_cloud->clear();
-    this->scan_count = 0;
-    this->has_scan_ = false;
+    this->TDTresult->clear();
 }
 // converged return res,false return pre
 Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
@@ -347,11 +345,28 @@ void RelocalizationNode::TDThandle() {
         }
     }
 }
-int main(int argc, char** argv) {
-    rclcpp::init(argc, argv);
-    auto node = std::make_shared<RelocalizationNode>();
-
-    rclcpp::spin(node);
-    rclcpp::shutdown();
-    return 0;
+void RelocalizationNode::onSetAlignSignal(align_res alignResult) {
+    // 处理设置结果
+    qt_control.store(true);
+    result_t_.translation() << alignResult.x, alignResult.y, alignResult.z;
+    result_t_.linear() =
+        Eigen::AngleAxisd(alignResult.roll, Eigen::Vector3d::UnitX()) *
+        Eigen::AngleAxisd(alignResult.pitch, Eigen::Vector3d::UnitY()) *
+        Eigen::AngleAxisd(alignResult.yaw, Eigen::Vector3d::UnitZ())
+            .toRotationMatrix();
+    publishTransform();
+    registration_success_ = true;
+    std::cout << "Manual align set to:\n" << result_t_.matrix() << std::endl;
+    emit setResultSignal(true);
+}
+void RelocalizationNode::OnRetrySet(bool isOk) {
+    std::cout << "Retry relocalization requested." << std::endl;
+    if (isOk) {
+        qt_control.store(false);
+        //成功匹配取消标志位,没成功在定位循环中已经处理了,不需要重复执行
+        if (!registration_success_) return;
+        registration_success_ = false;
+        this->scan_count = 0;
+        this->has_scan_ = false;
+    }
 }
