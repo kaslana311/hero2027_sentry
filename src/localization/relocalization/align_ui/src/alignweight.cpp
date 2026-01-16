@@ -26,14 +26,7 @@ Alignweight::Alignweight(int argc, char ** argv, QWidget * parent)
   align_thread_ = new QThread(this);
   relocalization_node_->moveToThread(align_thread_);
   connect(align_thread_, &QThread::started, relocalization_node_.get(), [this]() {
-    QTimer * ros_executor = new QTimer();
-    connect(ros_executor, &QTimer::timeout, [this]() {
-      if (rclcpp::ok()) {
-        // 这里的 spin_some 是非阻塞的
-        rclcpp::spin_some(this->relocalization_node_);
-      }
-    });
-    ros_executor->start(10);
+     std::thread([this]() { rclcpp::spin(this->relocalization_node_); }).detach();
   });
   align_thread_->start();
 }
