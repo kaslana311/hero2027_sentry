@@ -133,6 +133,15 @@ controller_server:
       yaw_goal_tolerance: 6.28
     FollowPath:
       plugin: "hero_mpc_controller::HeroMpcController"
+      max_velocity: 2.0
+      max_omega: 1.5
+      max_acceleration: 3.0
+      max_alpha: 1.0
+      enable_yaw_tracking: false
+      reference_yaw: 0.0
+      controller_frequency: 100.0
+      weight_q: [400.0, 100.0, 20.0, 10.0, 10.0, 5.0]
+      weight_r: [1.0, 1.0, 0.5]
       # translation_kp: 3.0
       # translation_ki: 0.1
       # translation_kd: 0.3
@@ -323,14 +332,14 @@ smoother_server:
       plugin: "pb_minco/MincoSmoother"
       odom_topic: "odometry/filtered"
       # ========== 优化权重 ==========
-      weight_smooth: 20.0           # 平滑性权重
+      weight_smooth: 10.0           # 平滑性权重
       weight_obstacle: 5000.0       # 避障权重（ESDF）
       weight_feasibility: 65.0     # 动力学可行性权重
       weight_time: 35.0            # 时间正则化权重
       # ========== 动力学约束 ==========
       max_vel: 2.0                 # 最大速度 (m/s)
       max_acc: 3.0                 # 最大加速度 (m/s²)
-      safe_distance: 0.5           # 安全距离 (m)
+      safe_distance: 0.3           # 安全距离 (m)
       # ========== 优化器参数 ==========
       max_iterations: 8000          # L-BFGS 最大迭代次数
       g_epsilon: 0.0            # 梯度收敛阈值
@@ -344,7 +353,7 @@ smoother_server:
       publish_trajectory: true     # 发布轨迹可视化 (话题: minco_trajectory)
       # ========== 均匀时间采样参数 ==========
       resample_time_resolution: 1.0  # 重采样时间分辨率 (s)
-      rotation_penalty_weight: 0.2    # 旋转惩罚权重
+      rotation_penalty_weight: 0.1    # 旋转惩罚权重
       dense_sample_resolution: 0.1    # 密集采样分辨率 (m)
 
 behavior_server:
