@@ -131,7 +131,7 @@ void HeroMpcController::configure(
     declare_parameter_if_not_declared(
         node, plugin_name_ + ".weight_q",
         rclcpp::ParameterValue(
-            std::vector<double>{400.0, 100.0, 20.0, 10.0, 10.0, 5.0}));
+            std::vector<double>{400.0, 100.0, 0.0, 10.0, 10.0, 0.0}));
     node->get_parameter(plugin_name_ + ".weight_q", weight_q_);
 
     // 权重参数 R (3 维控制)
@@ -179,7 +179,7 @@ void HeroMpcController::configure(
     // 话题名称: ~/minco_polynomial_trajectory
     minco_traj_sub_ =
         node->create_subscription<interfaces::msg::MincoTrajectory>(
-            "/red_standard_robot1/smoother_server/minco_polynomial_trajectory",
+            "/smoother_server/minco_polynomial_trajectory",
             rclcpp::QoS(10),
             std::bind(&HeroMpcController::mincoTrajectoryCallback, this,
                       std::placeholders::_1));
@@ -295,7 +295,7 @@ geometry_msgs::msg::TwistStamped HeroMpcController::computeVelocityCommands(
     //             vx_body, vy_body, vx_world, vy_world);
 
     // 步骤 3: 设置 MPC 初始状态
-    mpc_wrapper_->set_state(x, y, yaw, vx_world, vy_world, omega);
+    mpc_wrapper_->set_state(x, y, 0.0, vx_world, vy_world, 0.0);
 
     // 步骤 4: 计算轨迹相对时间并采样参考轨迹
     double t_current;
