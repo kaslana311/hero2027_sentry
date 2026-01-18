@@ -184,34 +184,6 @@ void RelocalizationNode::PassThroughFilter(
     pass.filter(*cloud_out);
 }
 
-    // 重置配准状态，重新开始配准
-    registration_success_ = false;
-    RCLCPP_INFO(this->get_logger(),
-                "Received new initial pose, restarting registration...");
-}
-
-void RelocalizationNode::PassThroughFilter(
-    pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
-    pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out, double min_z, double max_z,
-    double min_y, double max_y, double min_x, double max_x) {
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud(cloud_in);
-
-    pass.setFilterFieldName("z");
-    pass.setFilterLimits(min_z, max_z);
-    pass.filter(*cloud_out);
-
-    pass.setInputCloud(cloud_out);
-    pass.setFilterFieldName("y");
-    pass.setFilterLimits(min_y, max_y);
-    pass.filter(*cloud_out);
-
-    pass.setInputCloud(cloud_out);
-    pass.setFilterFieldName("x");
-    pass.setFilterLimits(min_x, max_x);
-    pass.filter(*cloud_out);
-}
-
 void RelocalizationNode::GlobalLocalizationTimerCallback() {
     if (registration_success_) return;
     if (!has_scan_) {
