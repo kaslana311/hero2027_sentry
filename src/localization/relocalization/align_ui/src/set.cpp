@@ -26,7 +26,7 @@ void set::on_ok_Button_clicked()
   data->x = x_str.toDouble();
   data->y = y_str.toDouble();
   data->z = z_str.toDouble();
-data->roll = roll_str.toDouble() / 180.0 * M_PI;
+  data->roll = roll_str.toDouble() / 180.0 * M_PI;
   data->pitch = pitch_str.toDouble() / 180.0 * M_PI;
   data->yaw = yaw_str.toDouble() / 180.0 * M_PI;
   QMessageBox::information(this, "Info", "我会出手!");

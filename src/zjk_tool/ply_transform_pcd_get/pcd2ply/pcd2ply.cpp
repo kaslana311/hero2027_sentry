@@ -12,12 +12,11 @@ using namespace pcl;
 //读取CAD模型z
 int main() {
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-  if (pcl::io::loadPCDFile("/home/z/ros_ws/src/pb2025_sentry_nav/"
-                           "pb2025_nav_bringup/pcd/simulation/rmul_2026.pcd",
+  if (pcl::io::loadPCDFile("/home/dji/project/HERO2025_Sentry/src/common/point_cloud_files/filtered_pcd/fast_lio_latest_map.pcd",
                            *cloud) == -1) {
     return -1;
   }
   std::cout << "read pcd success " << std::endl;
-  pcl::io::savePLYFileASCII("/home/z/Downloads/rm_map/align/ps.ply", *cloud);
+  pcl::io::savePLYFileASCII("/home/dji/zjk/temp/hero2026_-sentry/src/zjk_tool/ply_transform_pcd_get/pcd2ply/ply_files/s.ply", *cloud);
   return 0;
 }

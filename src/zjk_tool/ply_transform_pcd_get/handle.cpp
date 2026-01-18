@@ -11,7 +11,7 @@
 using namespace std;
 using namespace pcl;
 #define VOXEL 0
-#define PLY 0
+#define PLY 1
 #define M2MM 0
 #define TF 0
 #define MOVE 0
@@ -25,7 +25,7 @@ using namespace pcl;
 int main() {
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
   std::string path =
-      "/home/z/Downloads/fastlio2/ply_transform_pcd_get/build/scans.pcd";
+      "/home/dji/zjk/temp/hero2026_-sentry/src/zjk_tool/ply_transform_pcd_get/pcd2ply/ply_files/s1.ply";
   std::string name = std::filesystem::path(path).stem().string();
   if (PLY && pcl::io::loadPLYFile<pcl::PointXYZ>(path, *cloud) == -1) {
     PCL_ERROR("无法读取PLY文件！\n");
@@ -81,13 +81,13 @@ int main() {
       p.z -= min_z;
     }
   }
-  for (int i = 0; i < 200; i++) {
-    pcl::PointXYZ p;
-    p.x = 10;
-    p.y = 0;
-    p.z = i / 100.0 * 3;
-    cloud->push_back(p);
-  }
+  // for (int i = 0; i < 200; i++) {
+  //   pcl::PointXYZ p;
+  //   p.x = 10;
+  //   p.y = 0;
+  //   p.z = i / 100.0 * 3;
+  //   cloud->push_back(p);
+  // }
 
   if (VOXEL) {
     pcl::VoxelGrid<pcl::PointXYZ> voxel;
@@ -138,7 +138,7 @@ int main() {
   std::cout << "ok" << std::endl;
   if (WRITE)
     pcl::io::savePCDFileASCII(
-        "/home/z/Downloads/fastlio2/ply_transform_pcd_get/build/scans.pcd",
+        "/home/dji/zjk/temp/hero2026_-sentry/src/zjk_tool/ply_transform_pcd_get/pcd2ply/pcd_files/scans.pcd",
         *cloud);
 
   return 0;

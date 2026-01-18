@@ -2,7 +2,6 @@
 
 #include <pcl/common/transforms.h>
 #include <pcl/filters/conditional_removal.h>
-#include <pcl/filters/crop_box.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -14,7 +13,7 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
-
+#include <pcl/filters/crop_box.h>
 #include <Eigen/Dense>
 #include <chrono>
 #include <cmath>
@@ -58,16 +57,20 @@ class RelocalizationNode : public rclcpp::Node {
         const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan, Eigen::Matrix4d pre,
         double& fitness);
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_scan_;
-
+    pcl::CropBox<pcl::PointXYZ> crop;
     //-------------------------------data---------------------------------//
     std::mutex mtx, mtx1;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cur_scan_ = nullptr;
     pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_cloud;  //累计点云
     std::string pcd_path_;
+    // rclcpp::CallbackGroup::SharedPtr timer_group_;
+    // rclcpp::CallbackGroup::SharedPtr sub_group_;
     rclcpp::TimerBase::SharedPtr timer_, timer_pub;
     pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_ = nullptr;  // global_load
-    double base_x, base_y;
-    pcl::CropBox<pcl::PointXYZ> crop;
+
+    rclcpp::CallbackGroup::SharedPtr pub_gp;
+    rclcpp::CallbackGroup::SharedPtr lc_gp;
+
     bool has_global_map_ = false;
     bool has_scan_ = false;
     bool registration_success_ = false;
@@ -85,8 +88,7 @@ class RelocalizationNode : public rclcpp::Node {
     double fitness_threshold_ = 0.08;  // 接受阈值（与代码内一致）
     int registration_fail_count_ = 0;  // 配准失败计数
     double max_fitness_threshold_ = 0.1;  // 最大允许的fitness分数
-    rclcpp::CallbackGroup::SharedPtr pub_gp;
-    rclcpp::CallbackGroup::SharedPtr lc_gp;
+
     // small_gicp参数------------------
     std::shared_ptr<small_gicp::Registration<small_gicp::GICPFactor,
                                              small_gicp::ParallelReductionOMP>>
@@ -112,7 +114,9 @@ class RelocalizationNode : public rclcpp::Node {
     std::vector<double> init_pose_;
     bool first_lidar_pos = false;
     geometry_msgs::msg::TransformStamped transform_stampedlidarodom;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_test_;
+
+    //test 
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr test_pub;
     //---------------------inline func----------------------------//
     // Helpers for constrained registration and gating
     static inline double NormalizeAngle(double a) {

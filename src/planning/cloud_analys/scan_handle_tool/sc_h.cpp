@@ -37,37 +37,44 @@ int main(int argc, char ** argv)
   std::string pgm_path;
   int index = yaml_path.find_last_of("/");
   pgm_path = yaml_path.substr(0, index + 1) + yaml_get_value<std::string>(config, "image");
+  std::cout<<"input info "<<std::endl;
+  std::cout<<"yaml path: "<<yaml_path<<std::endl;
+  std::cout<<"save path: "<<save_path<<std::endl;
+  std::cout<<"min z : "<<min_z<<" max_z "<<max_z<<" height_pre "<<height_percent<<std::endl;
+
   cv::Mat pgm_map = cv::imread(pgm_path, cv::IMREAD_UNCHANGED);
   if (pgm_map.empty()) {
     std::cerr << " -- [ERROR] Failed to load map image file: " << pgm_path << std::endl;
     return -1;
   }
 
-  high_map = cv::Mat::zeros(pgm_map.rows, pgm_map.cols, CV_16U);
-  cv::Mat visit_map = cv::Mat::zeros(pgm_map.rows, pgm_map.cols, CV_8U);
+  high_map = cv::Mat::zeros(pgm_map.rows, pgm_map.cols, CV_16SC1);
+  cv::Mat visit_map = cv::Mat::zeros(pgm_map.rows, pgm_map.cols, CV_8UC1);
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
   if (pcl::io::loadPCDFile<pcl::PointXYZ>(pcd_path, *cloud) == -1) {
     PCL_ERROR("Couldn't read file %s \n", pcd_path.c_str());
     return -1;
   }
-
+  std::cout<<"input cloud size "<<cloud->size()<<std::endl;
   pcl::PassThrough<pcl::PointXYZ> pass_filter;
   pass_filter.setInputCloud(cloud);
   pass_filter.setFilterFieldName("z");
   pass_filter.setFilterLimits(min_z, max_z);
   pass_filter.filter(*cloud);
-
+  std::cout<<"filtered size "<<cloud->size()<<std::endl;
   std::vector<pcl::PointCloud<pcl::PointXYZ>> grid_map(pgm_map.rows * pgm_map.cols);
-  //   double min_z = 100.0;
-  //   for (const auto & point : cloud->points) {
-  //     int index_x = static_cast<int>((point.x - map_origin[0]) / yaml_resolution);
-  //     int index_y = static_cast<int>((point.y - map_origin[1]) / yaml_resolution);
-  //     if (index_x >= 0 && index_x < pgm_map.cols && index_y >= 0 && index_y < pgm_map.rows) {
-  //       int index_l = index_y * pgm_map.cols + index_x;
-  //       grid_map[index_l].points.push_back(point);
-  //       if (point.z < min_z) min_z = point.z;
-  //     }
-  //   }
+  pcl::io::savePCDFile ("/home/dji/project/HERO2025_Sentry/src/planning/cloud_analys/high_map/test.pcd",*cloud);
+    double  min_z_total = 100.5;
+    std::cout<<min_z_total;
+    for (const auto & point : cloud->points) {
+      int index_x = static_cast<int>((point.x - map_origin[0]) / yaml_resolution);
+      int index_y = static_cast<int>((point.y - map_origin[1]) / yaml_resolution);
+      if (index_x >= 0 && index_x < pgm_map.cols && index_y >= 0 && index_y < pgm_map.rows) {
+        int index_l = index_y * pgm_map.cols + index_x;
+        grid_map[index_l].points.push_back(point);
+        if (point.z < min_z_total){ min_z_total = point.z;}
+      }
+    }
   // 每个格子内部的点按照高度进行排序,取95%高度作为该格子的高度值
   for (auto & cell : grid_map) {
     std::sort(
@@ -80,11 +87,12 @@ int main(int argc, char ** argv)
       int index_l = (pgm_map.rows - 1 - y) * pgm_map.cols + x;
       const auto & cell = grid_map[index_l];
       if (cell.points.empty()) {
-        high_map.at<uint16_t>(y, x) = 0;
+        high_map.at<int16_t>(y, x) = 0;
       } else {
         size_t idx_95 = static_cast<size_t>(cell.points.size() * height_percent);
-        high_map.at<uint16_t>(y, x) = static_cast<uint16_t>((cell.points[idx_95].z) * 1000);
+        high_map.at<int16_t>(y, x) = static_cast<int16_t>((cell.points[idx_95].z) * 1000);
         visit_map.at<uint8_t>(y, x) = 1;
+        std::cout<<" data : "<<high_map.at<int16_t>(y, x)<<std::endl;
         count++;
       }
     }
@@ -93,8 +101,8 @@ int main(int argc, char ** argv)
                                                  {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
   for (int y = 0; y < pgm_map.rows; ++y) {
     for (int x = 0; x < pgm_map.cols; ++x) {
-      if (visit_map.at<uint8_t>(y, x) == 0 || high_map.at<uint16_t>(y, x) < 50) {
-        int h = 0;
+      if (visit_map.at<uint8_t>(y, x) == 0 || high_map.at<int16_t>(y, x) < 50) {
+        int16_t h = 0;
         int dod = 0;
         for (int step = 1; step < 5; step++) {
           for (const auto & dir : directions) {
@@ -102,13 +110,13 @@ int main(int argc, char ** argv)
             int ny = y + step * dir.second;
             if (nx >= 0 && nx < pgm_map.cols && ny >= 0 && ny < pgm_map.rows) {
               if (visit_map.at<uint8_t>(ny, nx) == 1) {
-                h += high_map.at<uint8_t>(ny, nx);
+                h += high_map.at<int16_t>(ny, nx);
                 dod++;
               }
             }
           }
           if (dod > 0) {
-            high_map.at<uint16_t>(y, x) = static_cast<uint16_t>(h / dod);
+            high_map.at<int16_t>(y, x) = static_cast<int16_t>(h / dod);
             break;
           }
         }
@@ -120,7 +128,7 @@ int main(int argc, char ** argv)
   cv::imwrite(save_path, high_map);
   cv::Mat visual_map;
 
-  high_map.convertTo(visual_map, CV_8U, 255.0 / 1000.0);  //1 m
+  high_map.convertTo(visual_map, CV_8S, 255.0 / 800.0);  //1 m
 
   cv::namedWindow("High Map Debug", cv::WINDOW_NORMAL);
   cv::imshow("High Map Debug", visual_map);
@@ -129,5 +137,6 @@ int main(int argc, char ** argv)
   cv::waitKey(0);
   std::cout << "High map saved as " << save_path << " with " << count << " valid points."
             << std::endl;
+    std::cout<<min_z_total;
   return 0;
 }

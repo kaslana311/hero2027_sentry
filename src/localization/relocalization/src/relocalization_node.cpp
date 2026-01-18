@@ -203,7 +203,7 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
         yaw_seeds.push_back(-a);
     }
     static bool first = true;
-    double best_fitness = 0.03;
+    double best_fitness = 0.05;
     Eigen::Matrix4d best_T = pose_estimation_;
     for (double dyaw : yaw_seeds) {
         Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
@@ -215,7 +215,7 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
             if (first) break;
         }
     }
-    first = false;
+    // first = false;
     //此时得到了最好的变幻关系
     rclcpp::Time end_icp_time = this->now();
     RCLCPP_INFO(this->get_logger(), "Registration time: %f, best fitness: %f",
