@@ -108,7 +108,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     start_time_ = this->now();
     // 创建订阅者
     vel_subscription_ = this->create_subscription<geometry_msgs::msg::Twist>(
-        "cmd_vel_nav2_result", 10,
+        "cmd_vel_controller", 10,
         std::bind(&ChassisNode::CmdVelCallback, this, std::placeholders::_1)
         // 不指定回调组，使用默认组
     );
@@ -200,7 +200,6 @@ void ChassisNode::CmdVelCallback(
 }
 
 void ChassisNode::ChassisCmdTimerCallback() {
-    RCLCPP_INFO(this->get_logger(), "fasong");
     Send_Cmd_Packet(serial_dev_, tx_buffer, sizeof(tx_buffer), 0);
 }
 

@@ -76,6 +76,7 @@ class ChassisNode : public rclcpp::Node {
     int save_interval_ms_ = 5000;  // 保存间隔(毫秒)，默认5秒
     std::string save_path_ = "./referee_data/";  // 保存数据的文件夹路径
 
+    // 修改：移除 spin_speed_ 和其互斥锁
     std::atomic<bool>
         is_danger_mode_;  // 是否处于危险模式（使用原子变量避免竞争）
 
