@@ -188,6 +188,7 @@ controller_server:
       # curvature_backward_dist: 0.3                      # 后向距离，用于曲率计算
       # max_velocity_scaling_factor_rate: 0.8             # 速度缩放因子的最大变化率
     #0.55 0.8 > 0.5 0.8(上坡会卡一下，不出错) > 0.6 0.9 > 0.6 0.8
+    
 local_costmap:
   local_costmap:
     ros__parameters:
