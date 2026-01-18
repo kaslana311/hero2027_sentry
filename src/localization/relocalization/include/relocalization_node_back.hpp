@@ -11,11 +11,9 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
-#include <tf2_ros/transform_listener.h>
 
 #include <Eigen/Dense>
 #include <chrono>
-#include <cmath>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
@@ -25,17 +23,12 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <small_gicp/benchmark/read_points.hpp>
-#include <small_gicp/pcl/pcl_point.hpp>
-#include <small_gicp/pcl/pcl_point_traits.hpp>
-#include <small_gicp/pcl/pcl_registration.hpp>
-#include <small_gicp/util/downsampling_omp.hpp>
-#include <string>
+#include <small_gicp/registration/registration_helper.hpp>
 #include <thread>
-#include <vector>
-
 // #include <small_gicp/pcl/pcl_registration.hpp>
+
 using namespace small_gicp;
+
 class RelocalizationNode : public rclcpp::Node {
    public:
     RelocalizationNode();
@@ -47,6 +40,10 @@ class RelocalizationNode : public rclcpp::Node {
     void GlobalLocalizationTimerCallback();
     bool GlobalLocalization();
 
+    void GlobalLocalizationTimerCallback();
+    bool GlobalLocalization();
+
+    void SaveCurOdomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
     void SaveCurScanCallback(
         const sensor_msgs::msg::PointCloud2::SharedPtr msg);
     void InitPoseCallback(
