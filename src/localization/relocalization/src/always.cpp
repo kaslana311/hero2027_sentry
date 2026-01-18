@@ -1,6 +1,6 @@
-#include "always.hpp"
-
 #include <pcl/filters/passthrough.h>
+
+#include "always.hpp"
 using namespace small_gicp;
 RelocalizationNode::RelocalizationNode()
     : Node("relocalization_node"),
@@ -10,7 +10,7 @@ RelocalizationNode::RelocalizationNode()
       accumulated_cloud(new pcl::PointCloud<pcl::PointXYZ>) {
     RCLCPP_INFO(this->get_logger(), "RelocalizationNode init");
     this->declare_parameter("init_pose",
-                            std::vector<double>{0., 0., 0., 0., 0., 0.});
+                            std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
 
     this->declare_parameter(
         "pcd_path",
@@ -104,8 +104,10 @@ RelocalizationNode::RelocalizationNode()
         rclcpp::CallbackGroupType::MutuallyExclusive);
     auto sub_options = rclcpp::SubscriptionOptions();
     sub_options.callback_group = lc_gp;
-    crop.setMin(Eigen::Vector4f(0.3, 0.3, -0.2, 1.0));
-    crop.setMax(Eigen::Vector4f(27.0, 14.0, 3.5, 1.0));
+    // crop.setMin(Eigen::Vector4f(-0.5, -0.5, -0.2, 1.0));
+    // crop.setMax(Eigen::Vector4f(27.0, 14.0, 3.8, 1.0));
+     crop.setMin(Eigen::Vector4f(-5.5, -4.1, -0.4, 1.0));
+    crop.setMax(Eigen::Vector4f(2.5, 3.5, 5.8, 1.0));
     sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "/cloud_registered", 1,
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
@@ -119,6 +121,7 @@ RelocalizationNode::RelocalizationNode()
     timer_pub = this->create_wall_timer(
         std::chrono::milliseconds(100),
         std::bind(&RelocalizationNode::publishTransform, this), pub_gp);
+   this->test_pub=this->create_publisher<sensor_msgs::msg::PointCloud2>("test_cl",10);
 }
 void RelocalizationNode::publishTransform() {
     if (!this->registration_success_) {
@@ -147,11 +150,14 @@ void RelocalizationNode::publishTransform() {
     transform_stamped.transform.rotation.w = rotation.w();
 
     tf_broadcaster_->sendTransform(transform_stamped);
+ 
 }
 void RelocalizationNode::SaveCurScanCallback(
     const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     //累计10帧
+    std::lock_guard<std::mutex> lock(mtx);
     pcl::fromROSMsg(*msg, *cur_scan_);
+   // 滤波
     Eigen::Matrix4d odom_to_map_mat;
     {
         std::lock_guard<std::mutex> lock(mtx1);
@@ -162,6 +168,13 @@ void RelocalizationNode::SaveCurScanCallback(
     // 设置地图边界 (Map系下的坐标)
     crop.setTransform(Eigen::Affine3f(odom_to_map_mat.cast<float>()));
     crop.filter(*cur_scan_);
+
+    sensor_msgs::msg::PointCloud2 ss;
+    pcl::toROSMsg( *cur_scan_,ss);
+    ss.header=msg->header;
+    test_pub->publish(ss);
+    
+
     *accumulated_cloud += *cur_scan_;
     this->scan_count++;
     //至少积累10帧才进行匹配
@@ -184,7 +197,7 @@ void RelocalizationNode::PassThroughFilter(
     pass.setFilterLimits(min_y, max_y);
     pass.filter(*cloud_out);
 
-    pass.setInputCloud(cloud_out);
+       pass.setInputCloud(cloud_out);
     pass.setFilterFieldName("x");
     pass.setFilterLimits(min_x, max_x);
     pass.filter(*cloud_out);
@@ -197,31 +210,51 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
         return;
     }
     rclcpp::Time begin_icp_time = this->now();
-
-    // 小范围多 yaw 初始值搜索
-    const double yaw_gate = gate_yaw_deg_ * M_PI / 180.0;
-    const double yaw_step = std::max(0.5, yaw_search_step_deg_) * M_PI / 180.0;
-    std::vector<double> yaw_seeds;
-    yaw_seeds.push_back(0.0);
-    for (double a = yaw_step; a <= yaw_gate + 1e-6; a += yaw_step) {
-        yaw_seeds.push_back(+a);
-        yaw_seeds.push_back(-a);
+    Eigen::Matrix4d best_T,pre;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        best_T= result_t_.matrix();
+        pre=result_t_.matrix();
+  
     }
     double best_fitness = 0.03;
-    Eigen::Matrix4d best_T = result_t_.matrix();
-    if (this->registration_success_)
-        this->register_->optimizer.max_iterations = 5;
-    for (double dyaw : yaw_seeds) {
-        Eigen::Matrix4d seed = RotZ(dyaw) * result_t_.matrix();
-        double f = 1e9;
-        Eigen::Isometry3d res =
-            SmallIcpRegistration(accumulated_cloud, seed, f);
-        if (f < best_fitness) {
-            best_fitness = f;
-            best_T = res.matrix();
-            break;
-        }
+    const double yaw_gate = gate_yaw_deg_ * M_PI / 180.0;
+    const double yaw_step = std::max(0.5, yaw_search_step_deg_) * M_PI / 180.0;
+    if (!this->registration_success_){
+        // 小范围多 yaw 初始值搜索
+            std::vector<double> yaw_seeds;
+            yaw_seeds.push_back(0.0);
+            for (double a = yaw_step; a <= yaw_gate + 1e-6; a += yaw_step) {
+                yaw_seeds.push_back(+a);
+                yaw_seeds.push_back(-a);
+            }
+        
+            
+            for (double dyaw : yaw_seeds) {
+                Eigen::Matrix4d seed = RotZ(dyaw) * pre;
+                double f = 1e9;
+                Eigen::Isometry3d res =
+                    SmallIcpRegistration(accumulated_cloud, seed, f);
+                if (f < best_fitness) {
+                    best_fitness = f;
+                    best_T = res.matrix();
+                    break;
+                }
+            }
+        
     }
+    else{
+        this->register_->optimizer.max_iterations = 5;
+            best_fitness = 0.01;
+            double f = 1e9;
+            Eigen::Isometry3d res =
+                SmallIcpRegistration(accumulated_cloud, pre, f);
+            if (f < best_fitness) {
+                best_fitness = f;
+                best_T = res.matrix();
+            }
+    }
+    
     //此时得到了最好的变幻关系
     rclcpp::Time end_icp_time = this->now();
     RCLCPP_INFO(this->get_logger(), "Registration time: %f, best fitness: %f",
@@ -229,21 +262,21 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     //评价可行性
     const bool fitness_ok = best_fitness < fitness_threshold_;
     const bool trans_ok =
-        TransDelta(best_T, result_t_.matrix()) <= gate_trans_m_;
-    const bool yaw_ok = YawDelta(best_T, result_t_.matrix()) <= yaw_gate;
+        TransDelta(best_T, pre) <= gate_trans_m_;
+    const bool yaw_ok = YawDelta(best_T, pre) <= yaw_gate;
     const double roll_gate = gate_roll_deg_ * M_PI / 180.0;
     const double pitch_gate = gate_pitch_deg_ * M_PI / 180.0;
-    const bool roll_ok = RollDelta(best_T, result_t_.matrix()) <= roll_gate;
-    const bool pitch_ok = PitchDelta(best_T, result_t_.matrix()) <= pitch_gate;
+    const bool roll_ok = RollDelta(best_T, pre) <= roll_gate;
+    const bool pitch_ok = PitchDelta(best_T, pre) <= pitch_gate;
 
     if (fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok) {
         RCLCPP_INFO(this->get_logger(),
                     "registration can be trusted (fitness=%.5f, dtrans=%.3f, "
                     "droll=%.2fdeg, dpitch=%.2fdeg, dyaw=%.2fdeg)",
-                    best_fitness, TransDelta(best_T, pose_estimation_),
-                    RollDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                    PitchDelta(best_T, pose_estimation_) * 180.0 / M_PI,
-                    YawDelta(best_T, pose_estimation_) * 180.0 / M_PI);
+                    best_fitness, TransDelta(best_T, pre),
+                    RollDelta(best_T, pre) * 180.0 / M_PI,
+                    PitchDelta(best_T, pre) * 180.0 / M_PI,
+                    YawDelta(best_T,pre) * 180.0 / M_PI);
 
         Eigen::Matrix4d T_pub = best_T;
         if (enforce_rp_zero_) {
@@ -324,7 +357,9 @@ Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
         return T;
     } else {
         std::cout << "Gicp registration not converged" << std::endl;
+        fitness=1.0;
         return init_T_target_source;
+        
     }
 }
 

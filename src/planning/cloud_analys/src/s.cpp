@@ -14,7 +14,9 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <opencv2/opencv.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp/time.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "pcl_ros/transforms.hpp"
 
@@ -56,16 +58,26 @@ class Handler : public rclcpp::Node
     bool rcv{false};
     Quatf q;
   } robot_state_;
+  bool isTransformAlmostEqual(
+    const tf2::Transform & a, const tf2::Transform & b,
+    double pos_tol = 1e-3,      // 位置容忍，单位 m
+    double ang_tol_rad = 1e-2)  // 角度容忍，单位 rad (~0.57°)
+  {
+    tf2::Vector3 da = a.getOrigin() - b.getOrigin();
+    if (da.length() > pos_tol) return false;
 
+    tf2::Quaternion qa = a.getRotation();
+    tf2::Quaternion qb = b.getRotation();
+    // 计算四元数内积并转为角度差： angle = 2*acos(|dot|)
+    double dot = std::abs(qa.x() * qb.x() + qa.y() * qb.y() + qa.z() * qb.z() + qa.w() * qb.w());
+    if (dot > 1.0) dot = 1.0;
+    double angle = 2.0 * std::acos(dot);
+    return angle <= ang_tol_rad;
+  }
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr odom_msg)
   {
     if (!tf_set) return;
-    // TODO odometry在odom下，利用tf转为map下
-    //  tf2::doTransform(odom_msg->pose.pose, odom_msg->pose.pose,
-    //  tf_stamped);
-    odom_msg->pose.pose.position.x += tf_t.getOrigin().x();
-    odom_msg->pose.pose.position.y += tf_t.getOrigin().y();
-    odom_msg->pose.pose.position.z += tf_t.getOrigin().z();
+
     auto pose = std::make_pair(
       Vec3f(
         odom_msg->pose.pose.position.x, odom_msg->pose.pose.position.y,
@@ -75,9 +87,6 @@ class Handler : public rclcpp::Node
         odom_msg->pose.pose.orientation.y, odom_msg->pose.pose.orientation.z));
     robot_state_.p = pose.first;
     robot_state_.q = pose.second;
-    // robot_state_.v = Vec3f(
-    //   odom_msg->twist.twist.linear.x, odom_msg->twist.twist.linear.y,
-    //   odom_msg->twist.twist.linear.z);
     robot_state_.rcv_time = this->get_clock()->now().seconds();
     robot_state_.rcv = true;
   }
@@ -85,29 +94,36 @@ class Handler : public rclcpp::Node
   void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg)
   {
     sensor_msgs::msg::PointCloud2 out;
-    if (!tf_set) {
-      try {
-        tf_stamped = this->tf_buffer_->lookupTransform(
-          "map", cloud_msg->header.frame_id, rclcpp::Time(cloud_msg->header.stamp),
-          rclcpp::Duration::from_seconds(0.5));
 
-        // tf2::fromMsg(tf_stamped.transform, tf_t);
-        tf_t = tf2::Transform(
-          tf2::Quaternion(
-            tf_stamped.transform.rotation.x, tf_stamped.transform.rotation.y,
-            tf_stamped.transform.rotation.z, tf_stamped.transform.rotation.w),
-          tf2::Vector3(
-            tf_stamped.transform.translation.x, tf_stamped.transform.translation.y,
-            tf_stamped.transform.translation.z));
+    try {
+      auto last_tf = tf_t;
+      tf_stamped =
+        this->tf_buffer_->lookupTransform("map", cloud_msg->header.frame_id, tf2::TimePointZero);
 
+      // tf2::fromMsg(tf_stamped.transform, tf_t);
+      tf_t = tf2::Transform(
+        tf2::Quaternion(
+          tf_stamped.transform.rotation.x, tf_stamped.transform.rotation.y,
+          tf_stamped.transform.rotation.z, tf_stamped.transform.rotation.w),
+        tf2::Vector3(
+          tf_stamped.transform.translation.x, tf_stamped.transform.translation.y,
+          tf_stamped.transform.translation.z));
+      if (!tf_set)
         tf_set = true;
-      } catch (...) {
-        std::cout << " -- [ROS] Cloud callback pcl::fromROSMsg error, "
-                     "skip this frame."
-                  << std::endl;
-        return;
+      else {
+        if (isTransformAlmostEqual(last_tf, tf_t, 1e-3, 1e-2) == false) {
+          //重新发布tf了,历史地图已经不准确,该更新了
+          history_minz_map_.setTo(30000);
+          std::cout << " -- [ROS] Cloud callback tf changed!" << std::endl;
+        }
       }
+    } catch (...) {
+      std::cout << " -- [ROS] Cloud callback pcl::fromROSMsg error, "
+                   "skip this frame."
+                << std::endl;
+      return;
     }
+    // tf
     pcl_ros::transformPointCloud("map", tf_t, *cloud_msg, out);
     if (!robot_state_.rcv) {
       std::cout << " -- [ROS] No odom received, skip cloud callback." << std::endl;
@@ -123,6 +139,32 @@ class Handler : public rclcpp::Node
     pcl::fromROSMsg(out, temp_pc);
     rc_.update_lock.lock();
     rc_.pc = temp_pc;
+    {
+      geometry_msgs::msg::Pose ps_in;
+      ps_in.position.x = robot_state_.p.x();
+      ps_in.position.y = robot_state_.p.y();
+      ps_in.position.z = robot_state_.p.z();
+      ps_in.orientation.w = robot_state_.q.w();
+      ps_in.orientation.x = robot_state_.q.x();
+      ps_in.orientation.y = robot_state_.q.y();
+      ps_in.orientation.z = robot_state_.q.z();
+      std::cout << " -- [ROS] Cloud callback robot pose before tf inv: " << ps_in.position.x << ", "
+                << ps_in.position.y << ", " << ps_in.position.z << std::endl;
+      geometry_msgs::msg::Pose ps_out;
+
+      try {
+        tf2::doTransform(ps_in, ps_out, tf_stamped);
+      } catch (const std::exception & e) {
+        RCLCPP_WARN(this->get_logger(), "tf2 doTransform failed: %s", e.what());
+      }
+      std::cout << " -- [ROS] Cloud callback robot pose after tf inv: " << ps_out.position.x << ", "
+                << ps_out.position.y << ", " << ps_out.position.z << std::endl;
+      robot_state_.p.x() = ps_out.position.x;
+      robot_state_.p.y() = ps_out.position.y;
+      robot_state_.p.z() = ps_out.position.z;
+      robot_state_.q = Quatf(
+        ps_out.orientation.w, ps_out.orientation.x, ps_out.orientation.y, ps_out.orientation.z);
+    }
     rc_.pc_pose = std::make_pair(robot_state_.p, robot_state_.q);
     rc_.unfinished_frame_cnt++;
     map_empty_ = false;
@@ -131,7 +173,7 @@ class Handler : public rclcpp::Node
 
   void updateCallback()
   {
-    auto start_time = std::chrono::steady_clock::now();
+    // auto start_time = std::chrono::steady_clock::now();
     if (map_empty_) {
       static double last_print_t = this->get_clock()->now().seconds();
       double cur_t = this->get_clock()->now().seconds();
@@ -164,15 +206,15 @@ class Handler : public rclcpp::Node
     CloudAnalys(temp_pc, temp_pose);
 
     /************* */
-    auto end_time = std::chrono::steady_clock::now();
-    double time_consuming =
-      std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-    std::cout << " -- [ROG INFO] Map updated in " << time_consuming << " ms." << std::endl;
+    // auto end_time = std::chrono::steady_clock::now();
+    // double time_consuming =
+    //   std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    // std::cout << " -- [ROG INFO] Map updated in " << time_consuming << " ms." << std::endl;
   }
 
   void CloudAnalys(pcl::PointCloud<pcl::PointXYZ> & cloud, Pose & pose)
   {
-    std::cout << "cloud size " << cloud.size() << std::endl;
+    // std::cout << "cloud size " << cloud.size() << std::endl;
     // std::cout << "robot pose " << pose.first.transpose() << std::endl;
     double min_x = pose.first[0] - half_map_size;
     min_x = std::max(min_x, map_origin[0]);
@@ -196,7 +238,7 @@ class Handler : public rclcpp::Node
     pass_filter_.setFilterFieldName("z");
     pass_filter_.setFilterLimits(-0.3, max_z);
     pass_filter_.filter(*cptr);
-
+    // std::cout << "filtered_cloud_size" << cptr->size() << std::endl;
     //遗忘若干帧没有观测到的障碍物
     for (auto it = pub_list.begin(); it != pub_list.end();) {
       (it->second)++;
@@ -212,10 +254,15 @@ class Handler : public rclcpp::Node
     //得到最低高度图
     // 填充障碍地图
     obs_list_.clear();
-    int s2count = 0;
+    // int set2count = 0;
+    // int fixcount = 0;
     for (auto & point : cptr->points) {
       int xi = static_cast<int>((point.x - min_x) / high_analys_resolution);
+
       int idy = static_cast<int>((point.y - min_y) / high_analys_resolution);
+      if (xi < 0 || xi >= Map_SIZE_D || idy < 0 || idy >= Map_SIZE_D) {
+        continue;
+      }
       int index_l = xi + idy * Map_SIZE_D;
       if (seted_map_[index_l] == 2) continue;  //不重复计算
       // 已经观测到这个格子存在较大的高程差，认为是障碍物
@@ -232,51 +279,86 @@ class Handler : public rclcpp::Node
           global_map_[index_g] = 250;
           auto res = Vec2i{idx_g, idy_g};
           obs_list_.push_back(res);
+          pub_list[index_g] = 0;
         }
-        s2count++;
-        pub_list[index_g] = 0;
+        // set2count++;
         seted_map_[index_l] = 2;
       }
       if (point.z < min_hmap[index_l]) {
         min_hmap[index_l] = point.z;
         seted_map_[index_l] = 1;
+        int idx_g = static_cast<int>((point.x - map_origin[0]) / resolution);
+        int idy_g = static_cast<int>((point.y - map_origin[1]) / resolution);
+        if (idx_g < 0 || idx_g >= global_map_xi || idy_g < 0 || idy_g >= global_map_yi) {
+          continue;
+        }
+        int temp_h = static_cast<int>(point.z * 1000);
+        if (history_minz_map_.at<int16_t>(idy_g, idx_g) > temp_h) {
+          history_minz_map_.at<int16_t>(idy_g, idx_g) = temp_h;
+        }
       }
     }
-    //此时存在部分障碍物点云被咱们前面的操作误杀了，补救一下(seted_map_[index_l] == 1)
-    int count = 0;
-    for (auto & point : cptr->points) {
-      int xi = static_cast<int>((point.x - min_x) / high_analys_resolution);
-      int idy = static_cast<int>((point.y - min_y) / high_analys_resolution);
-      int index_l = xi + idy * Map_SIZE_D;
-      if (seted_map_[index_l] != 1) continue;
+    for (auto & pt : cptr->points) {
+      int xi = static_cast<int>((pt.x - min_x) / high_analys_resolution);
 
-      int idx_g = static_cast<int>((point.x - map_origin[0]) / resolution);
-      int idy_g = static_cast<int>((point.y - map_origin[1]) / resolution);
-      if (idx_g < 0 || idx_g >= global_map_xi || idy_g < 0 || idy_g >= global_map_yi) {
+      int idy = static_cast<int>((pt.y - min_y) / high_analys_resolution);
+      if (xi < 0 || xi >= Map_SIZE_D || idy < 0 || idy >= Map_SIZE_D) {
         continue;
       }
-      double data = depth_Map.at<uint16_t>(depth_Map.rows - 1 - idy_g, idx_g);
-      double min_depth_data = data / 1000.0;
-      //这里我们要严厉的要求点云高度必须高于地面一定值，宁缺无烂
-      if (point.z - min_depth_data > 0.15) {
-        int index_g = idx_g + idy_g * global_map_xi;
+      int index_l = xi + idy * Map_SIZE_D;
+      if (seted_map_[index_l] != 1) continue;
+      int idx_g = static_cast<int>((pt.x - map_origin[0]) / resolution);
+      int idy_g = static_cast<int>((pt.y - map_origin[1]) / resolution);
+      if (idx_g < 0 || idx_g >= global_map_xi || idy_g < 0 || idy_g >= global_map_yi) continue;
+      int index_g = idx_g + idy_g * global_map_xi;
+      int temp_h = static_cast<int>(pt.z * 1000);
+      if (temp_h - history_minz_map_.at<int16_t>(idy_g, idx_g) > 4 * his_h_threshold) {
         if (global_map_[index_g] != 250) {
           global_map_[index_g] = 250;
           auto res = Vec2i{idx_g, idy_g};
           obs_list_.push_back(res);
+          pub_list[index_g] = 0;
         }
-        pub_list[index_g] = 0;
+        // fixcount++;
         seted_map_[index_l] = 2;
-        count++;
       }
     }
-    std::cout << "handle count " << count << "total " << s2count << std::endl;
-    //射线起点格子
-    int px = static_cast<int>((pose.first[0] - map_origin[0]) / resolution);
-    int py = static_cast<int>((pose.first[1] - map_origin[1]) / resolution);
-    Vec2i start_idx = Vec2i{px, py};
-    //射线处理，移除移动障碍物之前的轨迹
-    RayHandle(start_idx, obs_list_);
+    // std::cout << "set2count " << set2count << " fixcount " << fixcount << std::endl;
+    // for (auto & pt : cptr->points) {
+    //   int xi = static_cast<int>((pt.x - min_x) / high_analys_resolution);
+
+    //   int idy = static_cast<int>((pt.y - min_y) / high_analys_resolution);
+    //   if (xi < 0 || xi >= Map_SIZE_D || idy < 0 || idy >= Map_SIZE_D) {
+    //     continue;
+    //   }
+    //   int index_l = xi + idy * Map_SIZE_D;
+    //   if (seted_map_[index_l] != 1) continue;
+    //   int idx_g = static_cast<int>((pt.x - map_origin[0]) / resolution);
+    //   int idy_g = static_cast<int>((pt.y - map_origin[1]) / resolution);
+    //   for (int step = 1; step < 5; ++step) {
+    //     for (auto & move : moves) {
+    //       int nxi = xi + move.first * step;
+    //       int nidy = idy + move.second * step;
+    //       if (nxi < 0 || nxi >= Map_SIZE_D || nidy < 0 || nidy >= Map_SIZE_D) {
+    //         continue;
+    //       }
+    //       int nindex_l = nxi + nidy * Map_SIZE_D;
+    //       if (seted_map_[nindex_l] != 2) continue;
+    //       if (pt.z - min_hmap[nindex_l] > heighter_than_ground_threshold) {
+    //         int index_g = idx_g + idy_g * global_map_xi;
+    //         if (global_map_[index_g] != 250) {
+    //           global_map_[index_g] = 250;
+    //           auto res = Vec2i{idx_g, idy_g};
+    //           obs_list_.push_back(res);
+    //           pub_list[index_g] = 0;
+    //         }
+    //         seted_map_[index_l] = 2;
+    //         break;
+    //       }
+    //     }
+    //     if (seted_map_[index_l] == 2) break;
+    //   }
+    // }
 #ifdef DEBUG
     pcl::PointCloud<pcl::PointXYZ> ground_pc;
     for (auto & pt : cptr->points) {
@@ -307,8 +389,13 @@ class Handler : public rclcpp::Node
       cost_pub_.ground_pc_pub->publish(msg);
     }
 #endif
-    // std::cout << "set 1 total " << scount - sscount << " set1 count " << set1_count
-    //           << " handle set1 " << handle_set1_count << std::endl;
+    //射线起点格子
+    int px = static_cast<int>((pose.first[0] - map_origin[0]) / resolution);
+    int py = static_cast<int>((pose.first[1] - map_origin[1]) / resolution);
+    Vec2i start_idx = Vec2i{px, py};
+    //射线处理，移除移动障碍物之前的轨迹
+    RayHandle(start_idx, obs_list_);
+
     PubRes();
   }
   void PubRes()
@@ -414,16 +501,11 @@ public:
     this->get_parameter("global_map_size_y", global_map_size_y);
     this->get_parameter("frame_save", frame_save);
     this->get_parameter("map_yaml_path", yaml_path);
-
-    //test
-    this->declare_parameter("deep_map_path", "");
-    this->get_parameter("deep_map_path", deep_map_path);
     ReadMapYaml();
-    this->depth_Map = cv::imread(deep_map_path, cv::IMREAD_UNCHANGED);  //mm为单位
-    if (depth_Map.empty()) {
-      std::cout << " -- [ROS ERROR] Failed to load deep map image file: " << deep_map_path
-                << std::endl;
-    }
+    history_minz_map_ =
+      cv::Mat::zeros(global_map_yi, global_map_xi, CV_16SC1);  //存储历史最低高度图
+    history_minz_map_ += 30000;                                //初始值30m
+    his_h_threshold = 1000 * heighter_than_ground_threshold;
     cost_pub_.cost_pc_pub =
       this->create_publisher<sensor_msgs::msg::PointCloud2>("rog_map/inf_occ", qos);
     cost_pub_.ground_pc_pub =
@@ -457,7 +539,7 @@ private:
   double odom_timeout{0.1};
 
   unsigned char * global_map_;
-  double *min_hmap, *max_hmap;
+  double * min_hmap;
   char * seted_map_;
   tf2::Transform tf_t;
   std::vector<std::pair<int, int>> moves{{1, 1},  {1, 0},   {-1, 0}, {0, 1},
@@ -484,8 +566,8 @@ private:
   std::vector<double> map_origin{0.0, 0.0, 0.0};  //左下角点云坐标
   double yaml_resolution{0.05};
   std::string pgm_path;
-  std::string deep_map_path;
-  cv::Mat depth_Map;
+  cv::Mat history_minz_map_;
+  int his_h_threshold{50};  //历史最低高度阈值，单位mm
   void ReadMapYaml()
   {
     //读取yaml文件，获取地图信息

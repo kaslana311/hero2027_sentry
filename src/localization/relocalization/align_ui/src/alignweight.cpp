@@ -26,7 +26,7 @@ Alignweight::Alignweight(int argc, char ** argv, QWidget * parent)
   align_thread_ = new QThread(this);
   relocalization_node_->moveToThread(align_thread_);
   connect(align_thread_, &QThread::started, relocalization_node_.get(), [this]() {
-     std::thread([this]() { rclcpp::spin(this->relocalization_node_); }).detach();
+    std::thread([this]() { rclcpp::spin(this->relocalization_node_); }).detach();
   });
   align_thread_->start();
 }
