@@ -6,14 +6,14 @@
       init_yaw: 0.0
       init_pitch: 0.0
       init_roll: 0.0
-
+      init_pose: [0.0, 0.0,0.0, 0.0, 0.0, 0.0]
       pcd_path: "/home/dji/project/HERO2025_Sentry/src/common/point_cloud_files/filtered_pcd/fast_lio_latest_map.pcd"
       
       # 添加角度约束参数S
-      gate_yaw_deg: 10.5     # 偏航角约束范围（正负2度）
-      gate_pitch_deg: 10.5   # 俯仰角约束范围（正负5度）
-      gate_roll_deg: 10.5    # 横滚角约束范围（正负5度）
-      gate_trans_m: 0.5       # 平移约束范围（米）
+      gate_yaw_deg: 100.5     # 偏航角约束范围（正负2度）
+      gate_pitch_deg: 100.5   # 俯仰角约束范围（正负5度）
+      gate_roll_deg: 100.5    # 横滚角约束范围（正负5度）
+      gate_trans_m: 10.5       # 平移约束范围（米）
       
       # 其他配准相关参数
       enforce_rp_zero: false  # 是否强制pitch和roll为0
@@ -23,3 +23,11 @@
       use_crop_map: false      # 是否使用裁剪地图
       crop_radius: 30.0       # 裁剪半径（米）
       fitness_threshold: 0.09 # 配准适应度阈值
+
+      #过滤地图外点云
+      f_min_x: -0.5
+      f_min_y: -1.0
+      f_min_z: -0.5
+      f_max_x: 20.0
+      f_max_y: 20.0
+      f_max_z: 30.0

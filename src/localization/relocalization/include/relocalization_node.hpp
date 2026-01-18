@@ -10,10 +10,13 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/buffer.h>
+#include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
 #include <Eigen/Dense>
+#include <QObject>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <geometry_msgs/msg/point.hpp>
@@ -34,69 +37,110 @@
 #include <thread>
 #include <vector>
 
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2_eigen/tf2_eigen.hpp"
+#include "util.hpp"
 
+// #include <small_gicp/pcl/pcl_registration.hpp>
 using namespace small_gicp;
-class RelocalizationNode : public rclcpp::Node {
+struct Grid {
+    pcl::PointXYZ farthestPoint;
+    double maxDistance = -1.0;
+};
+struct fliter_params {
+    double min_x;
+    double max_x;
+    double max_y;
+    double min_y;
+    double min_z;
+    double max_z;
+};
+class RelocalizationNode : public QObject, public rclcpp::Node {
+    Q_OBJECT
    public:
-    RelocalizationNode();
+    explicit RelocalizationNode(QObject* parent = nullptr);
     ~RelocalizationNode() = default;
+    bool registration_success_ = false;
+   public slots:
+    void onSetAlignSignal(align_res alignResult);  //处理设置结果
+    void OnRetrySet(bool isOk);
+   signals:
+    void alignResultSignal(reloc_res res);  //发送匹配结果
+    void setResultSignal(bool isok);        //反馈设置结果
 
    private:
-    std::mutex mtx;
+    std::atomic<bool> qt_control{false};
+    void GlobalLocalizationTimerCallback();  //定位
 
-    void GlobalLocalizationTimerCallback();
-    bool GlobalLocalization();
-
-    void SaveCurOdomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
     void SaveCurScanCallback(
-        const sensor_msgs::msg::PointCloud2::SharedPtr msg);
-
-    void PublishCropMap(const pcl::PointCloud<pcl::PointXYZ>::Ptr& crop_map);
-    // 发布接受到的fast_lio的点云，在camera_init系下
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_cur_scan_;
-    // 参考系为map系，但点云是FOV视角中的
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_crop_map_;
-    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-
-    // 订阅odom和fast_lio的点云数据
+        const sensor_msgs::msg::PointCloud2::SharedPtr msg);  //保存积累点云
+    void publishTransform();                                  //发布tf
+    void PassThroughFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
+                           pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out,
+                           double min_z, double max_z, double min_y,
+                           double max_y, double min_x, double max_x);  //滤波
+    bool InitGlobalMap(std::string map_path);
+    Eigen::Isometry3d SmallIcpRegistration(
+        const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan, Eigen::Matrix4d pre,
+        double& fitness);
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_scan_;
 
-    nav_msgs::msg::Odometry cur_odom_;
-    // 分配内存需要在构造函数中
+    //-------------------------------data---------------------------------//
+    std::mutex mtx;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cur_scan_ = nullptr;
-
-    Eigen::Matrix4d pose_estimation_ = Eigen::Matrix4d::Identity();
-    double init_x_;
-    double init_y_;
-    double init_z_;
-    double init_yaw_;
-    double init_pitch_;
-    double init_roll_;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_cloud;  //累计点云
     std::string pcd_path_;
 
-    rclcpp::TimerBase::SharedPtr timer_, transform_timer_;
+    rclcpp::TimerBase::SharedPtr timer_;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_ = nullptr;  // global_load
+    fliter_params fparams;
+    bool has_global_map_ = false;
+    bool has_scan_ = false;
 
-    bool InitGlobalMap(std::string map_path);
-    // 裁减FOV中的地图，目前写的是方形采样
-    pcl::PointCloud<pcl::PointXYZ>::Ptr CropMapInFov(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr& global_map,
-        const Eigen::Matrix4d& pose_estimation,
-        const nav_msgs::msg::Odometry& cur_odom, double FOV, double FOV_FAR);
-    // voxel下采样
-    pcl::PointCloud<pcl::PointXYZ>::Ptr VoxelDownSamping(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, double leaf_size);
-    std::vector<Eigen::Vector3d> ConvertPointCloudToEigenVector(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
-    Eigen::Isometry3d SmallIcpRegistration(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan,
-        const Eigen::Matrix4d& initial, double& fitness);
-    Eigen::Matrix4d PoseToMat(const geometry_msgs::msg::Pose& pose);
-    geometry_msgs::msg::Pose MatToPose(const Eigen::Matrix4d& mat);
-    Eigen::Matrix4d CreateTfMatrix(double x, double y, double z, double yaw,
-                                   double pitch, double roll);
-    double Deg2Rad(double deg);
+    int max_scan_count_ = 10;  //累计点云帧数目阈值
+    // Gates and policies (populated from ROS parameters at runtime)
+    double gate_yaw_deg_ = 5.0;    // yaw 门限（度）
+    double gate_roll_deg_ = 5.0;   // roll 门限（度）
+    double gate_pitch_deg_ = 5.0;  // pitch 门限（度）
+    double gate_trans_m_ = 0.1;    // 平移门限（米）
 
+    bool enforce_rp_zero_ = false;  // 默认不强制清零RP，改为门限约束
+    double yaw_search_step_deg_ = 2.0;         // 粗搜步长（度）
+    int max_fail_before_fallback_ = 5;         // 失败次数后触发兜底
+    std::string fallback_policy_ = "initial";  // initial | identity
+    double fitness_threshold_ = 0.08;  // 接受阈值（与代码内一致）
+    int registration_fail_count_ = 0;  // 配准失败计数
+    double max_fitness_threshold_ = 0.1;  // 最大允许的fitness分数
+
+    // small_gicp参数------------------
+    std::shared_ptr<small_gicp::Registration<small_gicp::GICPFactor,
+                                             small_gicp::ParallelReductionOMP>>
+        register_;                                       //重定位
+    pcl::PointCloud<pcl::PointCovariance>::Ptr target_;  //先验地图
+    pcl::PointCloud<pcl::PointCovariance>::Ptr source_;  //扫描
+    std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>
+        target_tree_;
+    std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>
+        source_tree_;  // kd树
+    double smgicp_global_leaf_size_, smgicp_local_leaf_size_;
+    int smgicp_max_iterations_;
+    int smgicp_num_threads_;
+    double smgicp_max_dist_sq_;
+    int nebhor_num;
+    //当前累计点云帧数目
+    int scan_count = 0;
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
+    std::unique_ptr<tf2_ros::StaticTransformBroadcaster> tf_broadcaster_;
+    Eigen::Isometry3d result_t_;  // small_gicp result
+    Eigen::Matrix4d pose_estimation_;
+    std::vector<double> init_pose_;
+
+    // tdt
+    double gridSizeDegrees = 0.1;  // 0.1°*0.1°
+    std::map<std::pair<int, int>, Grid> gridMap;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr TDTresult;
+    void TDThandle();
+    //---------------------inline func----------------------------//
     // Helpers for constrained registration and gating
     static inline double NormalizeAngle(double a) {
         while (a > M_PI) a -= 2 * M_PI;
@@ -154,62 +198,4 @@ class RelocalizationNode : public rclcpp::Node {
         if (deg > 175.0 * M_PI / 180.0) deg = std::abs(M_PI - deg);
         return deg;
     }
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_ = nullptr;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr crop_global_map_ = nullptr;
-
-    bool has_global_map_ = false;
-    bool has_odom_ = false;
-    bool has_scan_ = false;
-
-    bool first_registration_ = false;
-    bool only_one_ = false;
-    bool registration_success_ = false;
-
-    // 配准参数
-    int num_threads_ = 4;                           // 线程数
-    double downsampling_resolution_ = 0.25;         // 降采样分辨率
-    int num_neighbors_ = 10;                        // 邻居点数量
-    double max_correspondence_distance_ = 1.0;      // 最大对应点距离
-    double rotation_epsilon_ = 0.1 * M_PI / 180.0;  // 旋转收敛阈值
-    double translation_epsilon_ = 1e-3;             // 平移收敛阈值
-    int max_iterations_ = 20;                       // 最大迭代次数
-    bool verbose_ = false;                          // 是否输出详细信息
-    double max_fitness_threshold_ = 0.1;  // 最大允许的fitness分数
-
-    // Gates and policies (populated from ROS parameters at runtime)
-    double gate_yaw_deg_ = 5.0;    // yaw 门限（度）
-    double gate_roll_deg_ = 5.0;   // roll 门限（度）
-    double gate_pitch_deg_ = 5.0;  // pitch 门限（度）
-    double gate_trans_m_ = 0.1;    // 平移门限（米）
-
-    bool enforce_rp_zero_ = false;  // 默认不强制清零RP，改为门限约束
-    double yaw_search_step_deg_ = 2.0;         // 粗搜步长（度）
-    int max_fail_before_fallback_ = 5;         // 失败次数后触发兜底
-    std::string fallback_policy_ = "initial";  // initial | identity
-    bool use_crop_map_ = true;                 // 使用裁剪地图
-    double crop_radius_ = 30.0;                // 裁剪半径（米）
-    double fitness_threshold_ = 0.08;  // 接受阈值（与代码内一致）
-
-    // ...existing code...
-    int registration_fail_count_ = 0;  // 配准失败计数
-                                       // ...existing code...
-    pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_cloud;  //累计点云
-    std::shared_ptr<small_gicp::Registration<small_gicp::GICPFactor,
-                                             small_gicp::ParallelReductionOMP>>
-        register_;                                       //重定位
-    pcl::PointCloud<pcl::PointCovariance>::Ptr target_;  //先验地图
-    pcl::PointCloud<pcl::PointCovariance>::Ptr source_;  //扫描
-    std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>
-        target_tree_;
-    std::shared_ptr<small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>
-        source_tree_;  // kd树
-    // small_gicp参数
-    double smgicp_global_leaf_size_, smgicp_local_leaf_size_;
-    int smgicp_max_iterations_;
-    int smgicp_num_threads_;
-    double smgicp_max_dist_sq_;
-    int nebhor_num;
-    //当前累计点云帧数目
-    int scan_count = 0;
 };

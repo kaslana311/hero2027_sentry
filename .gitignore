@@ -75,3 +75,4 @@ doc/_build/
 *.bin
 *.dat
 *.pgm
+*.pcd
