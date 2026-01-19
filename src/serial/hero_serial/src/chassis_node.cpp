@@ -104,6 +104,13 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         // 不指定回调组，使用默认组
     );
 
+    // 订阅自瞄状态消息 (isAiming)
+    aiming_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
+        "isAiming", 10,
+        std::bind(&ChassisNode::AimingCallback, this, std::placeholders::_1)
+        // 不指定回调组，使用默认组
+    );
+
     start_time_ = this->now();
     // 创建订阅者
     vel_subscription_ = this->create_subscription<geometry_msgs::msg::Twist>(
@@ -190,12 +197,49 @@ void ChassisNode::HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg) {
 
 void ChassisNode::ReachCallback(const std_msgs::msg::Bool::SharedPtr msg) {
     ctrl_info_t_data.is_tyro = msg->data;
+
+    // 只有在非进攻状态下才能切换移动/防御姿态
+    if (current_posture_ != RobotPosture::ATTACK) {
+        if (msg->data) {
+            // 到达目标点，进入移动姿态
+            SetPosture(RobotPosture::MOVE);
+        } else {
+            // 未到达目标点，进入防御姿态
+            SetPosture(RobotPosture::DEFENSE);
+        }
+    }
 }
 
 void ChassisNode::CmdVelCallback(
     const geometry_msgs::msg::Twist::SharedPtr msg) {
     ctrl_info_t_data.x = msg->linear.y * MPS_TO_MMPS * (-1);
     ctrl_info_t_data.y = msg->linear.x * MPS_TO_MMPS;
+}
+
+// 自瞄状态回调函数
+void ChassisNode::AimingCallback(const std_msgs::msg::Bool::SharedPtr msg) {
+    if (msg->data) {
+        // 收到 true，进入并保持进攻状态
+        SetPosture(RobotPosture::ATTACK);
+        RCLCPP_INFO(this->get_logger(), "进入进攻姿态");
+    } else {
+        // 收到 false，如果当前处于进攻状态则退出到移动姿态
+        if (current_posture_ == RobotPosture::ATTACK) {
+            SetPosture(RobotPosture::MOVE);
+            RCLCPP_INFO(this->get_logger(), "退出进攻姿态，进入移动姿态");
+        }
+    }
+}
+
+// 姿态切换辅助函数
+void ChassisNode::SetPosture(RobotPosture posture) {
+    if (current_posture_ != posture) {
+        current_posture_ = posture;
+        sentry_cmd_info_t_data.sentry_status =
+            static_cast<uint8_t>(current_posture_);
+        RCLCPP_DEBUG(this->get_logger(), "姿态切换至: %d",
+                     static_cast<int>(current_posture_));
+    }
 }
 
 void ChassisNode::ChassisCmdTimerCallback() {

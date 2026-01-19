@@ -31,6 +31,13 @@
 #include "std_msgs/msg/bool.hpp"
 // #include "serial_interfaces/msg/robot.hpp"
 
+// 机器人姿态状态枚举
+enum class RobotPosture : uint8_t {
+    ATTACK = 1,   // 进攻姿态
+    DEFENSE = 2,  // 防御姿态
+    MOVE = 3      // 移动姿态
+};
+
 class ChassisNode : public rclcpp::Node {
    public:
     ChassisNode();
@@ -54,6 +61,8 @@ class ChassisNode : public rclcpp::Node {
     // 血量危险状态订阅者
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
         hp_danger_subscription_;
+    // 自瞄状态订阅者 (isAiming)
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr aiming_subscription_;
     // 轮式里程计速度发布器
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr
         wheel_odom_vel_pub_;
@@ -64,6 +73,9 @@ class ChassisNode : public rclcpp::Node {
 
     cmd_protocol::ProtocolBuilder cmd_builder;
     refree_protocol::ProtocolParser referee_parser;
+
+    // 机器人姿态状态机
+    RobotPosture current_posture_ = RobotPosture::MOVE;  // 默认移动姿态
 
     // serial_interfaces::msg::Robot robot_reach_;
     bool has_arrived_ = true;
@@ -113,10 +125,14 @@ class ChassisNode : public rclcpp::Node {
 
     void CmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
     void HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg);
+    void AimingCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void ChassisCmdTimerCallback();
     void RefreeTimerCallback();
     void RefreePubTimerCallback();
 
     void ReachCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void PrintRefereeData(const auto& referee_parser);
+
+    // 姿态切换辅助函数
+    void SetPosture(RobotPosture posture);
 };
