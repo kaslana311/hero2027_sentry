@@ -89,7 +89,7 @@ class ChassisNode : public rclcpp::Node {
     LinuxDevice* device = new LinuxDevice();
     rt_device_t serial_dev_;
     Ctrl_info_t ctrl_info_t_data = {0, 0, 1200, 1, 0};
-    sentry_cmd_info_t sentry_cmd_info_t_data = {1, 0, 0, 0, 0, 0};
+    sentry_cmd_info_t sentry_cmd_info_t_data = {1, 0, 0, 0, 0, 3, 0};
 
     Game_info_t game_info_t_data = {0, 0, 0};
     Event_data_t event_data_t_data = {0};
@@ -99,11 +99,11 @@ class ChassisNode : public rclcpp::Node {
     Ground_robot_position_t ground_robot_position_t_data = {0, 0, 0, 0,
                                                             0, 0, 0, 0};
     Sentry_info_t sentry_info_t_data = {0, 0};
-    Game_robot_survivors_t game_robot_survivors = {
-        400, 400, 400, 400, 400, 400, 1500, 5000,
-        400, 400, 400, 400, 400, 400, 1500, 5000};
+    Game_robot_survivors_t game_robot_survivors = {400, 400, 400,  400,
+                                                   400, 400, 1500, 5000};
     Robot_command_map_t robot_command_map_data = {0, 0, 0, 0, 0};
     Robot_command_map_t last_robot_command_map_data = {0, 0, 0, 0, 0};
+    Robot_wheel_odometry_t robot_wheel_odometry_data = {0.0, 0.0};
     geometry_msgs::msg::Point trigger_position;
     geometry_msgs::msg::Point last_trigger_position;
 

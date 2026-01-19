@@ -20,14 +20,13 @@ void VelOdometry_Global_Callback(void* data) {
 
 void ChassisNode::VelOdometry_Callback(void* data) {
     // 发布轮式里程计速度（用于 EKF 融合）
-    // target_position_x 和 target_position_y 现在代表 v_x 和 v_y (单位: m/s)
     geometry_msgs::msg::TwistStamped wheel_vel_msg;
     wheel_vel_msg.header.stamp = this->now();
     wheel_vel_msg.header.frame_id = "base_link";
 
     // 将底盘发来的速度信息填入消息
-    wheel_vel_msg.twist.linear.x = robot_command_map_data.target_position_y;
-    wheel_vel_msg.twist.linear.y = -robot_command_map_data.target_position_x;
+    wheel_vel_msg.twist.linear.x = robot_wheel_odometry_data.vel_y;
+    wheel_vel_msg.twist.linear.y = -robot_wheel_odometry_data.vel_x;
     wheel_vel_msg.twist.linear.z = 0.0;
 
     // 角速度暂时设为0（如果底盘有角速度数据可以添加）
@@ -132,8 +131,8 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
                             sizeof(Game_robot_survivors_t),
                             (void*)&game_robot_survivors, Callback_func_data1);
     Attach_Receive_callback(
-        CMD_ID_Robot_command_map, sizeof(Robot_command_map_t),
-        (void*)&robot_command_map_data, VelOdometry_Global_Callback);
+        CMD_ID_Robot_wheel_odometry, sizeof(Robot_wheel_odometry_t),
+        (void*)&robot_wheel_odometry_data, VelOdometry_Global_Callback);
 
     Attach_SendCmd(serial_dev_,               // 设备句柄
                    CMD_ID_VISUAL_CTRL,        // 命令ID
@@ -261,10 +260,10 @@ void ChassisNode::RefreePubTimerCallback() {
     msg.projectile_allowance_fortress =
         bullet_remaining_t_data.projectile_allowance_fortress;
 
-    msg.red_sentry = game_robot_survivors.red_7_robot_HP;
-    msg.blue_sentry = game_robot_survivors.blue_7_robot_HP;
-    msg.red_outpost = game_robot_survivors.red_outpost_HP;
-    msg.blue_outpost = game_robot_survivors.blue_outpost_HP;
+    // msg.red_sentry = game_robot_survivors.red_7_robot_HP;
+    // msg.blue_sentry = game_robot_survivors.blue_7_robot_HP;
+    // msg.red_outpost = game_robot_survivors.red_outpost_HP;
+    // msg.blue_outpost = game_robot_survivors.blue_outpost_HP;
     refree_pub_->publish(msg);
 
     // if ((robot_command_map_data.target_position_x !=

@@ -3,6 +3,7 @@
 
 /******************视觉发送，底盘接收*************************************** */
 // 控制数据，包含x和y的线速度和角速度，以及小陀螺模式，跟随角度
+#include <cstdint>
 #pragma pack(push, 1)
 typedef struct {
     float x;            // x线速度
@@ -29,7 +30,8 @@ typedef struct  // 关于哨兵自主决策，裁判手册中说，哨兵底盘�
     uint32_t
         exchange_health_request_count : 4;  // 17-20bit,
                                             // 远程兑换血量的请求次数，从0开始递增，每次变化只能是1
-    uint32_t reserved : 11;  // 21-31bit, 保留位，当前未使用
+    uint32_t sentry_status : 2;
+    uint32_t reserved : 9;  // 21-31bit, 保留位，当前未使用
 } sentry_cmd_info_t;
 #pragma pack(pop)
 
@@ -53,25 +55,15 @@ typedef struct {
 
 #pragma pack(push, 1)
 typedef struct {
-    uint16_t red_1_robot_HP;  // 红 1 英雄机器人血量，未上场以及罚下血量为 0
-    uint16_t red_2_robot_HP;  // 红 2 工程机器人血量
-    uint16_t red_3_robot_HP;  // 红 3 步兵机器人血量
-    uint16_t red_4_robot_HP;  // 红 4 步兵机器人血量
-    uint16_t
-        red_5_robot_HP_reserve;  // 红 5 步兵机器人血量    //
-                                 // 2024.12.25日新修改的串口协议附录1.70版本将该字段设置为保留字段
-    uint16_t red_7_robot_HP;           // 红 7 哨兵机器人血量
-    uint16_t red_outpost_HP;           // 红方前哨站血量
-    uint16_t red_base_HP;              // 红方基地血量
-    uint16_t blue_1_robot_HP;          // 蓝 1 英雄机器人血量
-    uint16_t blue_2_robot_HP;          // 蓝 2 工程机器人血量
-    uint16_t blue_3_robot_HP;          // 蓝 2 工程机器人血量
-    uint16_t blue_4_robot_HP;          // 蓝 2 工程机器人血量
-    uint16_t blue_5_robot_HP_reserve;  // 蓝 5 步兵机器人血量
-    uint16_t blue_7_robot_HP;          // 蓝 7 哨兵机器人血量
-    uint16_t blue_outpost_HP;          // 蓝方前哨站血量
-    uint16_t blue_base_HP;             // 蓝方基地血量
-} Game_robot_survivors_t;              // 比赛机器人血量数据
+    uint16_t robot_1_HP;  // 己方 英雄机器人血量，未上场以及罚下血量为 0
+    uint16_t robot_2_HP;   // 己方 工程机器人血量
+    uint16_t robot_3_HP;   // 己方 步兵机器人血量
+    uint16_t robot_4_HP;   // 己方 步兵机器人血量
+    uint16_t reserve;      // 保留位
+    uint16_t robot_7_HP;   // 己方 哨兵机器人血量
+    uint16_t outpost_HP;   // 己方 前哨站血量
+    uint16_t base_HP;      // 己方 基地血量
+} Game_robot_survivors_t;  // 比赛机器人血量数据
 #pragma pack(pop)
 
 #pragma pack(push, 1)
@@ -146,14 +138,21 @@ typedef struct {
 } Robot_command_map_t;
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+typedef struct {
+    float vel_x;
+    float vel_y;
+} Robot_wheel_odometry_t;
+#pragma pack(pop)
+
 /***********设置的CMDid,发送次数，发送周期********************************* */
-#define CMD_ID_VISUAL_CTRL 0x01      // 视觉发送控制指令ID
-#define CMD_ID_VISUAL_RADAR 0x02     // 视觉发送雷达数据ID
+#define CMD_ID_VISUAL_CTRL 0x01   // 视觉发送控制指令ID
+#define CMD_ID_VISUAL_RADAR 0x02  // 视觉发送雷达数据ID
 #define CMD_ID_SENTRY_CMD_INFO 0x03  // 视觉发送哨兵数据ID（视觉发送给底盘）
-#define CMD_ID_GAME_INFO 0x04        // 向视觉发送比赛信息
+#define CMD_ID_GAME_INFO 0x04             // 向视觉发送比赛信息
 #define CMD_ID_GAME_ROBOT_survivors 0x05  // 向视觉发送机器人血量信息
 #define CMD_ID_EVENT_DATA 0x06            // 向视觉发送场地事件信息
-#define CMD_ID_ROBOT_INFO 0x07            // 向视觉发送机器人信息（自身信息）
+#define CMD_ID_ROBOT_INFO 0x07  // 向视觉发送机器人信息（自身信息）
 #define CMD_ID_ROBOT_POSITION \
     0x08  // 向视觉发送本机器人位置信息（自身位置信息）
 #define CMD_ID_Bullet_remaining 0x09  // 向视觉发送剩余子弹数和剩余金币数量
@@ -162,15 +161,17 @@ typedef struct {
 #define CMD_ID_Sentry_info \
     0x0B  // 给视觉发送哨兵自主决策反馈数据（裁判系统反馈信息）
 #define CMD_ID_Robot_command_map 0x0C
+#define CMD_ID_Robot_wheel_odometry \
+    0x0D  // 底盘向导航发送的轮式里程计速度数据ID
 
 // 设置 发送次数（有限次就写正整数，无限次发送写-1） 和 每几个周期发送一次
-#define CMD_SET_VISUAL_CTRL -1, 2      // 视觉发送控制指令
-#define CMD_SET_VISUAL_RADAR -1, 2     // 视觉发送雷达数据ID
+#define CMD_SET_VISUAL_CTRL -1, 2   // 视觉发送控制指令
+#define CMD_SET_VISUAL_RADAR -1, 2  // 视觉发送雷达数据ID
 #define CMD_SET_SENTRY_CMD_INFO -1, 2  // 视觉发送哨兵数据ID（视觉发送给底盘）
-#define CMD_SET_GAME_INFO -1, 2        // 向视觉发送比赛信息
+#define CMD_SET_GAME_INFO -1, 2             // 向视觉发送比赛信息
 #define CMD_SET_GAME_ROBOT_survivors -1, 2  // 向视觉发送机器人血量信息
 #define CMD_SET_EVENT_DATA -1, 2            // 向视觉发送场地事件信息
-#define CMD_SET_ROBOT_INFO -1, 2            // 向视觉发送机器人信息（自身信息）
+#define CMD_SET_ROBOT_INFO -1, 2  // 向视觉发送机器人信息（自身信息）
 #define CMD_SET_ROBOT_POSITION \
     -1, 2  // 向视觉发送本机器人位置信息（自身位置信息）
 #define CMD_SET_Bullet_remaining -1, 2  // 向视觉发送剩余子弹数和剩余金币数量
