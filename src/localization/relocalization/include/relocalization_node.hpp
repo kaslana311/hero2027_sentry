@@ -135,6 +135,9 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
     Eigen::Matrix4d pose_estimation_;
     std::vector<double> init_pose_;
 
+    // pub pcd
+    bool pcdPub = false;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pcd_;
     // tdt
     double gridSizeDegrees = 0.1;  // 0.1°*0.1°
     std::map<std::pair<int, int>, Grid> gridMap;

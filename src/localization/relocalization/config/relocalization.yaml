@@ -31,3 +31,4 @@
       f_max_x: 20.0
       f_max_y: 20.0
       f_max_z: 30.0
+      pcd_pub: True

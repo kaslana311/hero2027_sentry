@@ -44,6 +44,10 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     this->declare_parameter("f_max_x", 24.3);
     this->declare_parameter("f_max_y", 5.3);
     this->declare_parameter("f_max_z", 3.5);
+
+    this->declare_parameter("pcd_pub", pcdPub);
+    this->get_parameter("pcd_pub", pcdPub);
+
     fparams.min_x = this->get_parameter("f_min_x").as_double();
     fparams.min_y = this->get_parameter("f_min_y").as_double();
     fparams.min_z = this->get_parameter("f_min_z").as_double();
@@ -122,6 +126,23 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(1000),
         std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
+
+    if (pcdPub) {
+        pub_pcd_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+            "pcd_init", 1);
+        auto msg = sensor_msgs::msg::PointCloud2();
+        //降采一下发布
+        pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(
+            new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+        voxel_grid.setInputCloud(global_map_);
+        voxel_grid.setLeafSize(0.15f, 0.15f, 0.15f);
+        voxel_grid.filter(*filtered_cloud);
+        pcl::toROSMsg(*filtered_cloud, msg);
+        msg.header.frame_id = "odom";
+        msg.header.stamp = this->now();
+        pub_pcd_->publish(msg);
+    }
 }
 void RelocalizationNode::publishTransform() {
     if (result_t_.matrix().isZero()) {
