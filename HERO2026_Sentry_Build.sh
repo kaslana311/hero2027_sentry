@@ -127,7 +127,7 @@ build_cmake_project "src/third_party/small_gicp"
 
 # 4 colcon包（逐个）
 colcon_build_pkg "sophus"
-colcon_build_pkg "vikit_common"
+colcon_build_pkg "vikit_common" 
 colcon_build_pkg "vikit_ros"
 
 # 5
@@ -135,7 +135,8 @@ colcon_build_pkg "fast_livo"
 colcon_build_pkg "point_lio"
 colcon_build_pkg "interfaces"
 colcon_build_pkg "serial_interfaces"
-
+colcon_build_pkg "relocalization"
+colcon_build_pkg "cloud_analys"
 # 6 source 如果有
 safe_source_install
 
