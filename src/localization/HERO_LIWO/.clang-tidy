@@ -1,0 +1,18 @@
+---
+Checks: >
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  readability-*,
+  google-*,
+  -google-readability-braces-around-statements,
+  -cppcoreguidelines-pro-type-vararg
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+AnalyzeTemporaryDtors: false
+FormatStyle: file
+CheckOptions:
+  - key:             modernize-use-override.CheckSpelling
+    value:           1
+  - key:             readability-identifier-naming.IgnoreMainLikeFunctions
+    value:           1
