@@ -47,6 +47,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Bullet.msg"
   "msg/Cmdbuffer.msg"
   "msg/MincoTrajectory.msg"
+  "msg/TrackerOutput.msg"
   "srv/Fromsolve.srv"
   "srv/Solve.srv"
   "srv/Armor.srv"
