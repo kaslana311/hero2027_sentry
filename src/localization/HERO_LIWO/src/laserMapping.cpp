@@ -465,6 +465,7 @@ int main(int argc, char** argv) {
     auto pub_path = nh->create_publisher<nav_msgs::msg::Path>("path", 20);
     auto tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(nh);
 
+    int count_flag = 0;
     //------------------------------------------------------------------------------------------------------
     signal(SIGINT, SigHandle);
     rclcpp::Rate rate(500);
@@ -810,25 +811,28 @@ int main(int argc, char** argv) {
                         // 的循环次数）
                         if (publish_odometry_without_downsample) {
                             /******* Publish odometry *******/
-
-                            publish_odometry(pub_odom_aft_mapped,
-                                             tf_broadcaster);
-                            if (runtime_pos_log) {
-                                euler_cur = SO3ToEuler(kf_output.x_.rot);
-                                fout_out
-                                    << setw(20)
-                                    << Measures.lidar_beg_time -
-                                           first_lidar_time
-                                    << " " << euler_cur.transpose() << " "
-                                    << kf_output.x_.pos.transpose() << " "
-                                    << kf_output.x_.vel.transpose() << " "
-                                    << kf_output.x_.omg.transpose() << " "
-                                    << kf_output.x_.acc.transpose() << " "
-                                    << kf_output.x_.gravity.transpose() << " "
-                                    << kf_output.x_.bg.transpose() << " "
-                                    << kf_output.x_.ba.transpose() << " "
-                                    << feats_undistort->points.size() << '\n';
+                            if(count_flag == 10){
+                                publish_odometry(pub_odom_aft_mapped,
+                                                tf_broadcaster);
+                                if (runtime_pos_log) {
+                                    euler_cur = SO3ToEuler(kf_output.x_.rot);
+                                    fout_out
+                                        << setw(20)
+                                        << Measures.lidar_beg_time -
+                                            first_lidar_time
+                                        << " " << euler_cur.transpose() << " "
+                                        << kf_output.x_.pos.transpose() << " "
+                                        << kf_output.x_.vel.transpose() << " "
+                                        << kf_output.x_.omg.transpose() << " "
+                                        << kf_output.x_.acc.transpose() << " "
+                                        << kf_output.x_.gravity.transpose() << " "
+                                        << kf_output.x_.bg.transpose() << " "
+                                        << kf_output.x_.ba.transpose() << " "
+                                        << feats_undistort->points.size() << '\n';
+                                }
+                                count_flag =0;
                             }
+                            count_flag ++;
                         }
 
                         for (int j = 0; j < time_seq[k]; j++) {

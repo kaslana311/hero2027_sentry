@@ -164,7 +164,7 @@ std::vector<int> time_compressing(const PointCloudXYZI::Ptr& point_cloud) {
     // Batch 时间窗口大小 (单位: 毫秒)
     // 10ms 对应 100Hz 的更新频率
     // 可根据需求调整：5ms -> 200Hz, 20ms -> 50Hz
-    constexpr double batch_size_ms = 10.0;
+    constexpr double batch_size_ms = 1.0;
 
     // 预估 Batch 数量，减少 vector 重分配
     // 假设一帧 100ms，则约有 10 个 Batch

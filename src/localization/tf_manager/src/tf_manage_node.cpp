@@ -302,9 +302,11 @@ class TfManager : public rclcpp::Node {
     }
 
     // 成员变量
+    std::shared_ptr<tf2_ros::TransformBroadcaster> odom_base_broadcaster_;
     std::shared_ptr<tf2_ros::TransformBroadcaster>
         map_fake_base_broadcaster_;  // 新增
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_broadcaster_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_base_sub_;
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;

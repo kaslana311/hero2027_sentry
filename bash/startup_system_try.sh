@@ -4,8 +4,7 @@
 export DISPLAY=:0
 export XAUTHORITY=/home/dji/.Xauthority
 source /opt/ros/humble/setup.bash
-source /home/dji/project/HERO2025_Sentry/install/setup.bash
-
+source /home/dji/hero2026_-sentry/install/setup.bash
 # 创建日志目录
 LOG_DIR="$HOME/ros_logs/$(date +"%Y%m%d_%H%M%S")"
 mkdir -p "$LOG_DIR"
@@ -42,12 +41,12 @@ gnome-terminal --tab --title="start_lidar" -- bash -c \
 wait_for_topic "/livox/imu" 60
 
 gnome-terminal --tab --title="fast_livo" -- bash -c \
-"source /home/dji/project/HERO2025_Sentry/install/setup.bash && ros2 launch fast_livo mapping_avia.launch.py; bash"
+"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch fast_livo mapping_avia.launch.py; bash"
 
 wait_for_topic "/aft_mapped_to_init" 60
 
 gnome-terminal --tab --title="ekf_fusion" -- bash -c \
-"source /home/dji/project/HERO2025_Sentry/install/setup.bash && ros2 launch tf_manager fusion_launch.py; bash"
+"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch tf_manager fusion_launch.py; bash"
 
 # 启动重定位节点
 gnome-terminal --tab --title="relocalization" -- bash -c \

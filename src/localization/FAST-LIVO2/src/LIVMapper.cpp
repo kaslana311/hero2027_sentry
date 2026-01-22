@@ -1453,17 +1453,17 @@ Eigen::Quaterniond q_lidar_in_odom(geoQuat.w, geoQuat.x, geoQuat.y,
 Eigen::Matrix3d rot_lidar_in_odom = q_lidar_in_odom.toRotationMatrix();
 
 // ========== 步骤2: 定义 base_link → lidar_link 的静态变换 ==========
-// base_link → joint_link: 绕Y轴转20° (0.349066 rad), 无平移
-// joint_link → lidar_link: x方向平移0.15m, 无旋转
+// base_link → joint_link: 绕Y轴转35° (0.349066 rad), 无平移
+// joint_link → lidar_link: x方向平移0.1996m, 无旋转
 // 2.1 base_link → joint_link
-double angle_y = 0.349066;  // 20度转弧度
+double angle_y = 0.6108652;  // 35度转弧度
 Eigen::Matrix3d R_joint_base;
 R_joint_base = Eigen::AngleAxisd(angle_y, Eigen::Vector3d::UnitY());
 Eigen::Vector3d t_joint_base(0.0, 0.0, -0.0);
 
 // 2.2 joint_link → lidar_link
 Eigen::Matrix3d R_lidar_joint = Eigen::Matrix3d::Identity();
-Eigen::Vector3d t_lidar_joint(0.15, 0.0, 0.0);
+Eigen::Vector3d t_lidar_joint(0.2, 0.0, 0.0);
 
 // 2.3 组合得到 base_link → lidar_link 的总变换 (T_lidar_base)
 // T_lidar_base = T_lidar_joint * T_joint_base
