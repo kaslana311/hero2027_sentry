@@ -2,18 +2,27 @@
 
 #include <oneapi/tbb/parallel_for.h>
 
+#include <iostream>
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <unordered_map>
 
 #include "dog_map/eigen_alias.hpp"
 
-OccMap::OccMap(const std::string & pgm_yaml_path_) : pgm_yaml_path(pgm_yaml_path_)
+OccMap::OccMap(
+  double heighter_than_ground_threshold, double higher_than_car_threshold, double half_map_size,
+  double resolution_z, int frame_save, const std::string & pgm_yaml_path)
+: higher_than_ground_threshold_(heighter_than_ground_threshold),
+  higher_than_car_threshold_(higher_than_car_threshold),
+  half_map_size_(half_map_size),
+  resolution_z(resolution_z),
+  frame_save_(frame_save),
+  pgm_yaml_path(pgm_yaml_path)
 {
   YAML::Node config = YAML::LoadFile(pgm_yaml_path);
   cloud_at_map_origin = yaml_get_value<std::vector<double>>(config, "origin");
   resolution = yaml_get_value<double>(config, "resolution");
-  resolution_z = 0.05;  //0.03m一个高度层
+
   std::string pgm_path;
   int index = pgm_yaml_path.find_last_of("/");
   pgm_path = pgm_yaml_path.substr(0, index + 1) + yaml_get_value<std::string>(config, "image");
@@ -23,6 +32,12 @@ OccMap::OccMap(const std::string & pgm_yaml_path_) : pgm_yaml_path(pgm_yaml_path
               << ", size_y=" << map_img.rows * resolution << std::endl;
     InitMap(map_img);
   }
+  std::cout << " -- [DOG_MAP] OccMap initialized." << std::endl;
+  std::cout << " -- [DOG_MAP] half_map_size: " << half_map_size_
+            << ", resolution_z: " << resolution_z << std::endl;
+  std::cout << " -- [DOG_MAP] higher_than_ground_threshold: " << higher_than_ground_threshold_
+            << ", higher_than_car_threshold: " << higher_than_car_threshold_ << std::endl;
+  std::cout << " -- [DOG_MAP] frame_save: " << frame_save_ << std::endl;
 }
 void OccMap::InitMap(cv::Mat & grid_map)
 {
@@ -54,7 +69,7 @@ void OccMap::TimeGoON()
 void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI> & pub_pc)
 {
 //三维索引
-#ifdef DEBUG
+#ifndef DEBUG
   std::unordered_map<int, bool> point_map;
 #endif
   for (auto & item : time_list_) {
@@ -63,7 +78,7 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI> & pub_pc)
     int rem = index % (grid_map_.cols * grid_map_.rows);
     int idy = rem / grid_map_.cols;
     int idx = rem % grid_map_.cols;
-#ifdef DEBUG
+#ifndef DEBUG
     int key = idx + idy * grid_map_.cols;
     if (point_map.find(key) != point_map.end()) continue;
     point_map[key] = true;
@@ -222,15 +237,15 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, Pose pose)
   pcl::PassThrough<pcl::PointXYZ> pass;
   pass.setInputCloud(cloud_in);
   pass.setFilterFieldName("z");
-  pass.setFilterLimits(0.0, 1.0);
+  pass.setFilterLimits(0.0, higher_than_car_threshold_);
   pass.filter(*cloud_in);
-  double min_x = pose.first[0] - 10.0;
+  double min_x = pose.first[0] - half_map_size_;
   min_x = std::max(min_x, cloud_at_map_origin[0]);
-  double max_x = pose.first[0] + 10.0;
+  double max_x = pose.first[0] + half_map_size_;
   max_x = std::min(max_x, grid_map_.cols + cloud_at_map_origin[0]);
-  double min_y = pose.first[1] - 10.0;
+  double min_y = pose.first[1] - half_map_size_;
   min_y = std::max(min_y, cloud_at_map_origin[1]);
-  double max_y = pose.first[1] + 10.0;
+  double max_y = pose.first[1] + half_map_size_;
   max_y = std::min(max_y, grid_map_.rows + cloud_at_map_origin[1]);
   pass.setInputCloud(cloud_in);
   pass.setFilterFieldName("x");

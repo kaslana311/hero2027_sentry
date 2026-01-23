@@ -177,9 +177,27 @@ public:
 
   DogMapNode() : Node("dog_map_node")
   {
+    this->declare_parameter<std::string>("odom_topic", odom_topic);
+    this->declare_parameter<std::string>("cloud_topic", cloud_topic);
+    this->declare_parameter<std::string>("map_yaml_path", "");
+    this->declare_parameter<double>("heighter_than_ground_threshold", 0.05);
+    this->declare_parameter<double>("higher_than_car_threshold", 0.5);
+    this->declare_parameter<int>("frame_save", 10);
+    this->declare_parameter<double>("half_map_size", 10.0);
+    this->declare_parameter<double>("resolution_z", 0.03);
+    this->get_parameter("frame_save", frame_save);
+    this->get_parameter("odom_topic", odom_topic);
+    this->get_parameter("resolution_z", resolution_z);
+    this->get_parameter("cloud_topic", cloud_topic);
+    this->get_parameter("map_yaml_path", map_yaml_path);
+    this->get_parameter("heighter_than_ground_threshold", heighter_than_ground_threshold);
+    this->get_parameter("higher_than_car_threshold", higher_than_car_threshold);
+    this->get_parameter("half_map_size", half_map_size);
+
     const rclcpp::QoS qos(rclcpp::QoS(1).best_effort().keep_last(1).durability_volatile());
     occ_map_ = new OccMap(
-      "/home/z/ros_ws/src/pb2025_sentry_nav/pb2025_nav_bringup/map/simulation/rmuc_2026.yaml");
+      heighter_than_ground_threshold, higher_than_car_threshold, half_map_size, resolution_z,
+      frame_save, map_yaml_path);
     cost_pub_.cost_pc_pub =
       this->create_publisher<sensor_msgs::msg::PointCloud2>("rog_map/inf_occ", qos);
     cost_pub_.ground_pc_pub =
@@ -212,18 +230,23 @@ public:
 
 private:
   OccMap * occ_map_{nullptr};
-
   bool map_empty_{true};
   double odom_timeout{0.1};
-
   tf2::Transform tf_t;
-
   bool tf_set = false;
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
   std::string odom_topic = "lidar_odometry", cloud_topic = "registered_scan";
 
   geometry_msgs::msg::TransformStamped tf_stamped;
+
+private:
+  double half_map_size{10.0};
+  double heighter_than_ground_threshold{0.05};
+  double higher_than_car_threshold{0.5};
+  double resolution_z{0.03};
+  int frame_save{10};
+  std::string map_yaml_path{""};
 };
 int main(int argc, char ** argv)
 {

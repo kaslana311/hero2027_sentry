@@ -34,7 +34,9 @@ const uint8_t MIN_LOG = 5;
 class OccMap
 {
 public:
-  OccMap(const std::string & pgm_yaml_path = "");
+  OccMap(
+    double higher_than_ground_threshold, double higher_than_car_threshold, double half_map_size,
+    double resolution_z, int frame_save, const std::string & pgm_yaml_path = "");
   ~OccMap();
   void InitMap(cv::Mat & grid_map);
   void Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose);
@@ -51,15 +53,23 @@ public:
   void PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, Pose pose);
 
 private:
+  double higher_than_ground_threshold_;
+  double higher_than_car_threshold_;
+  double half_map_size_;
+  double resolution_z;
+  int frame_save_;
+  std::string pgm_yaml_path;
+
+private:
   cv::Mat grid_map_;
   uint8_t * occ_map;
   double resolution;
   double local_map_size;
   int local_map_size_d;
-  double resolution_z;
+
   int layer_z;
   long long update_frame = 0;
   std::vector<double> cloud_at_map_origin;
-  std::string pgm_yaml_path;
+
   std::map<int, long long> time_list_;  //索引+未观测到的累计帧数
 };
