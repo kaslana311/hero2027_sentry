@@ -20,21 +20,51 @@ void VelOdometry_Global_Callback(void* data) {
 
 void ChassisNode::VelOdometry_Callback(void* data) {
     // 发布轮式里程计速度（用于 EKF 融合）
-    geometry_msgs::msg::TwistStamped wheel_vel_msg;
-    wheel_vel_msg.header.stamp = this->now();
-    wheel_vel_msg.header.frame_id = "base_link";
+    nav_msgs::msg::Odometry wheel_odom_msg;
+    wheel_odom_msg.header.stamp = this->now();
+    wheel_odom_msg.header.frame_id = "odom";
+    wheel_odom_msg.child_frame_id = "base_link";
 
-    // 将底盘发来的速度信息填入消息
-    wheel_vel_msg.twist.linear.x = robot_wheel_odometry_data.vel_y;
-    wheel_vel_msg.twist.linear.y = -robot_wheel_odometry_data.vel_x;
-    wheel_vel_msg.twist.linear.z = 0.0;
+    // 填充 Twist 信息 (线速度和角速度)
+    // 根据 robot_localization 要求，我们只需要填充 vx, vy
+    wheel_odom_msg.twist.twist.linear.x = robot_wheel_odometry_data.vel_y;
+    wheel_odom_msg.twist.twist.linear.y = -robot_wheel_odometry_data.vel_x;
 
-    // 角速度暂时设为0（如果底盘有角速度数据可以添加）
-    wheel_vel_msg.twist.angular.x = 0.0;
-    wheel_vel_msg.twist.angular.y = 0.0;
-    wheel_vel_msg.twist.angular.z = 0.0;
+    // 如果没有实际测量的角速度，可以设为0
+    wheel_odom_msg.twist.twist.linear.z = 0.0;
+    wheel_odom_msg.twist.twist.angular.x = 0.0;
+    wheel_odom_msg.twist.twist.angular.y = 0.0;
+    wheel_odom_msg.twist.twist.angular.z = 0.0;
 
-    wheel_odom_vel_pub_->publish(wheel_vel_msg);
+    // 填充协方差矩阵 (6x6)
+    // 对应顺序：x, y, z, roll, pitch, yaw
+    // 我们主要关注 linear.x (index 0) 和 linear.y (index 7) 对应的协方差
+    // 假设速度测量有一定的噪声，例如方差为 0.01
+    // 注意：Odometry message 中的 twist.covariance 是一个 36 元素的数组
+    // 索引映射:
+    // 0: x  7: y  14: z  21: roll  28: pitch  35: yaw
+
+    // 初始化为全 0
+    for (int i = 0; i < 36; i++) {
+        wheel_odom_msg.twist.covariance[i] = 0.0;
+    }
+
+    // 设置对角线元素，表示方差
+    // 较小的值表示较高的置信度
+    wheel_odom_msg.twist.covariance[0] = 1e-3;   // vx variance
+    wheel_odom_msg.twist.covariance[7] = 1e-3;   // vy variance
+    wheel_odom_msg.twist.covariance[14] = 1e-6;  // vz variance (几乎为0)
+    wheel_odom_msg.twist.covariance[21] = 1e-6;  // vroll variance
+    wheel_odom_msg.twist.covariance[28] = 1e-6;  // vpitch variance
+    wheel_odom_msg.twist.covariance[35] = 1e-3;  // vyaw variance
+
+    // 注意：pose 信息这里不需要填充，因为我们只用它的速度
+    // 但为了规范，pose 的协方差可以设为极其大，表示不可信
+    for (int i = 0; i < 36; i++) {
+        wheel_odom_msg.pose.covariance[i] = 1e9;  // 很大的值
+    }
+
+    wheel_odom_vel_pub_->publish(wheel_odom_msg);
 }
 
 ChassisNode ::ChassisNode() : Node("chassis_node") {
@@ -87,9 +117,9 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     trigger_pub_ = this->create_publisher<geometry_msgs::msg::Point>(
         "trigger_msg", 10);  // 使用默认组
     // 轮式里程计速度发布器（用于 EKF 融合）
-    wheel_odom_vel_pub_ =
-        this->create_publisher<geometry_msgs::msg::TwistStamped>(
-            "/wheel_odom_velocity", 10);  // 使用默认组
+    // 注意：改用 Odometry 消息类型以包含协方差信息
+    wheel_odom_vel_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
+        "/wheel_odom_velocity", 10);  // 使用默认组
 
     reach_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
         "arrived_at_goal", 10,

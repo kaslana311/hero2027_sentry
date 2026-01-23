@@ -25,6 +25,7 @@
 #include "geometry_msgs/msg/point_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "refree_protocol_tool.hpp"
 #include "serial_interfaces/msg/refree.hpp"
@@ -64,8 +65,7 @@ class ChassisNode : public rclcpp::Node {
     // 自瞄状态订阅者 (isAiming)
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr aiming_subscription_;
     // 轮式里程计速度发布器
-    rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr
-        wheel_odom_vel_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr wheel_odom_vel_pub_;
 
     // 修改：为高频读写创建专用的回调组
     rclcpp::CallbackGroup::SharedPtr read_cb_group_;
