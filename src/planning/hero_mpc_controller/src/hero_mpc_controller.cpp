@@ -140,6 +140,12 @@ void HeroMpcController::configure(
         rclcpp::ParameterValue(std::vector<double>{1.0, 1.0, 0.5}));
     node->get_parameter(plugin_name_ + ".weight_r", weight_r_);
 
+    // Carrot Pose 发布器（用于发布预测点在 base_link 坐标系下的位置）
+    declare_parameter_if_not_declared(
+        node, plugin_name_ + ".carrot_point_index", rclcpp::ParameterValue(5));
+    node->get_parameter(plugin_name_ + ".carrot_point_index",
+                        carrot_point_index_);
+
     // -------------------------------------------------------------------------
     // 初始化 MPC 求解器
     // -------------------------------------------------------------------------
@@ -179,8 +185,7 @@ void HeroMpcController::configure(
     // 话题名称: ~/minco_polynomial_trajectory
     minco_traj_sub_ =
         node->create_subscription<interfaces::msg::MincoTrajectory>(
-            "/smoother_server/minco_polynomial_trajectory",
-            rclcpp::QoS(10),
+            "/smoother_server/minco_polynomial_trajectory", rclcpp::QoS(10),
             std::bind(&HeroMpcController::mincoTrajectoryCallback, this,
                       std::placeholders::_1));
 
@@ -191,6 +196,8 @@ void HeroMpcController::configure(
     reference_path_pub_ =
         node->create_publisher<visualization_msgs::msg::MarkerArray>(
             plugin_name_ + "/reference_path", 10);
+    carrot_pose_pub_ = node->create_publisher<geometry_msgs::msg::PoseStamped>(
+        "carrot_pose", 10);
 
     RCLCPP_INFO(logger_, "[%s] 配置完成: max_vel=%.2f, max_omega=%.2f, dt=%.4f",
                 plugin_name_.c_str(), max_vel_, max_omega_,
@@ -202,6 +209,7 @@ void HeroMpcController::cleanup() {
     minco_traj_sub_.reset();
     predicted_path_pub_.reset();
     reference_path_pub_.reset();
+    carrot_pose_pub_.reset();
     mpc_wrapper_.reset();
 }
 
@@ -209,12 +217,14 @@ void HeroMpcController::activate() {
     RCLCPP_INFO(logger_, "[%s] 激活", plugin_name_.c_str());
     predicted_path_pub_->on_activate();
     reference_path_pub_->on_activate();
+    carrot_pose_pub_->on_activate();
 }
 
 void HeroMpcController::deactivate() {
     RCLCPP_INFO(logger_, "[%s] 停用", plugin_name_.c_str());
     predicted_path_pub_->on_deactivate();
     reference_path_pub_->on_deactivate();
+    carrot_pose_pub_->on_deactivate();
 }
 
 geometry_msgs::msg::TwistStamped HeroMpcController::computeVelocityCommands(
@@ -621,12 +631,52 @@ double HeroMpcController::normalizeAngle(double angle) {
 
 void HeroMpcController::publishPredictedPath(
     const std::vector<StateVector>& predicted_states) {
+    rclcpp::Time current_time = clock_->now();
+
+    // -------------------------------------------------------------------------
+    // 发布 Carrot Pose（指定预测点在 base_link 坐标系下的位置）
+    // -------------------------------------------------------------------------
+    if (carrot_pose_pub_->get_subscription_count() > 0 &&
+        carrot_point_index_ >= 0 &&
+        static_cast<size_t>(carrot_point_index_) < predicted_states.size()) {
+        const auto& carrot_state = predicted_states[carrot_point_index_];
+
+        // 获取 map -> base_link 变换（使用 TimePointZero，不等待）
+        try {
+            auto transform =
+                tf_->lookupTransform("base_link", "map", tf2::TimePointZero);
+
+            // 构造 map 坐标系下的点
+            geometry_msgs::msg::PoseStamped carrot_in_map;
+            carrot_in_map.header.frame_id = "map";
+            carrot_in_map.header.stamp = current_time;
+            carrot_in_map.pose.position.x = carrot_state(kPosX);
+            carrot_in_map.pose.position.y = carrot_state(kPosY);
+            carrot_in_map.pose.position.z = 0.0;
+            carrot_in_map.pose.orientation.w = 1.0;
+
+            // 转换到 base_link 坐标系
+            geometry_msgs::msg::PoseStamped carrot_in_base;
+            tf2::doTransform(carrot_in_map, carrot_in_base, transform);
+            carrot_in_base.header.frame_id = "base_link";
+            carrot_in_base.header.stamp = current_time;
+
+            carrot_pose_pub_->publish(carrot_in_base);
+        } catch (const tf2::TransformException& ex) {
+            RCLCPP_WARN_THROTTLE(logger_, *clock_, 1000,
+                                 "[%s] 无法获取 map->base_link 变换: %s",
+                                 plugin_name_.c_str(), ex.what());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 发布预测轨迹可视化 Marker
+    // -------------------------------------------------------------------------
     if (predicted_path_pub_->get_subscription_count() == 0) {
         return;
     }
 
     visualization_msgs::msg::MarkerArray marker_array;
-    rclcpp::Time current_time = clock_->now();
 
     // 1. 定义删除标记（用于清理可能存在的旧标记）
     visualization_msgs::msg::Marker delete_marker;

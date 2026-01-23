@@ -403,6 +403,10 @@ class HeroMpcController : public nav2_core::Controller {
     rclcpp_lifecycle::LifecyclePublisher<
         visualization_msgs::msg::MarkerArray>::SharedPtr reference_path_pub_;
 
+    /// Carrot Pose 发布器（预测点在 base_link 坐标系下的位置）
+    rclcpp_lifecycle::LifecyclePublisher<
+        geometry_msgs::msg::PoseStamped>::SharedPtr carrot_pose_pub_;
+
     // =========================================================================
     // MPC 相关
     // =========================================================================
@@ -468,6 +472,9 @@ class HeroMpcController : public nav2_core::Controller {
 
     /// 参考航向角（当禁用航向跟踪时使用）
     double reference_yaw_{0.0};
+
+    /// Carrot 预测点索引（用于发布 carrot_pose）
+    int carrot_point_index_{5};
 
     // =========================================================================
     // 全局路径缓存（兼容 Nav2 接口）
