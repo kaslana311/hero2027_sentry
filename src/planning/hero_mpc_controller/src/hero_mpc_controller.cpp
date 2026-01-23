@@ -197,7 +197,7 @@ void HeroMpcController::configure(
         node->create_publisher<visualization_msgs::msg::MarkerArray>(
             plugin_name_ + "/reference_path", 10);
     carrot_pose_pub_ = node->create_publisher<geometry_msgs::msg::PoseStamped>(
-        "carrot_pose", 10);
+        "/carrot_pose", 10);
 
     RCLCPP_INFO(logger_, "[%s] 配置完成: max_vel=%.2f, max_omega=%.2f, dt=%.4f",
                 plugin_name_.c_str(), max_vel_, max_omega_,
