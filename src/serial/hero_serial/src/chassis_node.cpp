@@ -134,12 +134,13 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         // 不指定回调组，使用默认组
     );
 
-    // 订阅自瞄状态消息 (isAiming)
-    aiming_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
-        "isAiming", 10,
-        std::bind(&ChassisNode::AimingCallback, this, std::placeholders::_1)
-        // 不指定回调组，使用默认组
-    );
+    // 订阅自瞄状态消息 (TrackerOutput)
+    aiming_subscription_ =
+        this->create_subscription<interfaces::msg::TrackerOutput>(
+            "/tracker/output", 10,
+            std::bind(&ChassisNode::AimingCallback, this, std::placeholders::_1)
+            // 不指定回调组，使用默认组
+        );
 
     start_time_ = this->now();
     // 创建订阅者
@@ -246,17 +247,21 @@ void ChassisNode::CmdVelCallback(
     ctrl_info_t_data.y = msg->linear.x * MPS_TO_MMPS;
 }
 
-// 自瞄状态回调函数
-void ChassisNode::AimingCallback(const std_msgs::msg::Bool::SharedPtr msg) {
-    if (msg->data) {
-        // 收到 true，进入并保持进攻状态
-        SetPosture(RobotPosture::ATTACK);
-        RCLCPP_INFO(this->get_logger(), "进入进攻姿态");
+// 自瞄状态回调函数 (基于 TrackerOutput)
+void ChassisNode::AimingCallback(
+    const interfaces::msg::TrackerOutput::SharedPtr msg) {
+    if (!msg->targets.empty()) {
+        // targets 不为空，检验是否是 ATTACK 状态，不是则切入 ATTACK 状态
+        if (current_posture_ != RobotPosture::ATTACK) {
+            SetPosture(RobotPosture::ATTACK);
+            RCLCPP_INFO(this->get_logger(), "检测到目标，进入进攻姿态");
+        }
     } else {
-        // 收到 false，如果当前处于进攻状态则退出到移动姿态
+        // targets 为空，检验是否是 ATTACK 状态，是才切换成 MOVE 状态
         if (current_posture_ == RobotPosture::ATTACK) {
             SetPosture(RobotPosture::MOVE);
-            RCLCPP_INFO(this->get_logger(), "退出进攻姿态，进入移动姿态");
+            RCLCPP_INFO(this->get_logger(),
+                        "目标丢失，退出进攻姿态，进入移动姿态");
         }
     }
 }

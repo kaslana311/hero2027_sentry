@@ -52,21 +52,14 @@ add_executable(ec_interface_node src/ec_interface_node.cpp src/boost_asio.cpp)
 add_executable(new_ec_interface_node src/new_ec_interface_node.cpp src/boost_asio.cpp)
 add_executable(receive_decision_node src/receive_decision_node.cpp src/boost_asio.cpp)
 
-
-add_executable(test_node src/protocol_test.cpp)
-
-
-
 ament_target_dependencies(chassis_node rclcpp geometry_msgs serial_interfaces nav_msgs interfaces)
 ament_target_dependencies(gimbal_node rclcpp geometry_msgs serial_interfaces nav_msgs interfaces action_msgs tf2_ros geometry_msgs tf2_geometry_msgs)
 ament_target_dependencies(ec_interface_node rclcpp geometry_msgs serial_interfaces nav_msgs interfaces)
-ament_target_dependencies(test_node rclcpp geometry_msgs serial_interfaces nav_msgs interfaces)
 ament_target_dependencies(new_ec_interface_node rclcpp geometry_msgs serial_interfaces nav_msgs interfaces)
 ament_target_dependencies(receive_decision_node rclcpp geometry_msgs serial_interfaces nav_msgs interfaces)
 
 
 target_link_libraries(chassis_node Threads::Threads)
-target_link_libraries(test_node Threads::Threads)
 target_link_libraries(gimbal_node Threads::Threads)
 target_link_libraries(ec_interface_node Threads::Threads)
 target_link_libraries(new_ec_interface_node Threads::Threads)
@@ -75,7 +68,6 @@ target_link_libraries(receive_decision_node Threads::Threads)
 
 install(TARGETS
   gimbal_node
-  test_node
   chassis_node
   ec_interface_node
   new_ec_interface_node

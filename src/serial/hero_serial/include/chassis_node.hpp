@@ -25,6 +25,7 @@
 #include "geometry_msgs/msg/point_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
+#include "interfaces/msg/tracker_output.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "refree_protocol_tool.hpp"
@@ -62,8 +63,9 @@ class ChassisNode : public rclcpp::Node {
     // 血量危险状态订阅者
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
         hp_danger_subscription_;
-    // 自瞄状态订阅者 (isAiming)
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr aiming_subscription_;
+    // 自瞄状态订阅者 (TrackerOutput)
+    rclcpp::Subscription<interfaces::msg::TrackerOutput>::SharedPtr
+        aiming_subscription_;
     // 轮式里程计速度发布器
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr wheel_odom_vel_pub_;
 
@@ -125,7 +127,7 @@ class ChassisNode : public rclcpp::Node {
 
     void CmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
     void HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg);
-    void AimingCallback(const std_msgs::msg::Bool::SharedPtr msg);
+    void AimingCallback(const interfaces::msg::TrackerOutput::SharedPtr msg);
     void ChassisCmdTimerCallback();
     void RefreeTimerCallback();
     void RefreePubTimerCallback();

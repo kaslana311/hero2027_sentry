@@ -6,3 +6,9 @@ topics:
     type: geometry_msgs/msg/PoseStamped
     from_domain: 1
     to_domain: 2
+  
+  traker_output_backwarding:
+    topic: /tracker/output
+    type: interfaces/msg/TrackerOutput
+    from_domain: 2
+    to_domain: 1
