@@ -253,9 +253,9 @@ void ChassisNode::RefreeTimerCallback() {
                             static_cast<unsigned int>(data.size()))) {
             RCLCPP_ERROR(this->get_logger(), "裁判系统数据解析失败,%d",
                          data.size());
+        } else {
+            RCLCPP_INFO(this->get_logger(), "数据正常解析,%d", data.size());
         }
-        // RCLCPP_INFO(this->get_logger(), "数据正常解析,%d", data.size());
-        // }
         // 移除已处理数据
         boost_asio_.Consume(data.size());
     }
