@@ -290,34 +290,34 @@ class LidarExtrinsicCalibrator:
         
         # 创建图形
         fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-        fig.suptitle('激光雷达外参标定结果 (LiDAR Extrinsic Calibration)', fontsize=14, fontweight='bold')
+        fig.suptitle('LiDAR Extrinsic Calibration Result', fontsize=14, fontweight='bold')
         
         # ==================== 图 1: XY 平面圆拟合 ====================
         ax1 = axes[0]
         
         # 绘制原始轨迹散点
         scatter = ax1.scatter(data['x'], data['y'], c=data['timestamps'] - data['timestamps'][0],
-                              cmap='viridis', s=10, alpha=0.7, label='原始轨迹')
-        plt.colorbar(scatter, ax=ax1, label='时间 [秒]')
+                              cmap='viridis', s=10, alpha=0.7, label='Raw Trajectory')
+        plt.colorbar(scatter, ax=ax1, label='Time [s]')
         
         # 绘制拟合圆
         theta = np.linspace(0, 2 * np.pi, 100)
         x_circle = self.circle_center[0] + self.radius * np.cos(theta)
         y_circle = self.circle_center[1] + self.radius * np.sin(theta)
-        ax1.plot(x_circle, y_circle, 'r-', linewidth=2, label=f'拟合圆 (R={self.radius*1000:.2f}mm)')
+        ax1.plot(x_circle, y_circle, 'r-', linewidth=2, label=f'Fitted Circle (R={self.radius*1000:.2f}mm)')
         
         # 绘制圆心
         ax1.plot(self.circle_center[0], self.circle_center[1], 'r+', markersize=15, 
-                 markeredgewidth=2, label='圆心')
+                 markeredgewidth=2, label='Center')
         
         # 绘制半径线
         ax1.plot([self.circle_center[0], data['x'][0]], 
                  [self.circle_center[1], data['y'][0]], 
                  'r--', linewidth=1, alpha=0.7)
         
-        ax1.set_xlabel('X [米]')
-        ax1.set_ylabel('Y [米]')
-        ax1.set_title(f'XY 平面轨迹与圆拟合\n半径 R = {self.radius*1000:.3f} mm, RMSE = {self.rmse*1000:.3f} mm')
+        ax1.set_xlabel('X [m]')
+        ax1.set_ylabel('Y [m]')
+        ax1.set_title(f'XY Trajectory & Circle Fitting\nRadius R = {self.radius*1000:.3f} mm, RMSE = {self.rmse*1000:.3f} mm')
         ax1.legend(loc='upper right')
         ax1.axis('equal')
         ax1.grid(True, alpha=0.3)
@@ -333,7 +333,7 @@ class LidarExtrinsicCalibrator:
         
         # 绘制平均 Pitch 线
         ax2.axhline(y=np.degrees(self.pitch_mean), color='r', linestyle='--', linewidth=2,
-                    label=f'平均 Pitch = {np.degrees(self.pitch_mean):.4f}°')
+                    label=f'Mean Pitch = {np.degrees(self.pitch_mean):.4f}°')
         
         # 绘制 Pitch ± 1σ 范围
         ax2.fill_between(time_rel, 
@@ -341,9 +341,9 @@ class LidarExtrinsicCalibrator:
                          np.degrees(self.pitch_mean + self.pitch_std),
                          color='red', alpha=0.1, label='Pitch ±1σ')
         
-        ax2.set_xlabel('时间 [秒]')
-        ax2.set_ylabel('角度 [度]')
-        ax2.set_title(f'姿态角变化\n平均 Pitch = {np.degrees(self.pitch_mean):.4f}° ± {np.degrees(self.pitch_std):.4f}°')
+        ax2.set_xlabel('Time [s]')
+        ax2.set_ylabel('Angle [deg]')
+        ax2.set_title(f'Attitude Changes\nMean Pitch = {np.degrees(self.pitch_mean):.4f}° ± {np.degrees(self.pitch_std):.4f}°')
         ax2.legend(loc='upper right')
         ax2.grid(True, alpha=0.3)
         
