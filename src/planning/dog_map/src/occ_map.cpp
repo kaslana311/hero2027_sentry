@@ -33,6 +33,7 @@ OccMap::OccMap(
     InitMap(map_img);
   }
   std::cout << " -- [DOG_MAP] OccMap initialized." << std::endl;
+  std::cout << "[DOG_MAP] path " << pgm_path << std::endl;
   std::cout << " -- [DOG_MAP] half_map_size: " << half_map_size_
             << ", resolution_z: " << resolution_z << std::endl;
   std::cout << " -- [DOG_MAP] higher_than_ground_threshold: " << higher_than_ground_threshold_
@@ -51,7 +52,7 @@ void OccMap::Clear() { std::fill_n(occ_map, grid_map_.rows * grid_map_.cols, 0);
 void OccMap::TimeGoON()
 {  //长期未观测到的障碍物清除
   for (auto it = time_list_.begin(); it != time_list_.end();) {
-    if (update_frame - it->second > 10) {
+    if (update_frame - it->second > frame_save_) {
       int index = it->first;
       occ_map[index] = 0;
       it = time_list_.erase(it);
@@ -99,7 +100,7 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI> & pub_pc)
       }
     }
     double dzf = (max_z_occ_index - min_z_occ_index) * resolution_z;
-    if (dzf < 0.06) continue;                                          //地面过滤
+    if (dzf < higher_than_ground_threshold_) continue;                 //地面过滤
     if (dzf < 0.12 && min_z_occ_index * resolution_z > 0.2) continue;  //过高过滤
     //计算最大空洞大小
     int max_hole_size = 0;
@@ -117,9 +118,9 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI> & pub_pc)
     if (max_hole_size * resolution_z > 0.15) continue;
 
     pcl::PointXYZI pt;
-    pt.x = idx * resolution + resolution / 2.0;
-    pt.y = idy * resolution + resolution / 2.0;
-    pt.z = idz * resolution_z + resolution_z / 2.0;
+    pt.x = idx * resolution + resolution / 2.0 + cloud_at_map_origin[0];
+    pt.y = idy * resolution + resolution / 2.0 + cloud_at_map_origin[1];
+    pt.z = idz * resolution_z + resolution_z / 2.0 + cloud_at_map_origin[2];
     pt.intensity = pt.z;  // Set intensity to 1.0 (or any other value)
     pub_pc.points.push_back(pt);
   }
@@ -239,6 +240,7 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose)
       continue;  //静态障碍物不处理
 #endif
     int zi = static_cast<int>((point.z - cloud_at_map_origin[2]) / resolution_z);
+    if (zi < 2) continue;  //地面滤波
     int index = xi + yi * grid_map_.cols + zi * grid_map_.cols * grid_map_.rows;
     //更新占据概率
     occ_map[index] =
