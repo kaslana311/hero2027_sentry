@@ -167,8 +167,8 @@ std::vector<int> time_compressing(const PointCloudXYZI::Ptr& point_cloud) {
     constexpr double batch_size_ms = 1.0;
 
     // 预估 Batch 数量，减少 vector 重分配
-    // 假设一帧 100ms，则约有 10 个 Batch
-    time_seq.reserve(points_size / 100 + 10);
+    // 一帧 50ms，则约有 50 个 Batch
+    time_seq.reserve(points_size / 50 + 50);
 
     int count = 0;  // 当前 Batch 内的点计数
     // 当前 Batch 的起始时间 (curvature 单位是 ms)

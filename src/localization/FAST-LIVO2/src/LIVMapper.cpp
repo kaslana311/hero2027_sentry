@@ -1456,7 +1456,7 @@ Eigen::Matrix3d rot_lidar_in_odom = q_lidar_in_odom.toRotationMatrix();
 // base_link → joint_link: 绕Y轴转35° (0.349066 rad), 无平移
 // joint_link → lidar_link: x方向平移0.1996m, 无旋转
 // 2.1 base_link → joint_link
-double angle_y = 0.6108652;  // 35度转弧度
+double angle_y = 0.64;  // 35度转弧度
 Eigen::Matrix3d R_joint_base;
 R_joint_base = Eigen::AngleAxisd(angle_y, Eigen::Vector3d::UnitY());
 Eigen::Vector3d t_joint_base(0.0, 0.0, -0.0);

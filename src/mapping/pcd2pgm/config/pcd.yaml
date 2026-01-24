@@ -1,6 +1,6 @@
 /pcd2pgm:
   ros__parameters:
-    file_directory: /home/dji/project/HERO2025_Sentry/src/common/point_cloud_files/source_pcd/
+    file_directory: /home/dji/hero2026_-sentry/src/common/point_cloud_files/source_pcd/
     file_name: fast_lio_latest_map
     flag_pass_through: false
     map_resolution: 0.05

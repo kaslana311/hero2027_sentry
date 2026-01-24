@@ -120,7 +120,16 @@ def generate_launch_description():
         arguments=["--ros-args", "--log-level", log_level],
         parameters=[configured_params],
     )
-
+    cloud_analys=Node(
+        package="cloud_analys",
+        executable="cloud_analys_node",
+        name="cloud_analys_node",
+        output="screen",
+        respawn=use_respawn,
+        respawn_delay=2.0,
+        arguments=["--ros-args", "--log-level", log_level],
+        parameters=[configured_params],
+    )
     load_nodes = GroupAction(
         condition=IfCondition(PythonExpression(["not ", use_composition])),
         actions=[
@@ -302,9 +311,10 @@ def generate_launch_description():
     ld.add_action(declare_container_name_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
+    ld.add_action(cloud_analys)
     # Add the actions to launch all of the navigation nodes
-    ld.add_action(start_terrain_analysis_cmd)
-    ld.add_action(start_terrain_analysis_ext_cmd)
+    # ld.add_action(start_terrain_analysis_cmd)
+    # ld.add_action(start_terrain_analysis_ext_cmd)
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
 

@@ -7,8 +7,12 @@ topics:
     from_domain: 1
     to_domain: 2
   
-  traker_output_backwarding:
-    topic: /tracker/output
+  tracker/out:
     type: interfaces/msg/TrackerOutput
     from_domain: 2
     to_domain: 1
+    qos:
+      reliability: best_effort
+      durability: volatile
+      depth: 1
+      history: keep_last

@@ -734,7 +734,7 @@ MincoSmoother::findProjectionOnTrajectory(const Trajectory<5, 2> &traj,
     //    - 起始时间: max(0, elapsed_time) - 已经经过的部分没有参考意义
     //    - 结束时间: total_duration
     //    - 考虑到重规划预测时间，稍微向前看一点
-    double search_start = std::max(0.0, elapsed_time);
+    double search_start = 0.0;
     double search_end = total_duration;
 
     // 如果可搜索范围太小，返回无效

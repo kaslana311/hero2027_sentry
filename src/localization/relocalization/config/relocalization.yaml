@@ -7,7 +7,7 @@
       init_pitch: 0.0
       init_roll: 0.0
       init_pose: [0.0, 0.0,0.0, 0.0, 0.0, 0.0]
-      pcd_path: "/home/dji/project/HERO2025_Sentry/src/common/point_cloud_files/filtered_pcd/fast_lio_latest_map.pcd"
+      pcd_path: "src/common/point_cloud_files/filtered_pcd/fast_lio_latest_map.pcd"
       
       # 添加角度约束参数S
       gate_yaw_deg: 100.5     # 偏航角约束范围（正负2度）

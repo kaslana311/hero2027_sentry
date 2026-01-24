@@ -72,6 +72,7 @@ class ChassisNode : public rclcpp::Node {
     // 修改：为高频读写创建专用的回调组
     rclcpp::CallbackGroup::SharedPtr read_cb_group_;
     rclcpp::CallbackGroup::SharedPtr write_cb_group_;
+    rclcpp::CallbackGroup::SharedPtr refree_cb_group_;
 
     cmd_protocol::ProtocolBuilder cmd_builder;
     refree_protocol::ProtocolParser referee_parser;

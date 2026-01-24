@@ -27,8 +27,8 @@ void ChassisNode::VelOdometry_Callback(void* data) {
 
     // 填充 Twist 信息 (线速度和角速度)
     // 根据 robot_localization 要求，我们只需要填充 vx, vy
-    wheel_odom_msg.twist.twist.linear.x = robot_wheel_odometry_data.vel_y;
-    wheel_odom_msg.twist.twist.linear.y = -robot_wheel_odometry_data.vel_x;
+    wheel_odom_msg.twist.twist.linear.x = robot_wheel_odometry_data.vel_x / 1000.0; 
+    wheel_odom_msg.twist.twist.linear.y = robot_wheel_odometry_data.vel_y / 1000.0;
 
     // 如果没有实际测量的角速度，可以设为0
     wheel_odom_msg.twist.twist.linear.z = 0.0;
@@ -90,6 +90,8 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     write_cb_group_ = this->create_callback_group(
         rclcpp::CallbackGroupType::MutuallyExclusive);
     // 3. 其他低频的ROS订阅和发布将使用默认回调组，无需特殊设置
+    refree_cb_group_ = this->create_callback_group(
+        rclcpp::CallbackGroupType::MutuallyExclusive);
 
     // 创建发送给底盘控制命令的定时器 (100Hz)
     chassis_cmd_timer_ = this->create_wall_timer(
@@ -106,9 +108,8 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     // 创建裁判系统广播定时器 (10Hz)
     referee_pub_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(100),
-        std::bind(&ChassisNode::RefreePubTimerCallback, this)
-        // 不指定回调组，使用默认组
-    );
+        std::bind(&ChassisNode::RefreePubTimerCallback, this),
+        refree_cb_group_);
 
     // 发布裁判系统信息给决策节点
     refree_pub_ = this->create_publisher<serial_interfaces::msg::Refree>(
@@ -119,7 +120,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     // 轮式里程计速度发布器（用于 EKF 融合）
     // 注意：改用 Odometry 消息类型以包含协方差信息
     wheel_odom_vel_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
-        "/wheel_odom_velocity", 10);  // 使用默认组
+        "/wheel_odometry", 10);
 
     reach_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
         "arrived_at_goal", 10,
@@ -135,9 +136,10 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     );
 
     // 订阅自瞄状态消息 (TrackerOutput)
+    const rclcpp::QoS qos(rclcpp::QoS(1).best_effort().keep_last(1).durability_volatile());
     aiming_subscription_ =
         this->create_subscription<interfaces::msg::TrackerOutput>(
-            "/tracker/output", 10,
+            "/tracker/out", qos,
             std::bind(&ChassisNode::AimingCallback, this, std::placeholders::_1)
             // 不指定回调组，使用默认组
         );
@@ -243,13 +245,14 @@ void ChassisNode::ReachCallback(const std_msgs::msg::Bool::SharedPtr msg) {
 
 void ChassisNode::CmdVelCallback(
     const geometry_msgs::msg::Twist::SharedPtr msg) {
-    ctrl_info_t_data.x = msg->linear.y * MPS_TO_MMPS * (-1);
-    ctrl_info_t_data.y = msg->linear.x * MPS_TO_MMPS;
+    ctrl_info_t_data.x = msg->linear.x * MPS_TO_MMPS;
+    ctrl_info_t_data.y = msg->linear.y * MPS_TO_MMPS;
 }
 
 // 自瞄状态回调函数 (基于 TrackerOutput)
 void ChassisNode::AimingCallback(
     const interfaces::msg::TrackerOutput::SharedPtr msg) {
+    // RCLCPP_INFO(this->get_logger(), "收到消息");
     if (!msg->targets.empty()) {
         // targets 不为空，检验是否是 ATTACK 状态，不是则切入 ATTACK 状态
         if (current_posture_ != RobotPosture::ATTACK) {
@@ -288,8 +291,8 @@ void ChassisNode::RefreeTimerCallback() {
                             static_cast<unsigned int>(data.size()))) {
             RCLCPP_ERROR(this->get_logger(), "裁判系统数据解析失败,%d",
                          data.size());
-        } else {
-            RCLCPP_INFO(this->get_logger(), "数据正常解析,%d", data.size());
+        // }else{
+        //     RCLCPP_INFO(this->get_logger(), "裁判系统数据解析正常");
         }
         // 移除已处理数据
         boost_asio_.Consume(data.size());
@@ -297,7 +300,7 @@ void ChassisNode::RefreeTimerCallback() {
 }
 
 void ChassisNode::RefreePubTimerCallback() {
-    RCLCPP_INFO(this->get_logger(), "发布回调");
+    // RCLCPP_INFO(this->get_logger(), "发布回调");
     serial_interfaces::msg::Refree msg;
     // std::cout << "比赛类型: " << static_cast<int>(game_info_t_data.game_type)
     //           << std::endl;

@@ -15,7 +15,7 @@ ekf_filter_node:
                    false, false, false]
     odom0_differential: false
 
-    odom1: /wheel_odom_velocity
+    odom1: /wheel_odometry
     odom1_config: [false, false, false,   # X, Y, Z (不使用)
                     false, false, false,   # Roll, Pitch, Yaw (不使用)
                     true,  true,  false,   # Vx, Vy, Vz (使用x和y方向速度)
