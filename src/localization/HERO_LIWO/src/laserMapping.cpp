@@ -822,6 +822,62 @@ int main(int argc, char** argv) {
                             }
                         }
 
+                        // Batch内点云去畸变 (Deskewing)
+                        // 将 Batch 内所有点从采样时刻 t_j 投影到 Batch 结束时刻
+                        // 数学原理: p'_j = R_j * p_j + T_j
+                        // 其中 R_j = Exp(omega * dt_j), T_j = v_body * dt_j
+                        // dt_j = t_j - t_current (负值，因为点是在过去采样的)
+                        if (feats_down_size > 0) {
+                            // 1. 获取当前时刻的运动状态 (转换到 Body 系)
+                            // 角速度: IMU测量值 - 陀螺仪零偏
+                            V3D omega_curr = angvel_avr - kf_output.x_.bg;
+                            // 线速度: 世界系速度转到机体系 v_body = R_WB^T *
+                            // v_world
+                            V3D vel_curr_body =
+                                kf_output.x_.rot.transpose() * kf_output.x_.vel;
+
+                            // 2. 确定当前 Batch 的点云索引范围
+                            // idx 是上一轮循环处理完的最后一个点索引，本轮从
+                            // idx + 1 开始
+                            int batch_start_idx = idx + 1;
+                            int batch_end_idx = idx + time_seq[k];
+
+                            // 3. 遍历 Batch 内所有点并投影到 time_current 时刻
+                            for (int j = batch_start_idx; j <= batch_end_idx;
+                                 j++) {
+                                // 边界检查
+                                if (j < 0 || j >= static_cast<int>(
+                                                      feats_down_body->size()))
+                                    break;
+
+                                PointType& pt = feats_down_body->points[j];
+
+                                // 计算时间差: dt = t_sample - t_current (负值)
+                                double pt_time = pt.curvature / 1000.0 +
+                                                 Measures.lidar_beg_time;
+                                double dt_j = pt_time - time_current;
+
+                                // 时间差极小则跳过
+                                if (std::abs(dt_j) < 1e-6) continue;
+
+                                // 旋转补偿: R_j = Exp(omega * dt)
+                                V3D rho_j = omega_curr * dt_j;
+                                M3D R_j = Exp(rho_j(0), rho_j(1), rho_j(2));
+
+                                // 平移补偿: T_j = v_body * dt
+                                V3D t_j = vel_curr_body * dt_j;
+
+                                // 执行变换: p' = R * p + T
+                                V3D p_j(pt.x, pt.y, pt.z);
+                                V3D p_prime_j = R_j * p_j + t_j;
+
+                                // 原地更新点坐标
+                                pt.x = p_prime_j(0);
+                                pt.y = p_prime_j(1);
+                                pt.z = p_prime_j(2);
+                            }
+                        }
+
                         double t_update_start = omp_get_wtime();
 
                         // 点太少，跳过
