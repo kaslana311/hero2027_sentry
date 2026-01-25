@@ -54,9 +54,11 @@ void OccMap::TimeGoON()
   for (auto it = time_list_.begin(); it != time_list_.end();) {
     if (update_frame - it->second > frame_save_) {
       int index = it->first;
-      occ_map[index] = 0;
-      it = time_list_.erase(it);
-      continue;
+       // 更新 Free 状态
+      occ_map[index] =
+        std::max(static_cast<int>(occ_map[index]) +FORGET_FACTOR,  static_cast<int>(MIN_LOG));
+      // it = time_list_.erase(it);
+      // continue;
     }
     //非战据点清除
     if (!IsOccupied(it->first)) {
@@ -243,7 +245,7 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose)
 #endif
     int zi = static_cast<int>((point.z - cloud_at_map_origin[2]) / resolution_z);
     if (zi < 2) {
-      std::cout<<"zi "<<zi<<std::endl;
+      // std::cout<<"zi "<<zi<<std::endl;
       continue;}  //地面滤波
     int index = xi + yi * grid_map_.cols + zi * grid_map_.cols * grid_map_.rows;
     //更新占据概率
