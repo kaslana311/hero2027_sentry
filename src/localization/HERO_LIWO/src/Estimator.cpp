@@ -570,19 +570,19 @@ void h_model_wheel_output(state_output& s,
     skew_v_IMU << SKEW_SYM_MATRX(v_IMU_from_vel);
     Eigen::Matrix3d dv_drot = R_WI_T * skew_v_IMU;  // 3x3
     // 取前两行 (只考虑 vx, vy)
-    ekfom_data.H_wheel.block<2, 3>(0, 3) = -dv_drot.topRows(2);
+    ekfom_data.H_wheel.block<2, 3>(0, 3) = dv_drot.topRows(2);
 
     // ∂r/∂vel: 残差对速度的偏导 (在状态向量位置 12-14)
     // ∂v_pred/∂v_G = R_WI^T * R_GI
     Eigen::Matrix3d dv_dvel = R_WI_T * R_GI;  // 3x3
-    ekfom_data.H_wheel.block<2, 3>(0, 12) = -dv_dvel.topRows(2);
+    ekfom_data.H_wheel.block<2, 3>(0, 12) = dv_dvel.topRows(2);
 
     // ∂r/∂omg: 残差对角速度的偏导 (在状态向量位置 15-17)
     // ∂v_pred/∂ω = R_WI^T * (-[P_WI]×) = -R_WI^T * skew(P_WI)
     Eigen::Matrix3d skew_P;
     skew_P << SKEW_SYM_MATRX(P_wheel_in_IMU);
     Eigen::Matrix3d dv_domg = -R_WI_T * skew_P;  // 3x3
-    ekfom_data.H_wheel.block<2, 3>(0, 15) = -dv_domg.topRows(2);
+    ekfom_data.H_wheel.block<2, 3>(0, 15) = dv_domg.topRows(2);
 
     // Step 6: 设置观测噪声协方差
     ekfom_data.R_wheel(0) = wheel_noise_cov;
