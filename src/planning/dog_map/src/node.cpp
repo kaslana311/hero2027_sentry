@@ -219,7 +219,7 @@ public:
       rc_.update_cbk_group =
         this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
       rc_.update_timer = this->create_wall_timer(
-        std::chrono::milliseconds(100),  // 0.001秒，即1毫秒
+        std::chrono::milliseconds(1),  // 0.001秒，即1毫秒
         std::bind(&DogMapNode::updateCallback, this), rc_.update_cbk_group);
     }
   }
