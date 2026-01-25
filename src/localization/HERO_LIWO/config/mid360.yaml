@@ -62,10 +62,10 @@
             enable: False
             topic: "wheel_odometry"
             vel_cov: 0.01
-            extrinsic_T: [ 0.2, 0.0, 0.0 ]
-            extrinsic_R: [ 1.0, 0.0, 0.0,
-                           0.0, 1.0, 0.0,
-                           0.0, 0.0, 1.0 ]
+            extrinsic_T: [-0.17846, 0.0, 0.13092]
+            extrinsic_R: [0.80628,  0.0, 0.59151, 
+                          0.0,      1.0, 0.0, 
+                         -0.59151,  0.0, 0.80628]
 
         odometry:
             publish_odometry_without_downsample: True
