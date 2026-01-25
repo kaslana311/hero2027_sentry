@@ -27,8 +27,10 @@ void ChassisNode::VelOdometry_Callback(void* data) {
 
     // 填充 Twist 信息 (线速度和角速度)
     // 根据 robot_localization 要求，我们只需要填充 vx, vy
-    wheel_odom_msg.twist.twist.linear.x = robot_wheel_odometry_data.vel_x / 1000.0; 
-    wheel_odom_msg.twist.twist.linear.y = robot_wheel_odometry_data.vel_y / 1000.0;
+    wheel_odom_msg.twist.twist.linear.x =
+        robot_wheel_odometry_data.vel_x / 1000.0;
+    wheel_odom_msg.twist.twist.linear.y =
+        robot_wheel_odometry_data.vel_y / 1000.0;
 
     // 如果没有实际测量的角速度，可以设为0
     wheel_odom_msg.twist.twist.linear.z = 0.0;
@@ -99,11 +101,11 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         std::bind(&ChassisNode::ChassisCmdTimerCallback, this),
         write_cb_group_);  // 使用写入专用组
 
-    // 创建来自底盘裁判系统数据处理的定时器 (100Hz)
-    referee_read_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(10),
-        std::bind(&ChassisNode::RefreeTimerCallback, this),
-        read_cb_group_);  // 使用读取专用组
+    // ========== 启动独立接收线程（替代原来的定时器轮询） ==========
+    // 原 referee_read_timer_ 已移除，改用独立线程实现高频读取
+    thread_running_ = true;
+    receive_thread_ = std::thread(&ChassisNode::ReceiveThreadFunc, this);
+    RCLCPP_INFO(this->get_logger(), "串口接收线程已启动");
 
     // 创建裁判系统广播定时器 (10Hz)
     referee_pub_timer_ = this->create_wall_timer(
@@ -119,8 +121,8 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         "trigger_msg", 10);  // 使用默认组
     // 轮式里程计速度发布器（用于 EKF 融合）
     // 注意：改用 Odometry 消息类型以包含协方差信息
-    wheel_odom_vel_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
-        "/wheel_odometry", 10);
+    wheel_odom_vel_pub_ =
+        this->create_publisher<nav_msgs::msg::Odometry>("/wheel_odometry", 10);
 
     reach_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
         "arrived_at_goal", 10,
@@ -136,7 +138,8 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     );
 
     // 订阅自瞄状态消息 (TrackerOutput)
-    const rclcpp::QoS qos(rclcpp::QoS(1).best_effort().keep_last(1).durability_volatile());
+    const rclcpp::QoS qos(
+        rclcpp::QoS(1).best_effort().keep_last(1).durability_volatile());
     aiming_subscription_ =
         this->create_subscription<interfaces::msg::TrackerOutput>(
             "/tracker/out", qos,
@@ -280,23 +283,56 @@ void ChassisNode::SetPosture(RobotPosture posture) {
     }
 }
 
-void ChassisNode::ChassisCmdTimerCallback() {
-    Send_Cmd_Packet(serial_dev_, tx_buffer, sizeof(tx_buffer), 0);
+// ========== 析构函数：安全停止接收线程 ==========
+ChassisNode::~ChassisNode() {
+    // 设置线程停止标志
+    thread_running_ = false;
+
+    // 等待线程结束
+    if (receive_thread_.joinable()) {
+        RCLCPP_INFO(this->get_logger(), "正在停止串口接收线程...");
+        receive_thread_.join();
+        RCLCPP_INFO(this->get_logger(), "串口接收线程已停止");
+    }
+
+    // 清理全局指针
+    g_chassis_node_instance = nullptr;
 }
 
-void ChassisNode::RefreeTimerCallback() {
-    if (boost_asio_.Read()) {
-        const auto& data = boost_asio_.GetReadBuffer();
-        if (!Receive_Handle(const_cast<unsigned char*>(data.data()),
-                            static_cast<unsigned int>(data.size()))) {
-            RCLCPP_ERROR(this->get_logger(), "裁判系统数据解析失败,%d",
-                         data.size());
-        // }else{
-        //     RCLCPP_INFO(this->get_logger(), "裁判系统数据解析正常");
+// ========== 接收线程函数：高频串口读取 ==========
+void ChassisNode::ReceiveThreadFunc() {
+    RCLCPP_INFO(this->get_logger(), "接收线程开始运行");
+
+    while (rclcpp::ok() && thread_running_.load()) {
+        // 阻塞式读取串口数据（数据来了立刻返回）
+        if (boost_asio_.Read()) {
+            const auto& data = boost_asio_.GetReadBuffer();
+
+            if (!data.empty()) {
+                // 尝试解析数据
+                if (!Receive_Handle(const_cast<unsigned char*>(data.data()),
+                                    static_cast<unsigned int>(data.size()))) {
+                    // 解析失败时不打印日志，避免刷屏（可能是数据不完整）
+                    // 如果需要调试，可以取消注释下面的行
+                    // RCLCPP_WARN(this->get_logger(), "数据解析失败，数据长度:
+                    // %zu", data.size());
+                }
+
+                // 清空缓冲区，防止数据堆积
+                // 注意：这是临时方案，未来应实现环形缓冲区和粘包处理
+                boost_asio_.Consume(data.size());
+            }
+        } else {
+            // 读取失败时，短暂休眠避免 CPU 空转
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        // 移除已处理数据
-        boost_asio_.Consume(data.size());
     }
+
+    RCLCPP_INFO(this->get_logger(), "接收线程退出");
+}
+
+void ChassisNode::ChassisCmdTimerCallback() {
+    Send_Cmd_Packet(serial_dev_, tx_buffer, sizeof(tx_buffer), 0);
 }
 
 void ChassisNode::RefreePubTimerCallback() {

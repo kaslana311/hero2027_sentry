@@ -43,15 +43,21 @@ enum class RobotPosture : uint8_t {
 class ChassisNode : public rclcpp::Node {
    public:
     ChassisNode();
-    ~ChassisNode() = default;
+    ~ChassisNode();  // 需要自定义析构函数来停止线程
 
     void VelOdometry_Callback(void* data);
 
    private:
     BoostAsio boost_asio_;
+
+    // ========== 接收线程相关 ==========
+    std::thread receive_thread_;               // 接收线程
+    std::atomic<bool> thread_running_{false};  // 线程运行标志
+    void ReceiveThreadFunc();                  // 接收线程函数
+
     // 修改：为每个定时器使用独立的、有意义的变量名
     rclcpp::TimerBase::SharedPtr chassis_cmd_timer_;
-    rclcpp::TimerBase::SharedPtr referee_read_timer_;
+    // referee_read_timer_ 已移除，改用独立线程
     rclcpp::TimerBase::SharedPtr referee_pub_timer_;
 
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr
@@ -130,7 +136,7 @@ class ChassisNode : public rclcpp::Node {
     void HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void AimingCallback(const interfaces::msg::TrackerOutput::SharedPtr msg);
     void ChassisCmdTimerCallback();
-    void RefreeTimerCallback();
+    // RefreeTimerCallback 已被 ReceiveThreadFunc 替代
     void RefreePubTimerCallback();
 
     void ReachCallback(const std_msgs::msg::Bool::SharedPtr msg);

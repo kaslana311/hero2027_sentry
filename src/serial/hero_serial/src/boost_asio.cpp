@@ -5,6 +5,8 @@
 #include "boost_asio.hpp"
 
 #include <fcntl.h>
+#include <linux/serial.h>
+#include <sys/ioctl.h>
 
 BoostAsio::BoostAsio() : serial_port(io_context) {}
 
@@ -28,6 +30,23 @@ bool BoostAsio::Init(std::string port_name, uint64_t baud_rate) {
         return false;
     }
     std::cout << "串口打开成功" << std::endl;
+
+    // ========== 启用 Low Latency 模式 ==========
+    // 消除 USB 转串口驱动默认的 16ms 缓冲延迟
+    int fd = serial_port.native_handle();
+    struct serial_struct serial_info;
+    if (ioctl(fd, TIOCGSERIAL, &serial_info) == 0) {
+        serial_info.flags |= ASYNC_LOW_LATENCY;
+        if (ioctl(fd, TIOCSSERIAL, &serial_info) == 0) {
+            std::cout << "已启用 ASYNC_LOW_LATENCY 模式" << std::endl;
+        } else {
+            std::cerr << "警告: 无法设置 ASYNC_LOW_LATENCY 模式" << std::endl;
+        }
+    } else {
+        std::cerr << "警告: 无法获取串口信息 (ioctl TIOCGSERIAL 失败)"
+                  << std::endl;
+    }
+
     // 设置串口参数
     serial_port.set_option(boost::asio::serial_port::baud_rate(baud_rate_));
     // 每个字符由八个位组成

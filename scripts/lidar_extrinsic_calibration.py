@@ -16,7 +16,7 @@
 依赖：
     pip install rosbags numpy scipy matplotlib
 
-作者: GitHub Copilot
+作者: Jinbo Liu
 日期: 2026-01-24
 """
 
