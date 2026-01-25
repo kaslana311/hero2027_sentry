@@ -793,6 +793,35 @@ int main(int argc, char** argv) {
                         kf_output.predict(dt, Q_output, input_in, true, false);
                         propag_time += omp_get_wtime() - propag_state_start;
                         time_predict_last_const = time_current;
+
+                        // 紧耦合流式轮速更新
+                        // 在 IMU predict 后、LiDAR
+                        // update 前，处理时间戳 <= time_current 的轮速数据
+                        if (wheel_en && !use_imu_as_input) {
+                            while (!Measures.wheel_odom.empty()) {
+                                auto& wheel_msg = Measures.wheel_odom.front();
+                                double wheel_time =
+                                    get_time_sec(wheel_msg.header.stamp);
+                                // 只处理时间戳 <= 当前批次时间的轮速数据
+                                if (wheel_time > time_current) break;
+
+                                // 创建 dyn_share 结构用于轮速更新
+                                esekfom::dyn_share_modified<double>
+                                    dyn_share_wheel;
+                                h_model_wheel_output(
+                                    kf_output.x_, wheel_msg, Wheel_T_wrt_IMU,
+                                    Wheel_R_wrt_IMU, wheel_vel_cov,
+                                    dyn_share_wheel);
+
+                                // 执行轮速 EKF 更新
+                                kf_output.update_iterated_dyn_share_wheel(
+                                    dyn_share_wheel);
+
+                                // 移除已处理的轮速数据
+                                Measures.wheel_odom.pop_front();
+                            }
+                        }
+
                         double t_update_start = omp_get_wtime();
 
                         // 点太少，跳过
@@ -1149,39 +1178,6 @@ int main(int argc, char** argv) {
                             }
                         }
                     }
-                }
-            }
-
-            // ======================= 轮速计更新 (Wheel Odometry Update)
-            // LiDAR+IMU 更新完成后，使用本帧同步的轮速计数据进行额外的 EKF 更新
-            // 这是紧耦合 (tightly-coupled) 的实现方式
-            if (wheel_en && !Measures.wheel_odom.empty() && !use_imu_as_input) {
-                // 准备外参矩阵
-                V3D P_wheel_in_IMU;
-                M3D R_wheel_to_IMU;
-                P_wheel_in_IMU = Wheel_T_wrt_IMU;
-                R_wheel_to_IMU = Wheel_R_wrt_IMU;
-
-                // 遍历本帧内的所有轮速计数据
-                for (const auto& wheel_msg : Measures.wheel_odom) {
-                    // 创建 dyn_share 结构用于存储残差和雅可比
-                    esekfom::dyn_share_modified<double> dyn_share_wheel;
-
-                    // 计算轮速计观测的残差和雅可比
-                    h_model_wheel_output(kf_output.x_, wheel_msg,
-                                         P_wheel_in_IMU, R_wheel_to_IMU,
-                                         wheel_vel_cov, dyn_share_wheel);
-
-                    // 执行 EKF 更新
-                    kf_output.update_iterated_dyn_share_wheel(dyn_share_wheel);
-                }
-
-                // 调试输出：打印轮速计融合的数据量
-                if (runtime_pos_log) {
-                    RCLCPP_DEBUG(LOGGER,
-                                 "[Wheel] Processed %zu wheel odom messages in "
-                                 "this frame",
-                                 Measures.wheel_odom.size());
                 }
             }
 
