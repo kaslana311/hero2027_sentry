@@ -173,7 +173,7 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, Pose pose)
   pcl::PassThrough<pcl::PointXYZ> pass;
   pass.setInputCloud(cloud_in);
   pass.setFilterFieldName("z");
-  pass.setFilterLimits(0.0, higher_than_car_threshold_);
+  pass.setFilterLimits(-0.1, higher_than_car_threshold_);
   pass.filter(*cloud_in);
   double min_x = pose.first[0] - half_map_size_;
   min_x = std::max(min_x, cloud_at_map_origin[0] + 0.2);
@@ -213,6 +213,7 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose)
     int xi = static_cast<int>((point.x - cloud_at_map_origin[0]) / resolution);
     int yi = static_cast<int>((point.y - cloud_at_map_origin[1]) / resolution);
     int zi = static_cast<int>((point.z - cloud_at_map_origin[2]) / resolution_z);
+    if(zi<0) continue;
     Vec3i obs_idx = Vec3i{xi, yi, zi};
     racyHandle(start_idx, obs_idx, start_f, res);
   }
@@ -225,6 +226,7 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose)
         int yi = static_cast<int>((cloud->points[i].y - cloud_at_map_origin[1]) / resolution);
 
         int zi = static_cast<int>((cloud->points[i].z - cloud_at_map_origin[2]) / resolution_z);
+        if(zi<0) continue;
         Vec3i obs_idx = Vec3i{xi, yi, zi};
         racyHandle(start_idx, obs_idx, start_f, res);
       }
@@ -240,7 +242,9 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose)
       continue;  //静态障碍物不处理
 #endif
     int zi = static_cast<int>((point.z - cloud_at_map_origin[2]) / resolution_z);
-    if (zi < 2) continue;  //地面滤波
+    if (zi < 2) {
+      std::cout<<"zi "<<zi<<std::endl;
+      continue;}  //地面滤波
     int index = xi + yi * grid_map_.cols + zi * grid_map_.cols * grid_map_.rows;
     //更新占据概率
     occ_map[index] =

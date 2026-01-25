@@ -10,6 +10,7 @@ set(CMAKE_BUILD_TYPE "Release")
 add_compile_options(-O3)
 add_compile_definitions(TBB_DO)
 add_compile_definitions(DEBUG)
+add_compile_definitions(SAVE_STATIC)
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
