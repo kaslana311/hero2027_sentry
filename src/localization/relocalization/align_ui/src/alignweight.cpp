@@ -56,7 +56,7 @@ void Alignweight::on_set_Button_clicked() {
     set s(&res, this);
     s.setModal(true);
     s.exec();
-    if (res->flag == 0) return;
+    if (res.flag == 0) return;
     emit AlignWeightSet(res);
     this->ui->label_2->setText("等待参数设置反馈,5s未受到请重新发布!");
 }
