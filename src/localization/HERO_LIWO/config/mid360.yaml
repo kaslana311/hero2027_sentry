@@ -59,7 +59,7 @@
                            0.0, 0.0, 1.0 ]
         
         wheel:
-            enable: False
+            enable: True
             topic: "wheel_odometry"
             vel_cov: 0.01
             extrinsic_T: [-0.17846, 0.0, 0.13092]
