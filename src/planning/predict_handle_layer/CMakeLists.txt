@@ -1,0 +1,56 @@
+cmake_minimum_required(VERSION 3.8)
+project(predict_handle_layer)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_BUILD_TYPE Release)
+add_compile_options(-O3)
+# find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(interfaces REQUIRED)
+
+include_directories(
+  include
+)
+add_library(${PROJECT_NAME} SHARED
+  src/predict_handle_layer.cpp
+)
+ament_target_dependencies(${PROJECT_NAME}
+  rclcpp
+  sensor_msgs
+  nav2_costmap_2d
+  pluginlib
+  tf2_ros
+  interfaces
+)
+install(TARGETS ${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+  )
+install (TARGETS ${PROJECT_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+  )
+pluginlib_export_plugin_description_file(nav2_costmap_2d ${PROJECT_NAME}.xml)
+
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  # the following line skips the linter which checks for copyrights
+  # comment the line when a copyright and license is added to all source files
+  set(ament_cmake_copyright_FOUND TRUE)
+  # the following line skips cpplint (only works in a git repo)
+  # comment the line when this package is in a git repo and when
+  # a copyright and license is added to all source files
+  set(ament_cmake_cpplint_FOUND TRUE)
+  ament_lint_auto_find_test_dependencies()
+endif()
+
+ament_package()

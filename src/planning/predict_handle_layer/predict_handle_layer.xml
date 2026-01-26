@@ -1,0 +1,7 @@
+<library path="predict_handle_layer">
+    <class name="predict_handle_layer::PredictHandleLayer" type="predict_handle_layer::PredictHandleLayer" base_class_type="nav2_costmap_2d::Layer">
+        <description>
+        A costmap layer that predicts the future positions of obstacles.
+        </description>
+    </class>
+</library>
