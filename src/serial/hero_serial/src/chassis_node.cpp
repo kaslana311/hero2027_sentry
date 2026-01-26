@@ -317,7 +317,6 @@ void ChassisNode::ReceiveThreadFunc() {
                     // RCLCPP_WARN(this->get_logger(), "数据解析失败，数据长度:
                     // %zu", data.size());
                 }
-
                 // 清空缓冲区，防止数据堆积
                 // 注意：这是临时方案，未来应实现环形缓冲区和粘包处理
                 boost_asio_.Consume(data.size());
