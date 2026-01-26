@@ -25,7 +25,7 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_tf_base_to_lidar',
-        arguments=['0.2', '0', '0', '0', '0.64', '0', 'base_link', 'lidar_link']
+        arguments=['0.2213', '0', '0', '0', '0.63294', '0', 'base_link', 'lidar_link']
     )
 
     # static_tf_lidar_node = Node(
