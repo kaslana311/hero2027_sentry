@@ -70,7 +70,7 @@ public:
           tf_stamped.transform.rotation.z, tf_stamped.transform.rotation.w),
         tf2::Vector3(
           tf_stamped.transform.translation.x, tf_stamped.transform.translation.y,
-          tf_stamped.transform.translation.z+0.285));
+          tf_stamped.transform.translation.z+0.28));
       if (!tf_set) tf_set = true;
     } catch (...) {
       std::cout << " -- [DOG] Cloud callback pcl::fromROSMsg error, "
@@ -144,11 +144,11 @@ public:
       return;
     }
 
-    // if (rc_.unfinished_frame_cnt > 1) {
-    //   std::cout << " -- [DOG WARN] Unfinished frame cnt > 1, the map may not "
-    //                "work in real-time"
-    //             << std::endl;
-    // }
+    if (rc_.unfinished_frame_cnt > 1) {
+      std::cout << " -- [DOG WARN] Unfinished frame cnt > 1, the map may not "
+                   "work in real-time"
+                << std::endl;
+    }
     static pcl::PointCloud<pcl::PointXYZ> temp_pc;
     static Pose temp_pose;
 

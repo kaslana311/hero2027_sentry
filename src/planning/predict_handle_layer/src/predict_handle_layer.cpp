@@ -79,6 +79,7 @@ void PredictHandleLayer::updateBounds(
     // 此时 costmap 已被 resetMaps() 清零，不会污染 master
     if (!has_new_data_ || last_tracker_msg_.targets.empty()) {
       // 不更新边界，让 updateCosts 跳过
+      // std::cout<<"no new  date kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"<<std::endl;
       return;
     }
     tracker_msg = last_tracker_msg_;
@@ -111,13 +112,15 @@ void PredictHandleLayer::updateBounds(
 void PredictHandleLayer::updateCosts(
   nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j)
 {
-  if (previous_targets_.empty()) return;
+  if (previous_targets_.empty()) {
+      // std::cout<<"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"<<std::endl;
+    return;}
   std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
-
+//  std::cout<<"ooooooooooooooooooooooooooooo"<<std::endl;
   for (auto it = previous_targets_.begin(); it != previous_targets_.end(); ++it) {
     for (size_t i = 0; i < it->second.size(); i++) {
       // std::cout<<"target id: "<<it->first<<" circle x: "<<it->second[i].x<<" y: "<<it->second[i].y<<" radius: "<<it->second[i].radius<<" cost: "<<(int)it->second[i].cost<<std::endl;
-      std::cout << "start print  " << std::endl;
+      // std::cout << "start print  " << std::endl;
       unsigned int min_xi, min_yi, max_xi, max_yi;
       if (
         worldToMap(
@@ -130,9 +133,9 @@ void PredictHandleLayer::updateCosts(
           max_yi) == false)
         continue;
       //便利矩形区域内的栅格
-      std::cout << "target id: " << it->first << " circle x: " << it->second[i].x
-                << " y: " << it->second[i].y << " radius: " << it->second[i].radius
-                << " cost: " << (int)it->second[i].cost << std::endl;
+      // std::cout << "target id: " << it->first << " circle x: " << it->second[i].x
+      //           << " y: " << it->second[i].y << " radius: " << it->second[i].radius
+      //           << " cost: " << (int)it->second[i].cost << std::endl;
       for (unsigned int mx = min_xi; mx <= max_xi; ++mx) {
         for (unsigned int my = min_yi; my <= max_yi; ++my) {
           if (master_grid.getCost(mx, my) >= it->second[i].cost) continue;
