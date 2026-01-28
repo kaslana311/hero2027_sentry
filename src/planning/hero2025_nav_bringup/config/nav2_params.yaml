@@ -71,8 +71,8 @@ dog_map_node:
       odom_topic: "/LIVO2/imu_propagate"
       cloud_topic: "cloud_registered"
       half_map_size: 10.0 #以车为中心的局部地图,也就是点云分析范围
-      resolution_z: 0.03 #z方向分辨率,用于高层分析
-      heighter_than_ground_threshold: 0.05 #地面分割
+      resolution_z: 0.02 #z方向分辨率,用于高层分析
+      heighter_than_ground_threshold: 0.065 #地面分割
       higher_than_car_threshold: 0.7 # 最高点云高度,高于此数值的过滤
       frame_save: 10 # 地图记忆帧数
       map_yaml_path: "/home/dji/hero2026_-sentry/src/planning/map_server/map/map.yaml"
@@ -159,14 +159,14 @@ controller_server:
       yaw_goal_tolerance: 6.28
     FollowPath:
       plugin: "hero_mpc_controller::HeroMpcController"
-      max_velocity: 2.0
+      max_velocity: 3.0
       max_omega: 1.5
-      max_acceleration: 3.0
+      max_acceleration: 4.0
       max_alpha: 1.0
       enable_yaw_tracking: false
       reference_yaw: 0.0
       controller_frequency: 100.0
-      weight_q: [400.0, 100.0, 20.0, 10.0, 10.0, 5.0]
+      weight_q: [800.0, 800.0, 20.0, 100.0, 100.0, 5.0]
       weight_r: [1.0, 1.0, 0.5]
       carrot_point_index: 5
       # translation_kp: 3.0
@@ -245,7 +245,7 @@ local_costmap:
         #   obstacle_min_range: 0.0
       pre_layer:
         plugin: "predict_handle_layer::PredictHandleLayer"
-        tracker_topic: "tracker"
+        tracker_topic: "/tracker/out"
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
@@ -302,7 +302,7 @@ global_costmap:
         map_subscribe_transient_local: True
       pre_layer:
         plugin: "predict_handle_layer::PredictHandleLayer"
-        tracker_topic: "tracker"
+        tracker_topic: "/tracker/out"
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 2.5
@@ -372,12 +372,12 @@ smoother_server:
       odom_topic: "odometry/filtered"
       # ========== 优化权重 ==========
       weight_smooth: 10.0           # 平滑性权重
-      weight_obstacle: 5000.0       # 避障权重（ESDF）
+      weight_obstacle: 10000.0       # 避障权重（ESDF）
       weight_feasibility: 65.0     # 动力学可行性权重
       weight_time: 35.0            # 时间正则化权重
       # ========== 动力学约束 ==========
-      max_vel: 2.0                 # 最大速度 (m/s)
-      max_acc: 3.0                 # 最大加速度 (m/s²)
+      max_vel: 3.0                 # 最大速度 (m/s)
+      max_acc: 4.0                 # 最大加速度 (m/s²)
       safe_distance: 0.3           # 安全距离 (m)
       # ========== 优化器参数 ==========
       max_iterations: 8000          # L-BFGS 最大迭代次数
@@ -385,13 +385,12 @@ smoother_server:
       integral_resolution: 32       # 积分采样分辨率
       # ========== 路径处理参数 ==========
       waypoint_interval: 1.5       # 路点采样间隔 (m)
-      min_waypoints: 3             # 最少路点数
-      initial_time_per_meter: 1.0  # 初始每米时间估计 (s/m)
+      min_waypoints: 2             # 最少路点数
       # ========== 输出参数 ==========
       output_dt: 0.1               # 输出轨迹采样间隔 (s)
       publish_trajectory: true     # 发布轨迹可视化 (话题: minco_trajectory)
       # ========== 均匀时间采样参数 ==========
-      resample_time_resolution: 1.0  # 重采样时间分辨率 (s)
+      resample_time_resolution: 0.65  # 重采样时间分辨率 (s)
       rotation_penalty_weight: 0.1    # 旋转惩罚权重
       dense_sample_resolution: 0.1    # 密集采样分辨率 (m)
 
