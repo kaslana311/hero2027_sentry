@@ -154,7 +154,7 @@ void MincoSmoother::loadParameters() {
     // 轨迹连续性参数（平滑重规划）
     declare_parameter_if_not_declared(
         node, plugin_name_ + ".trajectory_continuity_threshold",
-        rclcpp::ParameterValue(0.5));
+        rclcpp::ParameterValue(0.25));
     declare_parameter_if_not_declared(
         node, plugin_name_ + ".projection_search_resolution",
         rclcpp::ParameterValue(0.02));
@@ -1048,6 +1048,33 @@ MincoSmoother::PathProcessingResult MincoSmoother::processPath(
 
     double total_time = arrival_times.back();
     RCLCPP_DEBUG(logger_, "processPath: 梯形规划总时间: %.2f s", total_time);
+
+    double current_real_vel = start_vel.norm();
+    // 物理上刹死所需的最小时间 T = V / A_max
+    double min_physical_time = current_real_vel / params_.max_acc;
+
+    // 检查1: 是否发生了“隐式降速” (Backward pass修改了起点速度)
+    // 检查2: 或者算出的几何时间太短
+    if (total_time < min_physical_time) {
+        RCLCPP_WARN(logger_,
+                    "检测到物理不可行约束: 真实速度 %.2f m/s 需要 %.2f s "
+                    "刹停，但几何规划仅分配 %.2f s",
+                    current_real_vel, min_physical_time, total_time);
+
+        // 强制使用物理时间，并给予 10% 的余量让优化器更从容
+        double safe_total_time = min_physical_time * 1.5;
+
+        // 拉伸时间：这等价于告诉后续步骤“慢慢刹，别急”
+        double ratio = safe_total_time / total_time;
+        for (auto &t : arrival_times) {  // 虽然 arrival_times
+                                         // 后面没用了，但逻辑上保持一致
+            t *= ratio;
+        }
+        total_time = safe_total_time;
+    }
+
+    // 兜底：防止时间极小
+    total_time = std::max(total_time, 0.1);
 
     if (total_time < 1e-6) {
         RCLCPP_WARN(logger_, "processPath: 总时间过小，路径无效");
