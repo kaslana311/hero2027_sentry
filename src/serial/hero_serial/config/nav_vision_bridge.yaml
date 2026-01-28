@@ -16,3 +16,4 @@ topics:
       durability: volatile
       depth: 1
       history: keep_last
+#  ros2 run domain_bridge  domain_bridge src/serial/hero_serial/config/nav_vision_bridge.yaml
