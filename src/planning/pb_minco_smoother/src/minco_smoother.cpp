@@ -46,13 +46,19 @@ void MincoSmoother::configure(
     // 加载参数
     loadParameters();
 
-    // 创建 MINCO 优化器
+    // 创建 MINCO 优化器（第二阶段，Kinematic & Feasibility）
     optimizer_ = std::make_unique<MincoOptimizer>();
+
+    // 创建第一阶段优化器（Shape Optimization）
+    stage1_optimizer_ = std::make_unique<MincoOptimizer>();
 
     // 创建轨迹可视化发布器
     if (params_.publish_trajectory) {
         trajectory_pub_ =
             node->create_publisher<nav_msgs::msg::Path>("minco_trajectory", 1);
+        // 第一阶段轨迹可视化（调试用）
+        stage1_trajectory_pub_ = node->create_publisher<nav_msgs::msg::Path>(
+            "~/debug/stage1_trajectory", 1);
     }
 
     // 创建 MINCO 多项式轨迹发布器（供 Controller 订阅）
@@ -63,6 +69,11 @@ void MincoSmoother::configure(
     waypoints_marker_pub_ =
         node->create_publisher<visualization_msgs::msg::MarkerArray>(
             "~/minco_waypoints_marker", rclcpp::QoS(1));
+
+    // 创建最终轨迹路点可视化发布器（MarkerArray）
+    final_waypoints_marker_pub_ =
+        node->create_publisher<visualization_msgs::msg::MarkerArray>(
+            "~/minco_final_waypoints_marker", rclcpp::QoS(1));
 
     // 创建 Costmap ESDF 适配器
     // 参数说明：
@@ -159,6 +170,36 @@ void MincoSmoother::loadParameters() {
         node, plugin_name_ + ".projection_search_resolution",
         rclcpp::ParameterValue(0.02));
 
+    // 两阶段优化参数
+    declare_parameter_if_not_declared(node,
+                                      plugin_name_ + ".stage1_weight_smooth",
+                                      rclcpp::ParameterValue(1.0));
+    declare_parameter_if_not_declared(node,
+                                      plugin_name_ + ".stage1_weight_obstacle",
+                                      rclcpp::ParameterValue(50.0));
+    declare_parameter_if_not_declared(
+        node, plugin_name_ + ".stage1_weight_feasibility",
+        rclcpp::ParameterValue(5.0));
+    declare_parameter_if_not_declared(node,
+                                      plugin_name_ + ".stage1_weight_time",
+                                      rclcpp::ParameterValue(10.0));
+    declare_parameter_if_not_declared(node,
+                                      plugin_name_ + ".stage1_weight_mean_time",
+                                      rclcpp::ParameterValue(10.0));
+    declare_parameter_if_not_declared(node,
+                                      plugin_name_ + ".stage1_max_iterations",
+                                      rclcpp::ParameterValue(2000));
+
+    // 平均时间约束参数
+    declare_parameter_if_not_declared(node,
+                                      plugin_name_ + ".mean_time_lower_bound",
+                                      rclcpp::ParameterValue(0.9));
+    declare_parameter_if_not_declared(node,
+                                      plugin_name_ + ".mean_time_upper_bound",
+                                      rclcpp::ParameterValue(1.1));
+    declare_parameter_if_not_declared(node, plugin_name_ + ".weight_mean_time",
+                                      rclcpp::ParameterValue(10.0));
+
     // 读取参数
     node->get_parameter(plugin_name_ + ".weight_smooth", params_.weight_smooth);
     node->get_parameter(plugin_name_ + ".weight_obstacle",
@@ -198,6 +239,28 @@ void MincoSmoother::loadParameters() {
                         params_.trajectory_continuity_threshold);
     node->get_parameter(plugin_name_ + ".projection_search_resolution",
                         params_.projection_search_resolution);
+
+    // 读取两阶段优化参数
+    node->get_parameter(plugin_name_ + ".stage1_weight_smooth",
+                        params_.stage1_weight_smooth);
+    node->get_parameter(plugin_name_ + ".stage1_weight_obstacle",
+                        params_.stage1_weight_obstacle);
+    node->get_parameter(plugin_name_ + ".stage1_weight_feasibility",
+                        params_.stage1_weight_feasibility);
+    node->get_parameter(plugin_name_ + ".stage1_weight_time",
+                        params_.stage1_weight_time);
+    node->get_parameter(plugin_name_ + ".stage1_weight_mean_time",
+                        params_.stage1_weight_mean_time);
+    node->get_parameter(plugin_name_ + ".stage1_max_iterations",
+                        params_.stage1_max_iterations);
+
+    // 读取平均时间约束参数
+    node->get_parameter(plugin_name_ + ".mean_time_lower_bound",
+                        params_.mean_time_lower_bound);
+    node->get_parameter(plugin_name_ + ".mean_time_upper_bound",
+                        params_.mean_time_upper_bound);
+    node->get_parameter(plugin_name_ + ".weight_mean_time",
+                        params_.weight_mean_time);
 }
 
 void MincoSmoother::cleanup() {
@@ -208,8 +271,11 @@ void MincoSmoother::cleanup() {
     odom_sub_.reset();
     esdf_adapter_.reset();
     optimizer_.reset();
+    stage1_optimizer_.reset();
     trajectory_pub_.reset();
+    stage1_trajectory_pub_.reset();
     minco_traj_pub_.reset();
+    final_waypoints_marker_pub_.reset();
 }
 
 void MincoSmoother::activate() {
@@ -218,11 +284,17 @@ void MincoSmoother::activate() {
     if (trajectory_pub_) {
         trajectory_pub_->on_activate();
     }
+    if (stage1_trajectory_pub_) {
+        stage1_trajectory_pub_->on_activate();
+    }
     if (minco_traj_pub_) {
         minco_traj_pub_->on_activate();
     }
     if (waypoints_marker_pub_) {
         waypoints_marker_pub_->on_activate();
+    }
+    if (final_waypoints_marker_pub_) {
+        final_waypoints_marker_pub_->on_activate();
     }
 }
 
@@ -232,11 +304,17 @@ void MincoSmoother::deactivate() {
     if (trajectory_pub_) {
         trajectory_pub_->on_deactivate();
     }
+    if (stage1_trajectory_pub_) {
+        stage1_trajectory_pub_->on_deactivate();
+    }
     if (minco_traj_pub_) {
         minco_traj_pub_->on_deactivate();
     }
     if (waypoints_marker_pub_) {
         waypoints_marker_pub_->on_deactivate();
+    }
+    if (final_waypoints_marker_pub_) {
+        final_waypoints_marker_pub_->on_deactivate();
     }
 }
 
@@ -353,43 +431,22 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
             publishWaypointsVisualization(waypoints, path.header);
         }
 
-        // 5. 配置优化器
-        MincoOptimizerConfig config;
-        config.weight_smooth = params_.weight_smooth;
-        config.weight_obstacle = params_.weight_obstacle;
-        config.weight_feasibility = params_.weight_feasibility;
-        config.weight_time = params_.weight_time;
-        config.max_vel = params_.max_vel;
-        config.max_acc = params_.max_acc;
-        config.safe_distance = params_.safe_distance;
-        config.max_iterations = params_.max_iterations;
-        config.g_epsilon = params_.g_epsilon;
-        config.integral_resolution = params_.integral_resolution;
-
-        optimizer_->setConfig(config);
-
-        // 6. 更新 ESDF 并注入优化器
-        // 采用 "Snapshot on Demand" 模式：
-        // 使用 Costmap ESDF 适配器
-        // Step 6.1: 从下采样后的路点构建路径点向量
+        // 5. 更新 ESDF（两阶段共用）
+        // Step 5.1: 从下采样后的路点构建路径点向量
         std::vector<Eigen::Vector2d> path_points;
         path_points.reserve(waypoints.cols());
         for (int i = 0; i < waypoints.cols(); ++i) {
             path_points.emplace_back(waypoints.col(i));
         }
 
-        // Step 6.2: 获取 Costmap 指针并更新局部 ESDF
+        // Step 5.2: 获取 Costmap 指针并更新局部 ESDF
         auto costmap = costmap_sub_->getCostmap();
+        bool esdf_available = false;
         if (costmap && esdf_adapter_) {
-            // 调用 updateSnapshot，它会：
-            // 1. 计算路径的包围盒 + margin
-            // 2. 加锁并拷贝局部 Costmap 数据
-            // 3. 解锁后计算距离变换 (EDT)
-            // 4. 存储结果供后续 getDistance/getGradient 使用
             bool esdf_ok =
                 esdf_adapter_->updateSnapshot(costmap.get(), path_points);
             if (esdf_ok) {
-                optimizer_->setESDFInterface(esdf_adapter_);
+                esdf_available = true;
                 RCLCPP_DEBUG(logger_, "使用 Costmap ESDF 快照进行优化");
             } else {
                 RCLCPP_WARN(logger_,
@@ -398,26 +455,116 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
         } else {
             RCLCPP_WARN(logger_, "无法获取 Costmap，优化将无避障功能");
         }
-        // }
 
-        // 7. 初始化优化器（使用 PVA 边界条件）
-        optimizer_->initialize(headPVA, tailPVA, pieceNum);
+        // ====================================================================
+        // ========== 第一阶段：Shape Optimization（形状优化） ===========
+        // ====================================================================
+        // 目标：快速获得合理的几何形状和初步的时间分配
+        // 使用放松的约束权重，主要优化轨迹形状
+        {
+            MincoOptimizerConfig stage1_config;
+            stage1_config.weight_smooth = params_.stage1_weight_smooth;
+            stage1_config.weight_obstacle = params_.stage1_weight_obstacle;
+            stage1_config.weight_feasibility =
+                params_.stage1_weight_feasibility;
+            stage1_config.weight_time = params_.stage1_weight_time;
+            stage1_config.weight_mean_time = params_.stage1_weight_mean_time;
+            stage1_config.mean_time_lower_bound = params_.mean_time_lower_bound;
+            stage1_config.mean_time_upper_bound = params_.mean_time_upper_bound;
+            stage1_config.max_vel = params_.max_vel;
+            stage1_config.max_acc = params_.max_acc;
+            stage1_config.safe_distance = params_.safe_distance;
+            stage1_config.max_iterations = params_.stage1_max_iterations;
+            stage1_config.g_epsilon = params_.g_epsilon;
+            stage1_config.integral_resolution = params_.integral_resolution;
 
-        // 8. 检查时间限制
-        auto elapsed = steady_clock::now() - start_time;
-        if (elapsed > std::chrono::duration<double>(max_time.seconds())) {
-            RCLCPP_WARN(logger_,
-                        "MINCO smoother timed out during initialization");
-            return false;
+            stage1_optimizer_->setConfig(stage1_config);
+            if (esdf_available) {
+                stage1_optimizer_->setESDFInterface(esdf_adapter_);
+            }
+
+            stage1_optimizer_->initialize(headPVA, tailPVA, pieceNum);
+
+            // 检查时间限制
+            auto elapsed = steady_clock::now() - start_time;
+            if (elapsed >
+                std::chrono::duration<double>(max_time.seconds() * 0.4)) {
+                RCLCPP_WARN(logger_,
+                            "MINCO smoother timed out during stage1 init");
+                return false;
+            }
+
+            bool stage1_success =
+                stage1_optimizer_->optimize(innerPoints, initialTimes);
+
+            if (!stage1_success) {
+                RCLCPP_WARN(logger_,
+                            "Stage 1 optimization failed, using initial "
+                            "points for stage 2");
+            } else {
+                // 使用第一阶段的优化结果作为第二阶段的初值
+                innerPoints = stage1_optimizer_->getOptimizedPoints();
+                initialTimes = stage1_optimizer_->getOptimizedTimes();
+
+                RCLCPP_INFO(logger_,
+                            "Stage 1 (Shape) 完成: pieces=%d, total_T=%.2f s",
+                            pieceNum, initialTimes.sum());
+
+                // 发布第一阶段轨迹可视化
+                if (params_.publish_trajectory && stage1_trajectory_pub_) {
+                    Trajectory<5, 2> stage1Traj;
+                    stage1_optimizer_->getTrajectory(stage1Traj);
+                    auto stage1_path =
+                        trajectoryToPath(stage1Traj, path.header);
+                    stage1_trajectory_pub_->publish(stage1_path);
+                }
+            }
         }
 
-        // 9. 执行优化
-        bool success = optimizer_->optimize(innerPoints, initialTimes);
+        // ====================================================================
+        // ========== 第二阶段：Kinematic & Feasibility Optimization ====
+        // ====================================================================
+        // 目标：满足严格的动力学约束和安全距离
+        // 输入：使用第一阶段优化后的路点和时间作为初值
+        {
+            MincoOptimizerConfig stage2_config;
+            stage2_config.weight_smooth = params_.weight_smooth;
+            stage2_config.weight_obstacle = params_.weight_obstacle;
+            stage2_config.weight_feasibility = params_.weight_feasibility;
+            stage2_config.weight_time = params_.weight_time;
+            stage2_config.weight_mean_time = params_.weight_mean_time;
+            stage2_config.mean_time_lower_bound = params_.mean_time_lower_bound;
+            stage2_config.mean_time_upper_bound = params_.mean_time_upper_bound;
+            stage2_config.max_vel = params_.max_vel;
+            stage2_config.max_acc = params_.max_acc;
+            stage2_config.safe_distance = params_.safe_distance;
+            stage2_config.max_iterations = params_.max_iterations;
+            stage2_config.g_epsilon = params_.g_epsilon;
+            stage2_config.integral_resolution = params_.integral_resolution;
 
-        if (!success) {
-            RCLCPP_WARN(logger_,
-                        "MINCO optimization failed, returning original path");
-            return true;  // 优化失败，返回原始路径
+            optimizer_->setConfig(stage2_config);
+            if (esdf_available) {
+                optimizer_->setESDFInterface(esdf_adapter_);
+            }
+
+            optimizer_->initialize(headPVA, tailPVA, pieceNum);
+
+            // 检查时间限制
+            auto elapsed = steady_clock::now() - start_time;
+            if (elapsed > std::chrono::duration<double>(max_time.seconds())) {
+                RCLCPP_WARN(logger_,
+                            "MINCO smoother timed out during stage2 init");
+                return false;
+            }
+
+            bool success = optimizer_->optimize(innerPoints, initialTimes);
+
+            if (!success) {
+                RCLCPP_WARN(logger_,
+                            "Stage 2 optimization failed, returning "
+                            "original path");
+                return true;
+            }
         }
 
         // 10. 获取优化后的轨迹 (S=3, Quintic, 2D)
@@ -425,7 +572,6 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
         optimizer_->getTrajectory(optimizedTraj);
 
         // 11. 缓存优化后的轨迹（供下次重规划时查找投影点）
-        // 保存轨迹和当前时间戳，用于下一次 smooth() 调用时的平滑重规划
         last_trajectory_ = optimizedTraj;
         last_trajectory_time_ = clock_->now();
         has_valid_trajectory_ = true;
@@ -444,6 +590,19 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
         // 14. 发布轨迹可视化
         if (params_.publish_trajectory && trajectory_pub_) {
             publishTrajectoryVisualization(optimizedTraj, path.header);
+        }
+
+        // 14.1 发布最终优化路点可视化（MarkerArray）
+        if (final_waypoints_marker_pub_) {
+            // 构建包含首尾的完整路点矩阵
+            Eigen::Matrix2Xd finalWaypoints(2, pieceNum + 1);
+            finalWaypoints.col(0) = headPVA.col(0);
+            const auto &optPts = optimizer_->getOptimizedPoints();
+            for (int i = 0; i < pieceNum - 1; ++i) {
+                finalWaypoints.col(i + 1) = optPts.col(i);
+            }
+            finalWaypoints.col(pieceNum) = tailPVA.col(0);
+            publishFinalWaypointsVisualization(finalWaypoints, path.header);
         }
 
         // 15. 发布 MINCO 多项式轨迹消息（供 Controller 订阅）
@@ -634,6 +793,90 @@ void MincoSmoother::publishWaypointsVisualization(
     RCLCPP_DEBUG(logger_, "发布了 %d 个中间路点的可视化 Marker", num_waypoints);
 }
 
+void MincoSmoother::publishFinalWaypointsVisualization(
+    const Eigen::Matrix2Xd &waypoints, const std_msgs::msg::Header &header) {
+    if (!final_waypoints_marker_pub_) {
+        return;
+    }
+
+    visualization_msgs::msg::MarkerArray marker_array;
+
+    // 首先发布一个 DELETEALL marker 来清除旧的 markers
+    visualization_msgs::msg::Marker delete_marker;
+    delete_marker.header = header;
+    delete_marker.ns = "minco_final_waypoints";
+    delete_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+    marker_array.markers.push_back(delete_marker);
+
+    int num_waypoints = waypoints.cols();
+
+    // 为每个优化后的路点创建菱形 Marker（区别于优化前的球形）
+    for (int i = 0; i < num_waypoints; ++i) {
+        visualization_msgs::msg::Marker marker;
+        marker.header = header;
+        marker.ns = "minco_final_waypoints";
+        marker.id = i;
+        marker.type = visualization_msgs::msg::Marker::CUBE;
+        marker.action = visualization_msgs::msg::Marker::ADD;
+
+        // 位置
+        marker.pose.position.x = waypoints(0, i);
+        marker.pose.position.y = waypoints(1, i);
+        marker.pose.position.z = 0.2;  // 稍高于输入路点
+        // 旋转 45° 形成菱形视觉效果
+        tf2::Quaternion q;
+        q.setRPY(0.0, 0.0, M_PI / 4.0);
+        marker.pose.orientation.x = q.x();
+        marker.pose.orientation.y = q.y();
+        marker.pose.orientation.z = q.z();
+        marker.pose.orientation.w = q.w();
+
+        // 尺寸
+        marker.scale.x = 0.12;
+        marker.scale.y = 0.12;
+        marker.scale.z = 0.12;
+
+        // 颜色：使用醒目的青色-洋红渐变，区别于输入路点的绿-红渐变
+        double ratio = static_cast<double>(i) / std::max(1, num_waypoints - 1);
+        marker.color.r = static_cast<float>(ratio);
+        marker.color.g = static_cast<float>(0.8 * (1.0 - ratio));
+        marker.color.b = 1.0f;
+        marker.color.a = 0.95f;
+
+        marker.lifetime = rclcpp::Duration::from_seconds(0);
+
+        marker_array.markers.push_back(marker);
+    }
+
+    // 添加连接线（LINE_STRIP），使用不同颜色区分
+    visualization_msgs::msg::Marker line_marker;
+    line_marker.header = header;
+    line_marker.ns = "minco_final_waypoints_line";
+    line_marker.id = 0;
+    line_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+    line_marker.action = visualization_msgs::msg::Marker::ADD;
+    line_marker.pose.orientation.w = 1.0;
+    line_marker.scale.x = 0.04;  // 线宽
+    line_marker.color.r = 1.0f;
+    line_marker.color.g = 0.5f;
+    line_marker.color.b = 0.0f;
+    line_marker.color.a = 0.8f;
+
+    for (int i = 0; i < num_waypoints; ++i) {
+        geometry_msgs::msg::Point p;
+        p.x = waypoints(0, i);
+        p.y = waypoints(1, i);
+        p.z = 0.15;
+        line_marker.points.push_back(p);
+    }
+    marker_array.markers.push_back(line_marker);
+
+    final_waypoints_marker_pub_->publish(marker_array);
+
+    RCLCPP_DEBUG(logger_, "发布了 %d 个最终优化路点的可视化 Marker",
+                 num_waypoints);
+}
+
 rcl_interfaces::msg::SetParametersResult
 MincoSmoother::dynamicParametersCallback(
     std::vector<rclcpp::Parameter> parameters) {
@@ -661,6 +904,24 @@ MincoSmoother::dynamicParametersCallback(
             params_.max_iterations = param.as_int();
         } else if (name == plugin_name_ + ".output_dt") {
             params_.output_dt = param.as_double();
+        } else if (name == plugin_name_ + ".mean_time_lower_bound") {
+            params_.mean_time_lower_bound = param.as_double();
+        } else if (name == plugin_name_ + ".mean_time_upper_bound") {
+            params_.mean_time_upper_bound = param.as_double();
+        } else if (name == plugin_name_ + ".weight_mean_time") {
+            params_.weight_mean_time = param.as_double();
+        } else if (name == plugin_name_ + ".stage1_weight_smooth") {
+            params_.stage1_weight_smooth = param.as_double();
+        } else if (name == plugin_name_ + ".stage1_weight_obstacle") {
+            params_.stage1_weight_obstacle = param.as_double();
+        } else if (name == plugin_name_ + ".stage1_weight_feasibility") {
+            params_.stage1_weight_feasibility = param.as_double();
+        } else if (name == plugin_name_ + ".stage1_weight_time") {
+            params_.stage1_weight_time = param.as_double();
+        } else if (name == plugin_name_ + ".stage1_weight_mean_time") {
+            params_.stage1_weight_mean_time = param.as_double();
+        } else if (name == plugin_name_ + ".stage1_max_iterations") {
+            params_.stage1_max_iterations = param.as_int();
         }
     }
 

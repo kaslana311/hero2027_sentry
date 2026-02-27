@@ -81,11 +81,16 @@ struct MincoOptimizerConfig {
     double weight_obstacle = 100.0;    ///< 避障代价权重
     double weight_feasibility = 10.0;  ///< 动力学可行性代价权重
     double weight_time = 10.0;         ///< 时间正则化权重
+    double weight_mean_time = 10.0;    ///< 平均时间约束权重
 
     // ========== 约束参数 ==========
     double max_vel = 2.0;        ///< 最大速度 (m/s)
     double max_acc = 2.0;        ///< 最大加速度 (m/s²)
     double safe_distance = 0.5;  ///< 安全距离 (m)
+
+    // ========== 平均时间约束参数 ==========
+    double mean_time_lower_bound = 0.9;  ///< 平均时间下界比例
+    double mean_time_upper_bound = 1.1;  ///< 平均时间上界比例
 
     // ========== 采样参数 ==========
     int integral_resolution = 8;  ///< 每段轨迹的积分采样点数
@@ -174,6 +179,9 @@ class MincoOptimizer {
 
         // 时间代价梯度缓冲区
         gradT_time_.resize(pieceNum);
+
+        // 平均时间约束梯度缓冲区
+        gradT_mean_time_.resize(pieceNum);
 
         // 合并后的总梯度缓冲区 (6N x 2 for S=3)
         totalGradC_.resize(6 * pieceNum, 2);
@@ -388,6 +396,46 @@ class MincoOptimizer {
         }
         timeCost *= config_.weight_time;
 
+        // ========== 5. 平均时间约束代价 ==========
+        // 参考成熟方案 optimizer.cpp 中 attachPenaltyFunctional 的实现
+        // 计算平均段时间，对偏离 [avg*lower, avg*upper] 的段施加二次惩罚
+        double meanTimeCost = 0.0;
+        gradT_mean_time_.setZero();
+
+        if (config_.weight_mean_time > 0.0 && pieceNum_ > 1) {
+            double avgT = times_.mean();
+            double lowerT = avgT * config_.mean_time_lower_bound;
+            double upperT = avgT * config_.mean_time_upper_bound;
+
+            for (int i = 0; i < pieceNum_; ++i) {
+                if (times_(i) < lowerT) {
+                    // 段时间过短，施加二次惩罚
+                    double diff = times_(i) - lowerT;
+                    meanTimeCost += config_.weight_mean_time * diff * diff;
+                    // 梯度：∂/∂T_j (T_i - avg*lb)^2
+                    // avg = sum(T)/N, 所以 ∂avg/∂T_j = 1/N
+                    // ∂(T_i - avg*lb)/∂T_j = δ_{ij} - lb/N
+                    // 对所有段的梯度贡献（通过 avg 的链式法则）
+                    gradT_mean_time_.array() +=
+                        config_.weight_mean_time * 2.0 * diff *
+                        (-config_.mean_time_lower_bound / pieceNum_);
+                    // 对当前段的额外直接梯度
+                    gradT_mean_time_(i) +=
+                        config_.weight_mean_time * 2.0 * diff;
+                }
+                if (times_(i) > upperT) {
+                    // 段时间过长，施加二次惩罚
+                    double diff = times_(i) - upperT;
+                    meanTimeCost += config_.weight_mean_time * diff * diff;
+                    gradT_mean_time_.array() +=
+                        config_.weight_mean_time * 2.0 * diff *
+                        (-config_.mean_time_upper_bound / pieceNum_);
+                    gradT_mean_time_(i) +=
+                        config_.weight_mean_time * 2.0 * diff;
+                }
+            }
+        }
+
         // ========== 合并梯度（使用预分配的缓冲区）==========
         totalGradC_ = gradC_smooth_;
         totalGradC_ += gradC_obstacle_;
@@ -397,6 +445,7 @@ class MincoOptimizer {
         totalGradT_ += gradT_obstacle_;
         totalGradT_ += gradT_feas_;
         totalGradT_ += gradT_time_;
+        totalGradT_ += gradT_mean_time_;
 
         // 梯度传播：从系数/时间梯度转换为路点/时间梯度
         minco_.propogateGrad(totalGradC_, totalGradT_, gradPoints_, gradTimes_);
@@ -413,7 +462,8 @@ class MincoOptimizer {
         for (int i = 0; i < pieceNum_; ++i) {
             grad(dimPoints_ + i) = gradTimes_(i) * dTdtau(i);
         }
-        return smoothCost + obstacleCost + feasibilityCost + timeCost;
+        return smoothCost + obstacleCost + feasibilityCost + timeCost +
+               meanTimeCost;
     }
     /**
      * @brief 计算避障代价 (使用 Smoothed L1 惩罚)
@@ -806,6 +856,9 @@ class MincoOptimizer {
 
     // 时间代价梯度缓冲区
     Eigen::VectorXd gradT_time_;  ///< 时间梯度 (N)
+
+    // 平均时间约束梯度缓冲区
+    Eigen::VectorXd gradT_mean_time_;  ///< 平均时间约束梯度 (N)
 
     // 合并后的总梯度缓冲区 (S=3: 6N x 2)
     Eigen::MatrixX2d totalGradC_;  ///< 合并后的系数梯度 (6N x 2)

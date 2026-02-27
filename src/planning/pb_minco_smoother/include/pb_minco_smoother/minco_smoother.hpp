@@ -98,6 +98,21 @@ struct MincoSmootherParams {
     double output_dt = 0.1;            ///< 输出轨迹采样间隔 (s)
     bool publish_trajectory = true;    ///< 是否发布轨迹可视化
     std::string odom_topic = "/odom";  ///< 里程计话题
+
+    // ========== 两阶段优化参数 ==========
+    // --- 第一阶段（Shape Optimization）权重 ---
+    double stage1_weight_smooth = 1.0;  ///< 第一阶段平滑性权重
+    double stage1_weight_obstacle = 50.0;  ///< 第一阶段避障权重（放松）
+    double stage1_weight_feasibility =
+        5.0;  ///< 第一阶段动力学可行性权重（放松）
+    double stage1_weight_time = 10.0;  ///< 第一阶段时间正则化权重
+    double stage1_weight_mean_time = 10.0;  ///< 第一阶段平均时间约束权重
+    int stage1_max_iterations = 2000;       ///< 第一阶段最大迭代次数
+
+    // --- 平均时间约束参数（两阶段共用） ---
+    double mean_time_lower_bound = 0.9;  ///< 段时间下界 = avg_T * lower_bound
+    double mean_time_upper_bound = 1.1;  ///< 段时间上界 = avg_T * upper_bound
+    double weight_mean_time = 10.0;  ///< 第二阶段平均时间约束权重
 };
 
 /**
@@ -265,6 +280,18 @@ class MincoSmoother : public nav2_core::Smoother {
                                        const std_msgs::msg::Header &header);
 
     /**
+     * @brief 发布最终轨迹路点可视化（MarkerArray）
+     *
+     * 使用 MarkerArray 发布 MINCO 优化后的路点位置，
+     * 用醒目颜色区分，方便与优化前路点对比。
+     *
+     * @param waypoints 优化后的路点矩阵 (2 x N)
+     * @param header 消息头
+     */
+    void publishFinalWaypointsVisualization(
+        const Eigen::Matrix2Xd &waypoints, const std_msgs::msg::Header &header);
+
+    /**
      * @brief 将 MINCO 轨迹转换为 ROS 消息
      *
      * @param traj MINCO 轨迹对象 (S=3, 5次多项式, 2D)
@@ -373,6 +400,9 @@ class MincoSmoother : public nav2_core::Smoother {
     // MINCO 优化器
     std::unique_ptr<MincoOptimizer> optimizer_;
 
+    // 第一阶段优化器（Shape Optimization）
+    std::unique_ptr<MincoOptimizer> stage1_optimizer_;
+
     // 参数
     MincoSmootherParams params_;
 
@@ -380,9 +410,17 @@ class MincoSmoother : public nav2_core::Smoother {
     rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
         trajectory_pub_;
 
+    // 发布器 - 第一阶段轨迹可视化（调试用）
+    rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr
+        stage1_trajectory_pub_;
+
     // 发布器 - 中间路点可视化（球形 Marker）
     rclcpp_lifecycle::LifecyclePublisher<
         visualization_msgs::msg::MarkerArray>::SharedPtr waypoints_marker_pub_;
+
+    // 发布器 - 最终轨迹路点 MarkerArray 可视化
+    rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::
+        SharedPtr final_waypoints_marker_pub_;
 
     // 发布器 - MINCO 多项式轨迹（用于 Controller 订阅）
     rclcpp_lifecycle::LifecyclePublisher<
