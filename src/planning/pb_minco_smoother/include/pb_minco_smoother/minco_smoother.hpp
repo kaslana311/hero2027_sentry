@@ -66,8 +66,6 @@ struct MincoSmootherParams {
     int integral_resolution = 8;  ///< 积分采样分辨率
 
     // ========== 路径处理参数 ==========
-    double waypoint_interval =
-        0.5;  ///< 路点间隔 (m) [已废弃，由 resample_time_resolution 替代]
     int min_waypoints = 3;  ///< 最少路点数
     int max_waypoints = 50;  ///< 最多路点数，防止 MINCO 优化段数过多
     double initial_time_per_meter = 0.5;  ///< 初始每米时间估计 (s/m) [已废弃]

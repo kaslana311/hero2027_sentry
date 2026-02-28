@@ -133,8 +133,6 @@ void MincoSmoother::loadParameters() {
         node, plugin_name_ + ".integral_resolution", rclcpp::ParameterValue(8));
 
     // 路径处理参数
-    declare_parameter_if_not_declared(node, plugin_name_ + ".waypoint_interval",
-                                      rclcpp::ParameterValue(0.5));
     declare_parameter_if_not_declared(node, plugin_name_ + ".min_waypoints",
                                       rclcpp::ParameterValue(3));
     declare_parameter_if_not_declared(node, plugin_name_ + ".max_waypoints",
@@ -215,8 +213,6 @@ void MincoSmoother::loadParameters() {
     node->get_parameter(plugin_name_ + ".g_epsilon", params_.g_epsilon);
     node->get_parameter(plugin_name_ + ".integral_resolution",
                         params_.integral_resolution);
-    node->get_parameter(plugin_name_ + ".waypoint_interval",
-                        params_.waypoint_interval);
     node->get_parameter(plugin_name_ + ".min_waypoints", params_.min_waypoints);
     node->get_parameter(plugin_name_ + ".max_waypoints", params_.max_waypoints);
     node->get_parameter(plugin_name_ + ".initial_time_per_meter",

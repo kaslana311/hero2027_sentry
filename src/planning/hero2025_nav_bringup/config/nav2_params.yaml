@@ -370,22 +370,30 @@ smoother_server:
     minco_smoother:
       plugin: "pb_minco/MincoSmoother"
       odom_topic: "odometry/filtered"
-      # ========== 优化权重 ==========
+      # ========== 第一阶段优化参数：优化轨迹形状 ==========
+      stage1_weight_smooth: 5.0       # 阶段1 平滑性权重
+      stage1_weight_obstacle: 25000.0    # 阶段1 避障权重
+      stage1_weight_feasibility: 40.0  # 阶段1 动力学可行性权重
+      stage1_weight_time: 5.0        # 阶段1 时间正则化权重
+      stage1_weight_mean_time: 40.0   # 阶段1 平均时间约束权重
+      stage1_max_iterations: 8000     # 阶段1 最大迭代次数
+      # ========== 第二阶段优化权重：优化动力学性质 ==========
       weight_smooth: 1.0           # 平滑性权重
       weight_obstacle: 10000.0       # 避障权重（ESDF）
       weight_feasibility: 100.0     # 动力学可行性权重
       weight_time: 25.0            # 时间正则化权重
       weight_mean_time: 100.0          # 平均时间约束权重
+      max_iterations: 8000          # L-BFGS 最大迭代次数
+      g_epsilon: 0.0            # 梯度收敛阈值
+      integral_resolution: 32       # 积分采样分辨率
+      # ========== 平均时间约束参数 ==========
+      mean_time_lower_bound: 0.9      # T_i 下界 = avg_T * 0.9
+      mean_time_upper_bound: 1.1      # T_i 上界 = avg_T * 1.1
       # ========== 动力学约束 ==========
       max_vel: 3.0                 # 最大速度 (m/s)
       max_acc: 4.0                 # 最大加速度 (m/s²)
       safe_distance: 0.3           # 安全距离 (m)
-      # ========== 优化器参数 ==========
-      max_iterations: 8000          # L-BFGS 最大迭代次数
-      g_epsilon: 0.0            # 梯度收敛阈值
-      integral_resolution: 32       # 积分采样分辨率
       # ========== 路径处理参数 ==========
-      waypoint_interval: 1.5       # 路点采样间隔 (m)
       min_waypoints: 2             # 最少路点数
       # ========== 输出参数 ==========
       output_dt: 0.1               # 输出轨迹采样间隔 (s)
@@ -394,16 +402,6 @@ smoother_server:
       resample_time_resolution: 0.65  # 重采样时间分辨率 (s)
       rotation_penalty_weight: 0.1    # 旋转惩罚权重
       dense_sample_resolution: 0.1    # 密集采样分辨率 (m)
-      # ========== 两阶段优化参数 (Stage1: 形状优化, 放松动力学) ==========
-      stage1_weight_smooth: 5.0       # 阶段1 平滑性权重
-      stage1_weight_obstacle: 25000.0    # 阶段1 避障权重（适度即可）
-      stage1_weight_feasibility: 40.0  # 阶段1 动力学可行性权重（大幅放松）
-      stage1_weight_time: 5.0        # 阶段1 时间正则化权重
-      stage1_weight_mean_time: 40.0   # 阶段1 平均时间约束权重
-      stage1_max_iterations: 8000     # 阶段1 最大迭代次数
-      # ========== 平均时间约束参数 ==========
-      mean_time_lower_bound: 0.9      # T_i 下界 = avg_T * 0.9
-      mean_time_upper_bound: 1.1      # T_i 上界 = avg_T * 1.1
 
 behavior_server:
   ros__parameters:
