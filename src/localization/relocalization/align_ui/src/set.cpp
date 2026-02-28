@@ -5,6 +5,12 @@
 set::set(align_res* setdata, QWidget* parent)
     : QDialog(parent), ui(new Ui::set), data(setdata) {
     ui->setupUi(this);
+    ui->x_lineEdit->setText(QString::number(0));
+    ui->y_lineEdit->setText(QString::number(0));
+    ui->z_lineEdit->setText(QString::number(0));
+    ui->roll_lineEdit->setText(QString::number(0));
+    ui->pitch_lineEdit->setText(QString::number(0));
+    ui->yaw_lineEdit->setText(QString::number(0));
 }
 
 set::~set() { delete ui; }
