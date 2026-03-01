@@ -331,7 +331,7 @@ planner_server:
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: "nav2_smac_planner/SmacPlannerHybrid"
-      tolerance: 0.5                      # 如果无法到达精确位置的规划容差，单位：米
+      tolerance: 1.5                      # 如果无法到达精确位置的规划容差，单位：米
       allow_unknown: true                 # 允许在未知空间中行驶
       downsample_costmap: false           # 是否对地图进行下采样
       downsampling_factor: 1              # 代价地图层分辨率的倍数 (e.g. 2 on a 5cm costmap would be 10cm)
