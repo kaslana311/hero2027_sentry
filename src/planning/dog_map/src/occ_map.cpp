@@ -262,9 +262,9 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
             continue;  //静态障碍物不处理
 #endif
         int zi = static_cast<int>(point.z / resolution_z);
-        // if (zi < 2) {
+        if (zi > layer_z-1) {
         //   // std::cout<<"zi "<<zi<<std::endl;
-        //   continue;}  //地面滤波
+          continue;}  //地面滤波
         int index =
             xi + yi * grid_map_.cols + zi * grid_map_.cols * grid_map_.rows;
         //更新占据概率
