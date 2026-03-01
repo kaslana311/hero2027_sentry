@@ -172,7 +172,7 @@ public:
     auto end_time = std::chrono::steady_clock::now();
     double time_consuming =
       std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-    std::cout << " -- [DOG INFO] Map updated in " << time_consuming << " ms." << std::endl;
+    // std::cout << " -- [DOG INFO] Map updated in " << time_consuming << " ms." << std::endl;
   }
 
   DogMapNode() : Node("dog_map_node")

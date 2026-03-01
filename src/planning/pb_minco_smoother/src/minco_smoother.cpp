@@ -502,9 +502,9 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
                 innerPoints = stage1_optimizer_->getOptimizedPoints();
                 initialTimes = stage1_optimizer_->getOptimizedTimes();
 
-                RCLCPP_INFO(logger_,
-                            "Stage 1 (Shape) 完成: pieces=%d, total_T=%.2f s",
-                            pieceNum, initialTimes.sum());
+                // RCLCPP_INFO(logger_,
+                //             "Stage 1 (Shape) 完成: pieces=%d, total_T=%.2f s",
+                //             pieceNum, initialTimes.sum());
 
                 // 发布第一阶段轨迹可视化
                 if (params_.publish_trajectory && stage1_trajectory_pub_) {
@@ -1413,11 +1413,11 @@ MincoSmoother::PathProcessingResult MincoSmoother::processPath(
     result.total_time = total_time;
     result.success = true;
 
-    RCLCPP_INFO(logger_,
-                "processPath: 路径预处理完成 - %ld 个路点, 总时间 %.2f s, "
-                "段时间 %.3f s",
-                result.waypoints.cols(), result.total_time,
-                actual_time_interval);
+    // RCLCPP_INFO(logger_,
+    //             "processPath: 路径预处理完成 - %ld 个路点, 总时间 %.2f s, "
+    //             "段时间 %.3f s",
+    //             result.waypoints.cols(), result.total_time,
+    //             actual_time_interval);
 
     return result;
 }
