@@ -391,7 +391,7 @@ smoother_server:
       mean_time_upper_bound: 1.1      # T_i 上界 = avg_T * 1.1
       # ========== 动力学约束 ==========
       max_vel: 3.0                 # 最大速度 (m/s)
-      max_acc: 4.0                 # 最大加速度 (m/s²)
+      max_acc: 3.0                 # 最大加速度 (m/s²)
       safe_distance: 0.3           # 安全距离 (m)
       # ========== 路径处理参数 ==========
       min_waypoints: 2             # 最少路点数
