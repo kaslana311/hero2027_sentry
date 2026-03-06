@@ -1,0 +1,8 @@
+<library path="Bstyle_smoother">
+  <class name="we_smoother/BSplineSmoother" type="nav2_bspline_smoother::BSplineSmoother" base_class_type="nav2_core::Smoother">
+    <description>
+      B-spline path smoother using L-BFGS optimization.
+      Optimizes for smoothness, collision avoidance, and velocity/acceleration feasibility.
+    </description>
+  </class>
+</library>
