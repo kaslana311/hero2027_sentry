@@ -293,19 +293,39 @@ geometry_msgs::msg::TwistStamped HeroMpcController::computeVelocityCommands(
 
     // 坐标系转换: 将机器人坐标系速度转换为世界坐标系速度
     // Nav2 提供的 velocity 是机器人坐标系下的速度 (base_link)
-    // MPC 使用世界坐标系下的状态
     double vx_body = velocity.linear.x;
     double vy_body = velocity.linear.y;
     double omega = velocity.angular.z;
 
-    double vx_world, vy_world;
-    bodyToWorld(vx_body, vy_body, yaw, vx_world, vy_world);
-
-    // RCLCPP_INFO(logger_, "vel_body=(%.2f, %.2f), vel_world=(%.2f, %.2f)",
-    //             vx_body, vy_body, vx_world, vy_world);
-
     // 步骤 3: 设置 MPC 初始状态
-    mpc_wrapper_->set_state(x, y, 0.0, vx_world, vy_world, 0.0);
+    // 【工业级改造】状态截断 (State Decoupling)
+    // 速度不再使用带噪声且受迫干扰的真实里程计速度，而是使用 MPC
+    // 上一次的最优预测指令。
+    // 这能有效防串扰（屏蔽细微抖动）和防止死锁（通过积分积攒逃逸力矩）。
+    static double last_cmd_vx_world = 0.0;
+    static double last_cmd_vy_world = 0.0;
+    static double last_cmd_omega = 0.0;
+    static rclcpp::Time last_call_time = clock_->now();
+
+    rclcpp::Time current_time = clock_->now();
+    double dt_call = (current_time - last_call_time).seconds();
+    last_call_time = current_time;
+
+    // 如果控制中断时间过长（例如重规划、停机重新开跑等），将内部记忆库对齐回现实世界
+    if (dt_call > 0.5) {
+        bodyToWorld(vx_body, vy_body, yaw, last_cmd_vx_world,
+                    last_cmd_vy_world);
+        last_cmd_omega = omega;
+        RCLCPP_INFO(
+            logger_,
+            "[%s] 控制间隔过长(%.2fs)，已重置速度记忆锚点至当前真实里程计",
+            plugin_name_.c_str(), dt_call);
+    }
+
+    // 将混合状态灌入 MPC (位置 x, y, yaw
+    // 严格以里程计为准闭环，速度以指令作为基准)
+    mpc_wrapper_->set_state(x, y, yaw, last_cmd_vx_world, last_cmd_vy_world,
+                            last_cmd_omega);
 
     // 步骤 4: 计算轨迹相对时间并采样参考轨迹
     double t_current;
@@ -378,6 +398,12 @@ geometry_msgs::msg::TwistStamped HeroMpcController::computeVelocityCommands(
     double vx_cmd_world = x_next(kVelX);
     double vy_cmd_world = x_next(kVelY);
     double omega_cmd = x_next(kOmega);
+
+    // 【工业级改造】更新内部指令记忆，供下一帧 MPC
+    // 的起推起点使用（蓄力机制的核心）
+    last_cmd_vx_world = vx_cmd_world;
+    last_cmd_vy_world = vy_cmd_world;
+    last_cmd_omega = omega_cmd;
 
     // 关键坐标系转换: 将世界坐标系速度转换为机器人坐标系速度
     // Nav2 的 cmd_vel 需要机器人坐标系下的速度
