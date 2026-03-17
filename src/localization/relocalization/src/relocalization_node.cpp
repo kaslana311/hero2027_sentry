@@ -113,7 +113,10 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
         target_, small_gicp::KdTreeBuilderOMP(smgicp_num_threads_));
     //匹配器初始化
     register_ = std::make_shared<small_gicp::Registration<
-        small_gicp::GICPFactor, small_gicp::ParallelReductionOMP>>();
+        small_gicp::GICPFactor, small_gicp::ParallelReductionOMP,
+        small_gicp::RestrictDoFFactor>>();
+    register_->general_factor.set_rotation_mask(
+        Eigen::Vector3d(0, 0, 1));  // 只优化yaw
     register_->reduction.num_threads = smgicp_num_threads_;
     register_->rejector.max_dist_sq = smgicp_max_dist_sq_;
     register_->optimizer.max_iterations = smgicp_max_iterations_;
@@ -181,8 +184,10 @@ void RelocalizationNode::SaveCurScanCallback(
     this->scan_count++;
     //至少积累10帧才进行匹配
     if (this->scan_count == max_scan_count_) {
-        // pcl::io::savePCDFile("/home/dji/hero2026_-sentry/src/localization/relocalization/test.pcd", *accumulated_cloud);
-        has_scan_ = true;}
+        // pcl::io::savePCDFile("/home/dji/hero2026_-sentry/src/localization/relocalization/test.pcd",
+        // *accumulated_cloud);
+        has_scan_ = true;
+    }
 }
 
 void RelocalizationNode::PassThroughFilter(

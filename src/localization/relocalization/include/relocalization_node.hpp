@@ -113,7 +113,8 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
 
     // small_gicp参数------------------
     std::shared_ptr<small_gicp::Registration<small_gicp::GICPFactor,
-                                             small_gicp::ParallelReductionOMP>>
+                                             small_gicp::ParallelReductionOMP,
+                                             small_gicp::RestrictDoFFactor>>
         register_;                                       //重定位
     pcl::PointCloud<pcl::PointCovariance>::Ptr target_;  //先验地图
     pcl::PointCloud<pcl::PointCovariance>::Ptr source_;  //扫描
