@@ -180,7 +180,9 @@ void RelocalizationNode::SaveCurScanCallback(
     *accumulated_cloud += *cur_scan_;
     this->scan_count++;
     //至少积累10帧才进行匹配
-    if (this->scan_count == max_scan_count_) has_scan_ = true;
+    if (this->scan_count == max_scan_count_) {
+        // pcl::io::savePCDFile("/home/dji/hero2026_-sentry/src/localization/relocalization/test.pcd", *accumulated_cloud);
+        has_scan_ = true;}
 }
 
 void RelocalizationNode::PassThroughFilter(

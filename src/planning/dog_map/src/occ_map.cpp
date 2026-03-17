@@ -48,7 +48,7 @@ void OccMap::InitMap(cv::Mat& grid_map) {
     grid_map_ = grid_map;
     layer_z = static_cast<int>(1.0 / resolution_z);  // 1m高度
     occ_map = new uint8_t[grid_map_.rows * grid_map_.cols * layer_z];
-    fake_layer_z = static_cast<int>(0.3 / resolution_z);  //平移避免越界
+    fake_layer_z = static_cast<int>(0.35 / resolution_z);  //平移避免越界
     std::fill_n(occ_map, grid_map_.rows * grid_map_.cols * layer_z, 0);
 }
 void OccMap::Clear() {
@@ -108,22 +108,22 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
         }
         double dzf = (max_z_occ_index - min_z_occ_index) * resolution_z;
         if (dzf < higher_than_ground_threshold_) continue;  //地面过滤
-        if (dzf < 0.12 && (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
-            continue;  //过高过滤
+        // if (dzf < 0.12 && (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
+            // continue;  //过高过滤
         //计算最大空洞大小
-        int max_hole_size = 0;
-        int curr_hole_size = 0;
-        for (int zi = max_z_occ_index - 1; zi >= min_z_occ_index; zi--) {
-            if (!IsOccupied(idx, idy, zi)) {
-                curr_hole_size++;
-            } else {
-                if (curr_hole_size > max_hole_size) {
-                    max_hole_size = curr_hole_size;
-                }
-                curr_hole_size = 0;
-            }
-        }
-        if (max_hole_size * resolution_z > 0.15) continue;
+        // int max_hole_size = 0;
+        // int curr_hole_size = 0;
+        // for (int zi = max_z_occ_index - 1; zi >= min_z_occ_index; zi--) {
+            // if (!IsOccupied(idx, idy, zi)) {
+                // curr_hole_size++;
+            // } else {
+                // if (curr_hole_size > max_hole_size) {
+                    // max_hole_size = curr_hole_size;
+                // }
+                // curr_hole_size = 0;
+            // }
+        // }
+        // if (max_hole_size * resolution_z > 0.15) continue;
 
         pcl::PointXYZI pt;
         pt.x = idx * resolution + resolution / 2.0 + cloud_at_map_origin[0];

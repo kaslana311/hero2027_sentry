@@ -4,7 +4,7 @@
       odom_topic: "/LIVO2/imu_propagate"
       cloud_topic: "cloud_registered"
       half_map_size: 10.0 #以车为中心的局部地图,也就是点云分析范围
-      resolution_z: 0.03 #z方向分辨率,用于高层分析
+      resolution_z: 0.05 #z方向分辨率,用于高层分析
       heighter_than_ground_threshold: 0.05 #地面分割
       higher_than_car_threshold: 0.7 # 最高点云高度,高于此数值的过滤"/home/dji/hero2026_-sentry/src/planning/map_server/map/map.yaml"
       frame_save: 10 # 地图记忆帧数

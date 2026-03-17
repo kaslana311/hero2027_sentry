@@ -96,7 +96,7 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
     bool has_global_map_ = false;
     bool has_scan_ = false;
 
-    int max_scan_count_ = 10;  //累计点云帧数目阈值
+    int max_scan_count_ = 20;  //累计点云帧数目阈值
     // Gates and policies (populated from ROS parameters at runtime)
     double gate_yaw_deg_ = 5.0;    // yaw 门限（度）
     double gate_roll_deg_ = 5.0;   // roll 门限（度）
