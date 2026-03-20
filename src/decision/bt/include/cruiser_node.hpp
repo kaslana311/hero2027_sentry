@@ -181,11 +181,20 @@ class NavNode : public StatefulActionNode {
 
         // 可选：检查goal handle状态作为额外验证
         if (goal_handle_) {
-            auto status = goal_handle_->get_status();
-            if (status == action_msgs::msg::GoalStatus::STATUS_ABORTED ||
-                status == action_msgs::msg::GoalStatus::STATUS_CANCELED) {
-                RCLCPP_WARN(node_->get_logger(), "Goal handle状态异常: %d",
-                            status);
+            try {
+                auto status = goal_handle_->get_status();
+                if (status == action_msgs::msg::GoalStatus::STATUS_ABORTED ||
+                    status == action_msgs::msg::GoalStatus::STATUS_CANCELED) {
+                    RCLCPP_WARN(node_->get_logger(), "Goal handle状态异常: %d",
+                                status);
+                    publishArrivalStatus(false);
+                    return NodeStatus::FAILURE;
+                }
+            } catch (const std::exception& e) {
+                // 若底层抛出未知句柄异常，说明目标状态早已被服务端结束和清理
+                RCLCPP_WARN(node_->get_logger(),
+                            "尝试获取异常的目标状态(直接当失败处理): %s",
+                            e.what());
                 publishArrivalStatus(false);
                 return NodeStatus::FAILURE;
             }
@@ -197,10 +206,21 @@ class NavNode : public StatefulActionNode {
     void onHalted() override {
         // 取消当前导航任务
         if (goal_handle_) {
-            RCLCPP_INFO(node_->get_logger(), "取消导航任务");
-            auto future_cancel =
-                action_client_->async_cancel_goal(goal_handle_);
-            // 不等待取消结果，避免阻塞
+            try {
+                auto status = goal_handle_->get_status();
+                // 只有当目标处于接收或执行状态时才尝试取消
+                if (status == action_msgs::msg::GoalStatus::STATUS_ACCEPTED ||
+                    status == action_msgs::msg::GoalStatus::STATUS_EXECUTING) {
+                    RCLCPP_INFO(node_->get_logger(), "取消导航任务");
+                    auto future_cancel =
+                        action_client_->async_cancel_goal(goal_handle_);
+                    // 不等待取消结果，避免阻塞
+                }
+            } catch (const std::exception& e) {
+                RCLCPP_WARN(node_->get_logger(),
+                            "Halt取消目标时忽略异常(目标可能已被清理): %s",
+                            e.what());
+            }
         }
 
         // 重置状态
