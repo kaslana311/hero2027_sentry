@@ -45,8 +45,8 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     this->declare_parameter("f_max_y", 5.3);
     this->declare_parameter("f_max_z", 3.5);
 
-    this->declare_parameter("pcd_pub", pcdPub);
-    this->get_parameter("pcd_pub", pcdPub);
+    // this->declare_parameter("pcd_pub", pcdPub);
+    // this->get_parameter("pcd_pub", pcdPub);
 
     fparams.min_x = this->get_parameter("f_min_x").as_double();
     fparams.min_y = this->get_parameter("f_min_y").as_double();
@@ -130,22 +130,22 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
         std::chrono::milliseconds(1000),
         std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
 
-    if (pcdPub) {
-        pub_pcd_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-            "pcd_init", 1);
-        auto msg = sensor_msgs::msg::PointCloud2();
-        //降采一下发布
-        pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(
-            new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
-        voxel_grid.setInputCloud(global_map_);
-        voxel_grid.setLeafSize(0.15f, 0.15f, 0.15f);
-        voxel_grid.filter(*filtered_cloud);
-        pcl::toROSMsg(*filtered_cloud, msg);
-        msg.header.frame_id = "odom";
-        msg.header.stamp = this->now();
-        pub_pcd_->publish(msg);
-    }
+    // if (pcdPub) {
+    //     pub_pcd_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+    //         "pcd_init", 1);
+    //     auto msg = sensor_msgs::msg::PointCloud2();
+    //     //降采一下发布
+    //     pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(
+    //         new pcl::PointCloud<pcl::PointXYZ>);
+    //     pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+    //     voxel_grid.setInputCloud(global_map_);
+    //     voxel_grid.setLeafSize(0.15f, 0.15f, 0.15f);
+    //     voxel_grid.filter(*filtered_cloud);
+    //     pcl::toROSMsg(*filtered_cloud, msg);
+    //     msg.header.frame_id = "odom";
+    //     msg.header.stamp = this->now();
+    //     pub_pcd_->publish(msg);
+    // }
 }
 void RelocalizationNode::publishTransform() {
     if (result_t_.matrix().isZero()) {
@@ -219,7 +219,7 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
                              "no scan msg");
         return;
     }
-    rclcpp::Time begin_icp_time = this->now();
+  static  rclcpp::Time begin_icp_time = this->now();
     TDThandle();
     // 小范围多 yaw 初始值搜索
     const double yaw_gate = gate_yaw_deg_ * M_PI / 180.0;
@@ -277,7 +277,8 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
         }
     } else {
         registration_fail_count_++;
-
+    max_scan_count_=max_scan_count_/2+1;
+if(register_->optimizer.max_iterations >20) register_->optimizer.max_iterations -=20; 
         if (registration_fail_count_ >= max_fail_before_fallback_) {
             RCLCPP_WARN(this->get_logger(),
                         "Registration failed over %d times, publishing "
@@ -286,6 +287,8 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
             publishTransform();
             registration_success_ = true;
             registration_fail_count_ = 0;  // 重置计数
+            RCLCPP_INFO(this->get_logger(), "Registration time: %f",
+                (end_icp_time - begin_icp_time).seconds());
         } else {                           //重新来过
             has_scan_ = false;
             this->scan_count = 0;
