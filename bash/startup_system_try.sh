@@ -27,7 +27,7 @@ wait_for_topic() {
 
 # 启动底盘节点
 gnome-terminal --tab --title="chassis" -- bash -c \
-"ros2 launch hero_serial chassis_node.launch.py 2>&1 | tee \"$LOG_DIR/chassis.log\"; exec bash"
+"ros2 launch hero_serial chassis_node.launch.py 2>&1 | tee -a \"$LOG_DIR/chassis.log\" | stdbuf -oL sync; exec bash"
 
 # 启动云台节点
 # gnome-terminal --tab --title="gimbal" -- bash -c \
@@ -35,7 +35,7 @@ gnome-terminal --tab --title="chassis" -- bash -c \
 
 # 启动雷达节点
 gnome-terminal --tab --title="start_lidar" -- bash -c \
-"ros2 launch livox_ros_driver2 msg_MID360_launch.py 2>&1 | tee \"$LOG_DIR/lidar.log\"; exec bash"
+"ros2 launch livox_ros_driver2 msg_MID360_launch.py 2>&1 | tee \"$LOG_DIR/lidar.log\" | stdbuf -oL sync; exec bash"
 
 # 等待雷达初始化完成
 wait_for_topic "/livox/imu" 60
@@ -50,18 +50,18 @@ gnome-terminal --tab --title="ekf_fusion" -- bash -c \
 
 # 启动重定位节点
 gnome-terminal --tab --title="relocalization" -- bash -c \
-"ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\"; exec bash"
+"ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\" | stdbuf -oL sync; exec bash"
 
 sleep 5  # 适当调整时间或使用话题检测
 
 # 启动导航规划节点
 gnome-terminal --tab --title="plan" -- bash -c \
-"ros2 launch hero2025_nav_bringup navigation_launch.py 2>&1 | tee \"$LOG_DIR/navigation.log\"; exec bash"
+"ros2 launch hero2025_nav_bringup navigation_launch.py 2>&1 | tee \"$LOG_DIR/navigation.log\" | stdbuf -oL sync; exec bash"
 
 # 启动地图服务器
 gnome-terminal --tab --title="map" -- bash -c \
 " export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/home/dji/hero2026_-sentry/src/third_party/acados/lib;
-     ros2 launch map_server map_server.launch.py 2>&1 | tee \"$LOG_DIR/map_server.log\"; exec bash"
+     ros2 launch map_server map_server.launch.py 2>&1 | tee \"$LOG_DIR/map_server.log\" | stdbuf -oL sync; exec bash"
 
 # 启动速度变换节点
 # gnome-terminal --tab --title="fake_vel_trans" -- bash -c \
@@ -69,7 +69,7 @@ gnome-terminal --tab --title="map" -- bash -c \
 
 # 启动RViz可视化
 gnome-terminal --tab --title="rviz" -- bash -c \
-"ros2 launch hero2025_nav_bringup rviz_launch.py 2>&1 | tee \"$LOG_DIR/rviz.log\"; exec bash"
+"ros2 launch hero2025_nav_bringup rviz_launch.py 2>&1 | tee \"$LOG_DIR/rviz.log\" | stdbuf -oL sync; exec bash"
 
 # sleep 10
 # 启动决策节点（特殊日志处理）
