@@ -1,5 +1,7 @@
 #!/bin/bash
-
+gnome-terminal --tab --title="delete" -- bash -c \
+"bash /home/dji/hero2026_-sentry/bash/kill_all_ros2_nodes.sh; bash "
+sleep 2
 # 设置必要的环境变量
 export DISPLAY=:0
 export XAUTHORITY=/home/dji/.Xauthority
@@ -30,8 +32,8 @@ gnome-terminal --tab --title="chassis" -- bash -c \
 "ros2 launch hero_serial chassis_node.launch.py 2>&1 | tee -a \"$LOG_DIR/chassis.log\" | stdbuf -oL sync; exec bash"
 
 # 启动云台节点
-# gnome-terminal --tab --title="gimbal" -- bash -c \
-# "ros2 launch hero_serial gimbal_node.launch.py 2>&1 | tee \"$LOG_DIR/gimbal.log\"; exec bash"
+gnome-terminal --tab --title="gimbal" -- bash -c \
+"ros2 launch hero_serial gimbal_node.launch.py 2>&1 | tee \"$LOG_DIR/gimbal.log\"; exec bash"
 
 # 启动雷达节点
 gnome-terminal --tab --title="start_lidar" -- bash -c \
