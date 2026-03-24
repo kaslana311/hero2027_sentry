@@ -24,12 +24,12 @@ T yaml_get_value(const YAML::Node& node, const std::string& key) {
         throw YAML::Exception(e.mark, ss.str());
     }
 }
-const int8_t LOG_OCC_HIT = 30;    // 占据增量
-const int8_t LOG_OCC_FREE = -10;  // 空闲减量
-const uint8_t THR_OCC = 35;       // 判定为障碍物的阈值
+const int8_t LOG_OCC_HIT = 40;    // 占据增量
+const int8_t LOG_OCC_FREE = -3;  // 空闲减量
+const uint8_t THR_OCC = 30;       // 判定为障碍物的阈值
 const uint8_t MAX_LOG = 250;
 const uint8_t MIN_LOG = 5;
-#define FORGET_FACTOR -24
+#define FORGET_FACTOR -30
 class OccMap {
    public:
     OccMap(double higher_than_ground_threshold,

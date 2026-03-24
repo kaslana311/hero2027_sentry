@@ -312,15 +312,15 @@ geometry_msgs::msg::TwistStamped HeroMpcController::computeVelocityCommands(
     last_call_time = current_time;
 
     // 如果控制中断时间过长（例如重规划、停机重新开跑等），将内部记忆库对齐回现实世界
-    if (dt_call > 0.5) {
-        bodyToWorld(vx_body, vy_body, yaw, last_cmd_vx_world,
-                    last_cmd_vy_world);
-        last_cmd_omega = omega;
-        RCLCPP_INFO(
-            logger_,
-            "[%s] 控制间隔过长(%.2fs)，已重置速度记忆锚点至当前真实里程计",
-            plugin_name_.c_str(), dt_call);
-    }
+    // if (dt_call > 0.5) {
+    //     bodyToWorld(vx_body, vy_body, yaw, last_cmd_vx_world,
+    //                 last_cmd_vy_world);
+    //     last_cmd_omega = omega;
+    //     RCLCPP_INFO(
+    //         logger_,
+    //         "[%s] 控制间隔过长(%.2fs)，已重置速度记忆锚点至当前真实里程计",
+    //         plugin_name_.c_str(), dt_call);
+    // }
 
     // 将混合状态灌入 MPC (位置 x, y, yaw
     // 严格以里程计为准闭环，速度以指令作为基准)
