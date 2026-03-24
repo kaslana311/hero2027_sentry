@@ -145,6 +145,12 @@ typedef struct {
 } Robot_wheel_odometry_t;
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+typedef struct {
+    bool is_aiming;
+} CV_to_Nav_Massage_t;
+#pragma pack(pop)
+
 /***********设置的CMDid,发送次数，发送周期********************************* */
 #define CMD_ID_VISUAL_CTRL 0x01   // 视觉发送控制指令ID
 #define CMD_ID_VISUAL_RADAR 0x02  // 视觉发送雷达数据ID
@@ -163,6 +169,8 @@ typedef struct {
 #define CMD_ID_Robot_command_map 0x0C
 #define CMD_ID_Robot_wheel_odometry \
     0x0D  // 底盘向导航发送的轮式里程计速度数据ID
+#define CMD_ID_CV_to_Nav_Massage \
+    0x0F  // 视觉发送给导航的是否正在瞄准的信息ID（视觉发送给导航）
 
 // 设置 发送次数（有限次就写正整数，无限次发送写-1） 和 每几个周期发送一次
 #define CMD_SET_VISUAL_CTRL -1, 2   // 视觉发送控制指令

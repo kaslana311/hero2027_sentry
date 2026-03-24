@@ -141,8 +141,8 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     const rclcpp::QoS qos(
         rclcpp::QoS(1).best_effort().keep_last(1).durability_volatile());
     aiming_subscription_ =
-        this->create_subscription<interfaces::msg::TrackerOutput>(
-            "/tracker/out", qos,
+        this->create_subscription<std_msgs::msg::Bool>(
+            "is_aiming", qos,
             std::bind(&ChassisNode::AimingCallback, this, std::placeholders::_1)
             // 不指定回调组，使用默认组
         );
@@ -207,20 +207,20 @@ void ChassisNode::HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg) {
         std::thread danger_thread([this]() {
             // 立即生成第一个随机转速
             ctrl_info_t_data.w = spin_speed_distribution_(random_engine_);
-            RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%d",
+            RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%f",
                         ctrl_info_t_data.w);
 
             // 运行6秒，每1.5秒更新一次转速
             for (int i = 0; i < 4; ++i) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1500));
                 ctrl_info_t_data.w = spin_speed_distribution_(random_engine_);
-                RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%d",
+                RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%f",
                             ctrl_info_t_data.w);
             }
 
-            // 恢复默认转速
-            ctrl_info_t_data.w = 3600;
-            RCLCPP_INFO(this->get_logger(), "危险模式结束，恢复默认转速");
+            // 恢复战时常规转速
+            ctrl_info_t_data.w = 2400;
+            RCLCPP_INFO(this->get_logger(), "危险模式结束，恢复战时常规转速");
 
             // 重置危险模式标志
             is_danger_mode_.store(false);
@@ -232,16 +232,17 @@ void ChassisNode::HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg) {
 }
 
 void ChassisNode::ReachCallback(const std_msgs::msg::Bool::SharedPtr msg) {
-    ctrl_info_t_data.is_tyro = msg->data;
+    // ctrl_info_t_data.is_tyro = msg->data;
+    is_guarding = msg->data;
 
     // 只有在非进攻状态下才能切换移动/防御姿态
     if (current_posture_ != RobotPosture::ATTACK) {
         if (msg->data) {
-            // 到达目标点，进入移动姿态
-            SetPosture(RobotPosture::MOVE);
-        } else {
-            // 未到达目标点，进入防御姿态
+            // 到达目标点，进入防御姿态
             SetPosture(RobotPosture::DEFENSE);
+        } else {
+            // 未到达目标点，进入移动姿态
+            SetPosture(RobotPosture::MOVE);
         }
     }
 }
@@ -254,9 +255,9 @@ void ChassisNode::CmdVelCallback(
 
 // 自瞄状态回调函数 (基于 TrackerOutput)
 void ChassisNode::AimingCallback(
-    const interfaces::msg::TrackerOutput::SharedPtr msg) {
+    const std_msgs::msg::Bool msg) {
     // RCLCPP_INFO(this->get_logger(), "收到消息");
-    if (!msg->targets.empty()) {
+    if (msg.data) {
         // targets 不为空，检验是否是 ATTACK 状态，不是则切入 ATTACK 状态
         if (current_posture_ != RobotPosture::ATTACK) {
             SetPosture(RobotPosture::ATTACK);
@@ -265,9 +266,15 @@ void ChassisNode::AimingCallback(
     } else {
         // targets 为空，检验是否是 ATTACK 状态，是才切换成 MOVE 状态
         if (current_posture_ == RobotPosture::ATTACK) {
-            SetPosture(RobotPosture::MOVE);
-            RCLCPP_INFO(this->get_logger(),
-                        "目标丢失，退出进攻姿态，进入移动姿态");
+            if(is_guarding == true){
+                SetPosture(RobotPosture::DEFENSE);
+                RCLCPP_INFO(this->get_logger(),
+                "目标丢失，退出进攻姿态，进入防御姿态");
+            }else{
+                SetPosture(RobotPosture::MOVE);
+                RCLCPP_INFO(this->get_logger(),
+                "目标丢失，退出进攻姿态，进入移动姿态");
+            }
         }
     }
 }
@@ -278,7 +285,7 @@ void ChassisNode::SetPosture(RobotPosture posture) {
         current_posture_ = posture;
         sentry_cmd_info_t_data.sentry_status =
             static_cast<uint8_t>(current_posture_);
-        RCLCPP_DEBUG(this->get_logger(), "姿态切换至: %d",
+        RCLCPP_INFO(this->get_logger(), "姿态切换至: %d",
                      static_cast<int>(current_posture_));
     }
 }
@@ -303,33 +310,79 @@ ChassisNode::~ChassisNode() {
 void ChassisNode::ReceiveThreadFunc() {
     RCLCPP_INFO(this->get_logger(), "接收线程开始运行");
 
+    // 私有数据蓄水池，用于无损拼接不定长的粘包与半包
+    std::vector<unsigned char> rx_buffer;
+
     while (rclcpp::ok() && thread_running_.load()) {
-        // 阻塞式读取串口数据（数据来了立刻返回）
         if (boost_asio_.Read()) {
             const auto& data = boost_asio_.GetReadBuffer();
 
             if (!data.empty()) {
-                // 尝试解析数据
-                if (!Receive_Handle(const_cast<unsigned char*>(data.data()),
-                                    static_cast<unsigned int>(data.size()))) {
-                    // 解析失败时不打印日志，避免刷屏（可能是数据不完整）
-                    // 如果需要调试，可以取消注释下面的行
-                    // RCLCPP_WARN(this->get_logger(), "数据解析失败，数据长度:
-                    // %zu", data.size());
-                }
-                // 清空缓冲区，防止数据堆积
-                // 注意：这是临时方案，未来应实现环形缓冲区和粘包处理
+                // 1. 将串口底层读取到的残缺或超长数据全部灌入蓄水池
+                rx_buffer.insert(rx_buffer.end(), data.begin(), data.end());
+                // 2. 清空底层缓冲区
                 boost_asio_.Consume(data.size());
             }
-        } else {
-            // 读取失败时，短暂休眠避免 CPU 空转
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
+
+        // 3. 不断循环剥离蓄水池中的完整数据包
+        while (!rx_buffer.empty()) {
+            // 步骤 A：匹配帧头标志位 SOF (0xAA)
+            size_t sof_idx = 0;
+            while (sof_idx < rx_buffer.size() &&
+                   rx_buffer[sof_idx] != COM_HEADER_SOF) {
+                sof_idx++;
+            }
+
+            // 丢弃匹配到有效标志位之前的乱码
+            if (sof_idx > 0) {
+                rx_buffer.erase(rx_buffer.begin(), rx_buffer.begin() + sof_idx);
+            }
+
+            // 步骤 B：包头完整性检测 (包头定义为5个字节)
+            if (rx_buffer.size() < sizeof(ComHeader_t)) {
+                break;  // 这是典型的"半包"状态，退出当前循环等待下一次 Read 补齐
+            }
+
+            // 步骤 C：核心！包头 CRC8 预校验 —— 彻底消灭假帧头陷阱
+            // 包头除了最后的 CRC8 本身，前 4 字节参与计算: SOF(1) + DataLength(2) + Seq(1)
+            unsigned char cal_crc8 = Get_CRC8_Check_Sum(rx_buffer.data(), 4, CRC8_INIT);
+            if (cal_crc8 != rx_buffer[4]) {
+                // ！！！ 这一步至关重要 ！！！
+                // 哪怕第一个字节是0xAA，它也只是个藏在数据段里的"假李鬼"
+                // 强行剔除这 1 个字节，逼迫蓄水池继续往后寻找真正的 0xAA 帧头
+                rx_buffer.erase(rx_buffer.begin(), rx_buffer.begin() + 1);
+                continue; 
+            }
+
+            // 步骤 D：提取极其安全可靠的有效数据长度
+            uint16_t data_length =
+                rx_buffer[1] | (static_cast<uint16_t>(rx_buffer[2]) << 8);
+
+            // 步骤 E：根据底层协议精准计算一整包大小 
+            // 真实物理帧长 = 帧头(5) + 命令头CmdID(2) + 数据(data_length)
+            // 没有 CRC16，总附加字节正好是 7
+            size_t frame_total_len = 7 + data_length;
+
+            if (rx_buffer.size() < frame_total_len) {
+                break;  // 包头合法但数据区尚未全部抵达（也是半包），留着下个循环继续接
+            }
+
+            // 步骤 F：大功告成，将百分百合法且完整的内存块丢给学长的解析器
+            Receive_Handle(rx_buffer.data(), frame_total_len);
+
+            // 步骤 G：精准剥离刚才已经被解析消费掉的帧长，一毫米的字节都不多删
+            rx_buffer.erase(rx_buffer.begin(),
+                            rx_buffer.begin() + frame_total_len);
+        }
+
+        // 避免空跑吃满 CPU，线程轻微睡 1ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
     RCLCPP_INFO(this->get_logger(), "接收线程退出");
 }
-
+// ...existing code...
 void ChassisNode::ChassisCmdTimerCallback() {
     Send_Cmd_Packet(serial_dev_, tx_buffer, sizeof(tx_buffer), 0);
 }
@@ -337,20 +390,19 @@ void ChassisNode::ChassisCmdTimerCallback() {
 void ChassisNode::RefreePubTimerCallback() {
     // RCLCPP_INFO(this->get_logger(), "发布回调");
     serial_interfaces::msg::Refree msg;
-    // std::cout << "比赛类型: " << static_cast<int>(game_info_t_data.game_type)
-    //           << std::endl;
-    // std::cout << "比赛阶段: "
-    //           << static_cast<int>(game_info_t_data.game_progress) <<
-    //           std::endl;
-    // std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time << "
-    // 秒"
-    //           << std::endl;
-    // std::cout << "机器人ID: " << static_cast<int>(robot_info_t_data.robot_id)
-    //           << std::endl;
-    // std::cout << "当前血量: " << robot_info_t_data.remain_HP << std::endl;
-    // std::cout << "17mm弹药剩余: "
-    //           << bullet_remaining_t_data.bullet_remaining_num_17mm <<
-    //           std::endl;
+    std::cout << "比赛类型: " << static_cast<int>(game_info_t_data.game_type)
+              << std::endl;
+    std::cout << "比赛阶段: "
+              << static_cast<int>(game_info_t_data.game_progress) <<
+              std::endl;
+    std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time << "秒"
+              << std::endl;
+    std::cout << "机器人ID: " << static_cast<int>(robot_info_t_data.robot_id)
+              << std::endl;
+    std::cout << "当前血量: " << robot_info_t_data.remain_HP << std::endl;
+    std::cout << "17mm弹药剩余: "
+              << bullet_remaining_t_data.bullet_remaining_num_17mm <<
+              std::endl;
     // std::cout << "堡垒上允许发弹："
     //           << bullet_remaining_t_data.projectile_allowance_fortress
     //           << std::endl;
