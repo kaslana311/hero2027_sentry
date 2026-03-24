@@ -1,7 +1,8 @@
 #include "relocalization_node.hpp"
-
+#include <filesystem>
 #include <pcl/filters/passthrough.h>
 using namespace small_gicp;
+namespace fs = std::filesystem;
 RelocalizationNode::RelocalizationNode(QObject* parent)
     : QObject(parent),
       Node("relocalization_node"),
@@ -184,10 +185,20 @@ void RelocalizationNode::SaveCurScanCallback(
     this->scan_count++;
     //至少积累10帧才进行匹配
     if (this->scan_count == max_scan_count_) {
-        // pcl::io::savePCDFile("/home/dji/hero2026_-sentry/src/localization/relocalization/test.pcd",
-        // *accumulated_cloud);
-        has_scan_ = true;
-    }
+
+        std::string pathname="/home/dji/hero2026_-sentry/src/localization/relocalization/rec.pcd";
+        // try{
+        //     int count=0;
+        //     while (fs::exists(pathname)){
+        //         pathname ="/home/dji/hero2026_-sentry/src/localization/relocalization/rec"+std::to_string(count++)+".pcd";
+        //     }
+        // pcl::io::savePCDFile(pathname, *accumulated_cloud);
+
+        // }
+        // catch(const fs::filesystem_error & e){
+        //     std::cout<<"error install "<<e.what();
+        // }
+        has_scan_ = true;}
 }
 
 void RelocalizationNode::PassThroughFilter(
@@ -214,90 +225,91 @@ void RelocalizationNode::PassThroughFilter(
 
 void RelocalizationNode::GlobalLocalizationTimerCallback() {
     if (registration_success_) return;
-    if (!has_scan_) {
-        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                             "no scan msg");
-        return;
-    }
+    // if (!has_scan_) {
+    //     RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+    //                          "no scan msg");
+    //     return;
+    // }
   static  rclcpp::Time begin_icp_time = this->now();
-    TDThandle();
+    // TDThandle();
     // 小范围多 yaw 初始值搜索
-    const double yaw_gate = gate_yaw_deg_ * M_PI / 180.0;
-    const double yaw_step = std::max(0.5, yaw_search_step_deg_) * M_PI / 180.0;
-    std::vector<double> yaw_seeds;
-    yaw_seeds.push_back(0.0);
-    for (double a = yaw_step; a <= yaw_gate + 1e-6; a += yaw_step) {
-        yaw_seeds.push_back(+a);
-        yaw_seeds.push_back(-a);
-    }
-    static bool first = true;
+    // const double yaw_gate = gate_yaw_deg_ * M_PI / 180.0;
+    // const double yaw_step = std::max(0.5, yaw_search_step_deg_) * M_PI / 180.0;
+    // std::vector<double> yaw_seeds;
+    // yaw_seeds.push_back(0.0);
+    // for (double a = yaw_step; a <= yaw_gate + 1e-6; a += yaw_step) {
+    //     yaw_seeds.push_back(+a);
+    //     yaw_seeds.push_back(-a);
+    // }
+    // static bool first = true;
     double best_fitness = 0.05;
     Eigen::Matrix4d best_T = pose_estimation_;
-    for (double dyaw : yaw_seeds) {
-        Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
-        double f = 1e9;
-        Eigen::Isometry3d res = SmallIcpRegistration(TDTresult, seed, f);
-        if (f < best_fitness) {
-            best_fitness = f;
-            best_T = res.matrix();
-            if (first) break;
-        }
-    }
+    // this->scan_count = max_scan_count_+1;
+    // for (double dyaw : yaw_seeds) {
+    //     Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
+    //     double f = 1e9;
+    //     Eigen::Isometry3d res = SmallIcpRegistration(TDTresult, seed, f);
+    //     if (f < best_fitness) {
+    //         best_fitness = f;
+    //         best_T = res.matrix();
+    //         if (first) break;
+    //     }
+    // }
     // first = false;
     //此时得到了最好的变幻关系
-    rclcpp::Time end_icp_time = this->now();
-    RCLCPP_INFO(this->get_logger(), "Registration time: %f, best fitness: %f",
-                (end_icp_time - begin_icp_time).seconds(), best_fitness);
+    // rclcpp::Time end_icp_time = this->now();
+    // RCLCPP_INFO(this->get_logger(), "Registration time: %f, best fitness: %f",
+    //             (end_icp_time - begin_icp_time).seconds(), best_fitness);
     reloc_res relocResult;
-
+result_t_.matrix()=pose_estimation_;
     relocResult.fitness = best_fitness;
     relocResult.dtrans = TransDelta(best_T, result_t_.matrix());
     relocResult.dpitch = PitchDelta(best_T, result_t_.matrix());
     relocResult.droll = RollDelta(best_T, result_t_.matrix());
     relocResult.dyaw = YawDelta(best_T, result_t_.matrix());
-    const bool fitness_ok = best_fitness < fitness_threshold_;
-    const bool trans_ok = relocResult.dtrans <= gate_trans_m_;
-    const bool yaw_ok = relocResult.dyaw <= yaw_gate;
-    const double roll_gate = gate_roll_deg_ * M_PI / 180.0;
-    const double pitch_gate = gate_pitch_deg_ * M_PI / 180.0;
-    const bool roll_ok = relocResult.droll <= roll_gate;
-    const bool pitch_ok = relocResult.dpitch <= pitch_gate;
-    bool judge_ok = fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok;
+    // const bool fitness_ok = best_fitness < fitness_threshold_;
+    // const bool trans_ok = relocResult.dtrans <= gate_trans_m_;
+    // const bool yaw_ok = relocResult.dyaw <= yaw_gate;
+    // const double roll_gate = gate_roll_deg_ * M_PI / 180.0;
+    // const double pitch_gate = gate_pitch_deg_ * M_PI / 180.0;
+    // const bool roll_ok = relocResult.droll <= roll_gate;
+    // const bool pitch_ok = relocResult.dpitch <= pitch_gate;
+    // bool judge_ok = fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok;
 
-    if (judge_ok) {
+    // if (judge_ok) {
         Eigen::Matrix4d T_pub = best_T;
-        if (enforce_rp_zero_) {
-            ZeroRollPitchKeepYaw(best_T);
-        }
+        // if (enforce_rp_zero_) {
+        //     ZeroRollPitchKeepYaw(best_T);
+        // }
         relocResult.isOk = true;
         result_t_.matrix() = T_pub;
         if (!qt_control.load()) {
             publishTransform();
             registration_success_ = true;  // 设置配准成功标志
         }
-    } else {
-        registration_fail_count_++;
-    max_scan_count_=max_scan_count_/2+1;
-if(register_->optimizer.max_iterations >20) register_->optimizer.max_iterations -=20; 
-        if (registration_fail_count_ >= max_fail_before_fallback_) {
-            RCLCPP_WARN(this->get_logger(),
-                        "Registration failed over %d times, publishing "
-                        "fallback (%s)!",
-                        max_fail_before_fallback_, fallback_policy_.c_str());
-            publishTransform();
-            registration_success_ = true;
-            registration_fail_count_ = 0;  // 重置计数
-            RCLCPP_INFO(this->get_logger(), "Registration time: %f",
-                (end_icp_time - begin_icp_time).seconds());
-        } else {                           //重新来过
-            has_scan_ = false;
-            this->scan_count = 0;
-        }
-        relocResult.isOk = false;
-    }
+//     } else {
+//         registration_fail_count_++;
+//     max_scan_count_=max_scan_count_/2+1;
+// if(register_->optimizer.max_iterations >20) register_->optimizer.max_iterations -=20; 
+//         if (registration_fail_count_ >= max_fail_before_fallback_) {
+//             RCLCPP_WARN(this->get_logger(),
+//                         "Registration failed over %d times, publishing "
+//                         "fallback (%s)!",
+//                         max_fail_before_fallback_, fallback_policy_.c_str());
+//             publishTransform();
+//             registration_success_ = true;
+//             registration_fail_count_ = 0;  // 重置计数
+//             RCLCPP_INFO(this->get_logger(), "Registration time: %f",
+//                 (end_icp_time - begin_icp_time).seconds());
+//         } else {                           //重新来过
+//             has_scan_ = false;
+//             this->scan_count = 0;
+//         }
+//         relocResult.isOk = false;
+//     }
     emit alignResultSignal(relocResult);  //发送配准结果
 
-    this->accumulated_cloud->clear();
+    // this->accumulated_cloud->clear();
     this->TDTresult->clear();
 }
 // converged return res,false return pre

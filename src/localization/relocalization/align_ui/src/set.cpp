@@ -5,7 +5,7 @@
 set::set(align_res* setdata, QWidget* parent)
     : QDialog(parent), ui(new Ui::set), data(setdata) {
     ui->setupUi(this);
-    ui->x_lineEdit->setText(QString::number(-4.5));
+    ui->x_lineEdit->setText(QString::number(-4.6));
     ui->y_lineEdit->setText(QString::number(3.7));
     ui->z_lineEdit->setText(QString::number(0));
     ui->roll_lineEdit->setText(QString::number(0));
