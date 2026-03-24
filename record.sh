@@ -6,10 +6,10 @@
 #sudo apt install ros-humble-rosbag2-storage-mcap
 #
 # 1. 定义你的命名空间 (如果不需要命名空间，留空 "" 即可)
-NS="/red_standard_robot1" 
+NS="" 
 
 # 2. 定义相对话题名（不要以 / 开头）
-RELATIVE_TOPICS="odometry tf tf_static rog_map/inf_occ plan plan_smoothed global_costmap/costmap"
+RELATIVE_TOPICS=" tf tf_static FollowPath/predicted_path path FollowPath/reference_path"
 
 # 3. 存储路径配置
 BAG_PATH_BASE="$HOME/ros_bags"
