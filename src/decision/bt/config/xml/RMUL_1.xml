@@ -35,17 +35,18 @@
           <Fallback> <!-- 血量分支判断-->
             <!-- 高血量分支 -->
             <Sequence>
-                <CheckValue value="{current_hp}" expected="150" operator="gt"/>
+                <CheckValue value="{current_hp}" expected="230" operator="gt"/>
                 <LogMessage message="血量健康，前往占点区"/>
                 <ReactiveSequence>
                     <CheckValue value="{stage_time}" expected="0" operator="gt"/>
-                    <CheckValue value="{current_hp}" expected="150" operator="gt"/>
-                    <Nav x="3.58" y="4.45" />
+                    <CheckValue value="{current_hp}" expected="230" operator="gt"/>
+                    <Nav x="0.80" y="-0.5" />
+                    <!-- <Nav x="0.00" y="-0.5" /> -->
                 </ReactiveSequence>
                 <ReactiveSequence>
                     <CheckValue value="{stage_time}" expected="0" operator="gt"/>
-                    <CheckValue value="{current_hp}" expected="150" operator="gt"/>
-                    <Guardian guard_duration = "15.0"/>
+                    <CheckValue value="{current_hp}" expected="230" operator="gt"/>
+                    <Guardian guard_duration = "10.0"/>
                 </ReactiveSequence>
             </Sequence>
 
@@ -53,9 +54,10 @@
             <Sequence>
               <ReactiveSequence>
                 <CheckValue value="{stage_time}" expected="0" operator="gt"/>
-                <CheckValue value="{current_hp}" expected="150" operator="le"/> <!-- le表示小于等于 -->
+                <CheckValue value="{current_hp}" expected="230" operator="le"/> <!-- le表示小于等于 -->
                 <LogMessage message="血量不足或弹丸不够，返回补给区"/>
-                <Nav x="0.455" y="-0.466" />
+                <Nav x="-5.10" y="3.10" />
+                <!-- <Nav x="-3.20" y="2.80" /> -->
               </ReactiveSequence>
               <ReactiveSequence>
                 <LogMessage message="等待血量恢复:{current_hp}"/>

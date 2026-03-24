@@ -8,7 +8,7 @@
         <Sequence>
             <!-- 比赛类型检查 -->
             <LogMessage message="检查比赛类型，比赛类型为：{competition_type}"/>
-            <CheckValue value="{competition_type}" expected="1" operator="eq"/>
+            <CheckValue value="{competition_type}" expected="4" operator="eq"/>
             <LogMessage message="比赛类型通过"/>
 
             <!-- 比赛阶段检查 -->
@@ -38,12 +38,12 @@
             <!-- 高血量分支 -->
             <Sequence>
                 <CheckValue value="{current_hp}" expected="100" operator="gt"/>
-                <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
+                <!-- <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/> -->
                 <LogMessage message="血量健康，前往占点区"/>
                 <Fallback>
                     <!-- 血量高且己方前哨站未被击毁 -->
                     <Sequence>
-                        <CheckValue value="{friend_outpost}" expected="0" operator="gt"/>
+                        <!-- <CheckValue value="{friend_outpost}" expected="0" operator="gt"/> -->
                         <Fallback> <!-- 状态机的每一状态检查不通过返回false就进入下一状态 -->
                             <!-- 巡航点0:左中央高地 x="2.47" y="10.6" -->
                             <Sequence>
@@ -51,8 +51,8 @@
                                 <ReactiveSequence>
                                     <CheckValue value="{stage_time}" expected="0" operator="gt"/>
                                     <CheckValue value="{current_hp}" expected="100" operator="gt"/>
-                                    <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
-                                    <Nav x="2.47" y="10.6" />
+                                    <!-- <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/> -->
+                                    <Nav x="2.22" y="1.51" />
                                 </ReactiveSequence>
                                 <AutoAimManager is_auto_aim = "1"
                                                 auto_aim_mode = "1"
@@ -69,7 +69,7 @@
                                 <ReactiveSequence>
                                     <CheckValue value="{stage_time}" expected="0" operator="gt"/>
                                     <CheckValue value="{current_hp}" expected="100" operator="gt"/>
-                                    <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
+                                    <!-- <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/> -->
                                     <Guardian guard_duration = "10.0"/>
                                 </ReactiveSequence>                                   
                                 <CruiserStateManager cruise_state_in = "{cruise_state}"
@@ -83,8 +83,8 @@
                                 <ReactiveSequence>
                                     <CheckValue value="{stage_time}" expected="0" operator="gt"/>
                                     <CheckValue value="{current_hp}" expected="100" operator="gt"/>
-                                    <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
-                                    <Nav x="3.6" y="7.56" />
+                                    <!-- <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/> -->
+                                    <Nav x="2.17" y="4.28" />
                                 </ReactiveSequence>
                                 <AutoAimManager is_auto_aim = "1"
                                                 auto_aim_mode = "1"
@@ -101,7 +101,7 @@
                                 <ReactiveSequence>
                                     <CheckValue value="{stage_time}" expected="0" operator="gt"/>
                                     <CheckValue value="{current_hp}" expected="100" operator="gt"/>
-                                    <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
+                                    <!-- <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/> -->
                                     <Guardian guard_duration = "10.0"/>
                                 </ReactiveSequence>
                                 <CruiserStateManager cruise_state_in = "{cruise_state}"
@@ -112,7 +112,7 @@
                     </Sequence>
 
                     <!-- 血量高且己方前哨站被击毁 -->
-                    <Sequence>
+                    <!-- <Sequence>
                         <CheckValue value="{friend_outpost}" expected="0" operator="eq"/>
                         <LogMessage message="前哨站你怎么似了"/>
                         <ReactiveSequence>
@@ -127,7 +127,7 @@
                             <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
                             <Guardian guard_duration = "10.0"/>
                         </ReactiveSequence>
-                    </Sequence>
+                    </Sequence> -->
                 </Fallback>
             </Sequence>
 
@@ -137,8 +137,9 @@
                 <CheckValue value="{stage_time}" expected="0" operator="gt"/>
                 <Fallback> <!-- 满足血量低或没有弹丸 -->
                   <CheckValue value="{current_hp}" expected="100" operator="le"/> <!-- le表示小于等于 -->
-                  <CheckValue value="{bullet_17mm}" expected="20" operator="le"/>
+                  <!-- <CheckValue value="{bullet_17mm}" expected="20" operator="le"/> -->
                 </Fallback>
+                <LogMessage message="血量：{current_hp} 弹丸：{bullet_17mm}"/>
                 <LogMessage message="血量不足或弹丸不够，返回补给区"/>
                 <Nav x="0.356" y="0.871" />
               </ReactiveSequence>
@@ -148,7 +149,7 @@
                 <Inverter> <!-- 若不满足两条件，则返回success，继续在reactive sequence中循环，直到满足条件返回false 退出-->
                   <Sequence>
                     <CheckValue value="{current_hp}" expected="300" operator="gt"/> <!-- gt表示大于 -->
-                    <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
+                    <!-- <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/> -->
                   </Sequence>
                 </Inverter>
                 <Guardian guard_duration = "5.0"/>
