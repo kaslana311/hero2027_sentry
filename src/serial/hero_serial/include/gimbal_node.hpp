@@ -6,7 +6,6 @@
 #include <thread>
 
 #include "boost_asio.hpp"
-#include "cmd_protocol_tool.hpp"
 #include "drv_cmd_com.h"
 #include "visual_data.h"
 
@@ -26,8 +25,6 @@ class GimbalNode : public rclcpp::Node {
     void ReceiveThreadFunc();                  // 接收线程函数
 
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr is_aiming_pub_;
-
-    cmd_protocol::ProtocolBuilder cmd_builder;
 
     LinuxDevice* device;
     rt_device_t serial_dev_;

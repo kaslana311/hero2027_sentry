@@ -1,7 +1,7 @@
 // 该节点负责向底盘发送控制指令，接受来自底盘发送的裁判系统信息
 #pragma once
-#include <drv_cmd_com.h>
 #include <drv_CRC.h>
+#include <drv_cmd_com.h>
 #include <visual_data.h>
 
 #include <atomic>
@@ -21,7 +21,6 @@
 #include <thread>
 
 #include "boost_asio.hpp"
-#include "cmd_protocol_tool.hpp"
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/point_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
@@ -29,10 +28,8 @@
 #include "interfaces/msg/tracker_output.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "refree_protocol_tool.hpp"
 #include "serial_interfaces/msg/refree.hpp"
 #include "std_msgs/msg/bool.hpp"
-// #include "serial_interfaces/msg/robot.hpp"
 
 // 机器人姿态状态枚举
 enum class RobotPosture : uint8_t {
@@ -71,8 +68,7 @@ class ChassisNode : public rclcpp::Node {
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
         hp_danger_subscription_;
     // 自瞄状态订阅者 (TrackerOutput)
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
-        aiming_subscription_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr aiming_subscription_;
     // 轮式里程计速度发布器
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr wheel_odom_vel_pub_;
 
@@ -80,9 +76,6 @@ class ChassisNode : public rclcpp::Node {
     rclcpp::CallbackGroup::SharedPtr read_cb_group_;
     rclcpp::CallbackGroup::SharedPtr write_cb_group_;
     rclcpp::CallbackGroup::SharedPtr refree_cb_group_;
-
-    cmd_protocol::ProtocolBuilder cmd_builder;
-    refree_protocol::ProtocolParser referee_parser;
 
     // 机器人姿态状态机
     RobotPosture current_posture_ = RobotPosture::MOVE;  // 默认移动姿态
