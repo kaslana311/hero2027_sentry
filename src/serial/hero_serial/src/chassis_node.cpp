@@ -101,8 +101,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         std::bind(&ChassisNode::ChassisCmdTimerCallback, this),
         write_cb_group_);  // 使用写入专用组
 
-    // ========== 启动独立接收线程（替代原来的定时器轮询） ==========
-    // 原 referee_read_timer_ 已移除，改用独立线程实现高频读取
+    // 独立接收线程
     thread_running_ = true;
     receive_thread_ = std::thread(&ChassisNode::ReceiveThreadFunc, this);
     RCLCPP_INFO(this->get_logger(), "串口接收线程已启动");
@@ -207,14 +206,14 @@ void ChassisNode::HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg) {
         std::thread danger_thread([this]() {
             // 立即生成第一个随机转速
             ctrl_info_t_data.w = spin_speed_distribution_(random_engine_);
-            RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%d",
+            RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%f",
                         ctrl_info_t_data.w);
 
             // 运行6秒，每1.5秒更新一次转速
             for (int i = 0; i < 4; ++i) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1500));
                 ctrl_info_t_data.w = spin_speed_distribution_(random_engine_);
-                RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%d",
+                RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%f",
                             ctrl_info_t_data.w);
             }
 
@@ -266,14 +265,14 @@ void ChassisNode::AimingCallback(
     } else {
         // targets 为空，检验是否是 ATTACK 状态，是才切换成 MOVE 状态
         if (current_posture_ == RobotPosture::ATTACK) {
-            if(is_guarding == true){
+            if (is_guarding == true) {
                 SetPosture(RobotPosture::DEFENSE);
                 RCLCPP_INFO(this->get_logger(),
-                "目标丢失，退出进攻姿态，进入防御姿态");
-            }else{
+                            "目标丢失，退出进攻姿态，进入防御姿态");
+            } else {
                 SetPosture(RobotPosture::MOVE);
                 RCLCPP_INFO(this->get_logger(),
-                "目标丢失，退出进攻姿态，进入移动姿态");
+                            "目标丢失，退出进攻姿态，进入移动姿态");
             }
         }
     }
@@ -310,28 +309,77 @@ ChassisNode::~ChassisNode() {
 void ChassisNode::ReceiveThreadFunc() {
     RCLCPP_INFO(this->get_logger(), "接收线程开始运行");
 
+    // 私有数据蓄水池，用于无损拼接不定长的粘包与半包
+    std::vector<unsigned char> rx_buffer;
+
     while (rclcpp::ok() && thread_running_.load()) {
-        // 阻塞式读取串口数据（数据来了立刻返回）
         if (boost_asio_.Read()) {
             const auto& data = boost_asio_.GetReadBuffer();
 
             if (!data.empty()) {
-                // 尝试解析数据
-                if (!Receive_Handle(const_cast<unsigned char*>(data.data()),
-                                    static_cast<unsigned int>(data.size()))) {
-                    // 解析失败时不打印日志，避免刷屏（可能是数据不完整）
-                    // 如果需要调试，可以取消注释下面的行
-                    // RCLCPP_WARN(this->get_logger(), "数据解析失败，数据长度:
-                    // %zu", data.size());
-                }
-                // 清空缓冲区，防止数据堆积
-                // 注意：这是临时方案，未来应实现环形缓冲区和粘包处理
+                // 1. 将串口底层读取到的残缺或超长数据全部灌入蓄水池
+                rx_buffer.insert(rx_buffer.end(), data.begin(), data.end());
+                // 2. 清空底层缓冲区
                 boost_asio_.Consume(data.size());
             }
-        } else {
-            // 读取失败时，短暂休眠避免 CPU 空转
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
+
+        // 3. 不断循环剥离蓄水池中的完整数据包
+        while (!rx_buffer.empty()) {
+            // 步骤 A：匹配帧头标志位 SOF (0xAA)
+            size_t sof_idx = 0;
+            while (sof_idx < rx_buffer.size() &&
+                   rx_buffer[sof_idx] != COM_HEADER_SOF) {
+                sof_idx++;
+            }
+
+            // 丢弃匹配到有效标志位之前的乱码
+            if (sof_idx > 0) {
+                rx_buffer.erase(rx_buffer.begin(), rx_buffer.begin() + sof_idx);
+            }
+
+            // 步骤 B：包头完整性检测 (包头定义为5个字节)
+            if (rx_buffer.size() < sizeof(ComHeader_t)) {
+                break;  // 这是典型的"半包"状态，退出当前循环等待下一次 Read
+                        // 补齐
+            }
+
+            // 步骤 C：核心！包头 CRC8 预校验 —— 彻底消灭假帧头陷阱
+            // 包头除了最后的 CRC8 本身，前 4 字节参与计算: SOF(1) +
+            // DataLength(2) + Seq(1)
+            unsigned char cal_crc8 =
+                Get_CRC8_Check_Sum(rx_buffer.data(), 4, CRC8_INIT);
+            if (cal_crc8 != rx_buffer[4]) {
+                // ！！！ 这一步至关重要 ！！！
+                // 哪怕第一个字节是0xAA，它也只是个藏在数据段里的"假李鬼"
+                // 强行剔除这 1 个字节，逼迫蓄水池继续往后寻找真正的 0xAA 帧头
+                rx_buffer.erase(rx_buffer.begin(), rx_buffer.begin() + 1);
+                continue;
+            }
+
+            // 步骤 D：提取极其安全可靠的有效数据长度
+            uint16_t data_length =
+                rx_buffer[1] | (static_cast<uint16_t>(rx_buffer[2]) << 8);
+
+            // 步骤 E：根据底层协议精准计算一整包大小
+            // 真实物理帧长 = 帧头(5) + 命令头CmdID(2) + 数据(data_length)
+            // 没有 CRC16，总附加字节正好是 7
+            size_t frame_total_len = 7 + data_length;
+
+            if (rx_buffer.size() < frame_total_len) {
+                break;  // 包头合法但数据区尚未全部抵达（也是半包），留着下个循环继续接
+            }
+
+            // 步骤 F：大功告成，将百分百合法且完整的内存块丢给学长的解析器
+            Receive_Handle(rx_buffer.data(), frame_total_len);
+
+            // 步骤 G：精准剥离刚才已经被解析消费掉的帧长，一毫米的字节都不多删
+            rx_buffer.erase(rx_buffer.begin(),
+                            rx_buffer.begin() + frame_total_len);
+        }
+
+        // 避免空跑吃满 CPU，线程轻微睡 1ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
     RCLCPP_INFO(this->get_logger(), "接收线程退出");

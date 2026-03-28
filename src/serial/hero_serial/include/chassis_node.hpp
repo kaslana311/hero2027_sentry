@@ -1,5 +1,6 @@
 // 该节点负责向底盘发送控制指令，接受来自底盘发送的裁判系统信息
 #pragma once
+#include <drv_CRC.h>
 #include <drv_cmd_com.h>
 #include <visual_data.h>
 
