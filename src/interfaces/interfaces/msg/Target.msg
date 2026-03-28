@@ -1,5 +1,6 @@
 std_msgs/Header header
 string id
+string type
 int32 armors_num
 geometry_msgs/Point position
 geometry_msgs/Vector3 velocity
