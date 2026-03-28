@@ -662,8 +662,7 @@ void HeroMpcController::publishPredictedPath(
     // -------------------------------------------------------------------------
     // 发布 Carrot Pose（指定预测点在 base_link 坐标系下的位置）
     // -------------------------------------------------------------------------
-    if (carrot_pose_pub_->get_subscription_count() > 0 &&
-        carrot_point_index_ >= 0 &&
+    if (carrot_point_index_ >= 0 &&
         static_cast<size_t>(carrot_point_index_) < predicted_states.size()) {
         const auto& carrot_state = predicted_states[carrot_point_index_];
 
