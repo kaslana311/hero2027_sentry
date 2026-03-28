@@ -1,6 +1,5 @@
 // 该节点负责向底盘发送控制指令，接受来自底盘发送的裁判系统信息
 #pragma once
-#include <drv_CRC.h>
 #include <drv_cmd_com.h>
 #include <visual_data.h>
 
@@ -68,7 +67,8 @@ class ChassisNode : public rclcpp::Node {
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
         hp_danger_subscription_;
     // 自瞄状态订阅者 (TrackerOutput)
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr aiming_subscription_;
+    rclcpp::Subscription<interfaces::msg::TrackerOutput>::SharedPtr
+        aiming_subscription_;
     // 轮式里程计速度发布器
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr wheel_odom_vel_pub_;
 
@@ -104,7 +104,7 @@ class ChassisNode : public rclcpp::Node {
     char tx_buffer[1024];
     LinuxDevice* device = new LinuxDevice();
     rt_device_t serial_dev_;
-    Ctrl_info_t ctrl_info_t_data = {0, 0, 2400, 1, 0};
+    Ctrl_info_t ctrl_info_t_data = {0, 0, 1200, 1, 0};
     sentry_cmd_info_t sentry_cmd_info_t_data = {1, 0, 0, 0, 0, 3, 0};
 
     Game_info_t game_info_t_data = {0, 0, 0};
@@ -129,7 +129,7 @@ class ChassisNode : public rclcpp::Node {
 
     void CmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
     void HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg);
-    void AimingCallback(const std_msgs::msg::Bool msg);
+    void AimingCallback(const interfaces::msg::TrackerOutput::SharedPtr msg);
     void ChassisCmdTimerCallback();
     // RefreeTimerCallback 已被 ReceiveThreadFunc 替代
     void RefreePubTimerCallback();
