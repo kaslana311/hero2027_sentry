@@ -392,19 +392,19 @@ void ChassisNode::ChassisCmdTimerCallback() {
 void ChassisNode::RefreePubTimerCallback() {
     // RCLCPP_INFO(this->get_logger(), "发布回调");
     serial_interfaces::msg::Refree msg;
-    std::cout << "比赛类型: " << static_cast<int>(game_info_t_data.game_type)
-              << std::endl;
-    std::cout << "比赛阶段: "
-              << static_cast<int>(game_info_t_data.game_progress) <<
-              std::endl;
-    std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time << "秒"
-              << std::endl;
-    std::cout << "机器人ID: " << static_cast<int>(robot_info_t_data.robot_id)
-              << std::endl;
-    std::cout << "当前血量: " << robot_info_t_data.remain_HP << std::endl;
-    std::cout << "17mm弹药剩余: "
-              << robot_info_t_data.shooter_cooling_rate <<
-              std::endl;
+    // std::cout << "比赛类型: " << static_cast<int>(game_info_t_data.game_type)
+    //           << std::endl;
+    // std::cout << "比赛阶段: "
+    //           << static_cast<int>(game_info_t_data.game_progress) <<
+    //           std::endl;
+    // std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time << "秒"
+    //           << std::endl;
+    // std::cout << "机器人ID: " << static_cast<int>(robot_info_t_data.robot_id)
+    //           << std::endl;
+    // std::cout << "当前血量: " << robot_info_t_data.remain_HP << std::endl;
+    // std::cout << "17mm弹药剩余: "
+    //           << robot_info_t_data.shooter_cooling_rate <<
+    //           std::endl;
     // std::cout << "堡垒上允许发弹："
     //           << bullet_remaining_t_data.projectile_allowance_fortress
     //           << std::endl;
