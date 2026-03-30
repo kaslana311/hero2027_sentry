@@ -168,7 +168,7 @@ controller_server:
       controller_frequency: 100.0
       weight_q: [800.0, 800.0, 20.0, 100.0, 100.0, 5.0]
       weight_r: [1.0, 1.0, 0.5]
-      carrot_point_index: 5
+      carrot_point_index: 8
       # plugin: "nav2_mppi_controller::MPPIController"
     
       # # param 
