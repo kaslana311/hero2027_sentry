@@ -105,7 +105,7 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
 
     bool enforce_rp_zero_ = false;  // 默认不强制清零RP，改为门限约束
     double yaw_search_step_deg_ = 2.0;         // 粗搜步长（度）
-    int max_fail_before_fallback_ = 2;         // 失败次数后触发兜底
+    int max_fail_before_fallback_ = 5;         // 失败次数后触发兜底
     std::string fallback_policy_ = "initial";  // initial | identity
     double fitness_threshold_ = 0.08;  // 接受阈值（与代码内一致）
     int registration_fail_count_ = 0;  // 配准失败计数

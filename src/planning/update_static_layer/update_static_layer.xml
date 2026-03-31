@@ -1,0 +1,7 @@
+<library path="update_static_layer">
+    <class name="update_static_layer::UpdateStaticLayer" type="update_static_layer::UpdateStaticLayer" base_class_type="nav2_costmap_2d::Layer">
+        <description>
+        A costmap layer that marks obstacles based on incoming point clouds.
+        </description>
+    </class>
+</library>

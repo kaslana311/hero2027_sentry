@@ -8,6 +8,7 @@ set(CMAKE_AUTORCC ON)
 
 add_compile_options(-O3)
 set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # 查找依赖项
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)

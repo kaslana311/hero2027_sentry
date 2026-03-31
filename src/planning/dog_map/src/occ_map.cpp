@@ -34,6 +34,15 @@ OccMap::OccMap(double heighter_than_ground_threshold,
                   << ", size_y=" << map_img.rows * resolution << std::endl;
         InitMap(map_img);
     }
+/*************fix map init */
+#ifdef FIX_MAP
+    static_fix_map_ = std::make_shared<static_fix_map::StaticFixMap>();
+    static_fix_map_->InitPtr(std::make_shared<cv::Mat>(grid_map_), occ_map,
+                             layer_z, fake_layer_z);
+    static_fix_map_->SetMapInfo(cloud_at_map_origin[0], cloud_at_map_origin[1],
+                                0.0, resolution);
+#endif
+    /*************888888888888888 */
     std::cout << " -- [DOG_MAP] OccMap initialized." << std::endl;
     std::cout << "[DOG_MAP] path " << pgm_path << std::endl;
     std::cout << " -- [DOG_MAP] half_map_size: " << half_map_size_
@@ -108,22 +117,22 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
         }
         double dzf = (max_z_occ_index - min_z_occ_index) * resolution_z;
         if (dzf < higher_than_ground_threshold_) continue;  //地面过滤
-        // if (dzf < 0.12 && (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
-            // continue;  //过高过滤
-        //计算最大空洞大小
-        // int max_hole_size = 0;
-        // int curr_hole_size = 0;
-        // for (int zi = max_z_occ_index - 1; zi >= min_z_occ_index; zi--) {
-            // if (!IsOccupied(idx, idy, zi)) {
-                // curr_hole_size++;
-            // } else {
-                // if (curr_hole_size > max_hole_size) {
-                    // max_hole_size = curr_hole_size;
-                // }
-                // curr_hole_size = 0;
-            // }
-        // }
-        // if (max_hole_size * resolution_z > 0.15) continue;
+        if (dzf < 0.12 && (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
+            continue;  //过高过滤
+        // 计算最大空洞大小
+        int max_hole_size = 0;
+        int curr_hole_size = 0;
+        for (int zi = max_z_occ_index - 1; zi >= min_z_occ_index; zi--) {
+            if (!IsOccupied(idx, idy, zi)) {
+                curr_hole_size++;
+            } else {
+                if (curr_hole_size > max_hole_size) {
+                    max_hole_size = curr_hole_size;
+                }
+                curr_hole_size = 0;
+            }
+        }
+        if (max_hole_size * resolution_z > 0.15) continue;
 
         pcl::PointXYZI pt;
         pt.x = idx * resolution + resolution / 2.0 + cloud_at_map_origin[0];
@@ -131,6 +140,9 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
         pt.z = idz * resolution_z + resolution_z / 2.0 + cloud_at_map_origin[2];
         pt.intensity = pt.z;  // Set intensity to 1.0 (or any other value)
         pub_pc.points.push_back(pt);
+#ifdef FIX_MAP
+        UpdateStaticMap(idx, idy);
+#endif
     }
 }
 OccMap::~OccMap() { delete[] occ_map; }
@@ -257,14 +269,15 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
             static_cast<int>((point.x - cloud_at_map_origin[0]) / resolution);
         int yi =
             static_cast<int>((point.y - cloud_at_map_origin[1]) / resolution);
-#ifndef SAVE_STATIC
+#ifdef SKIP_STATIC
         if (grid_map_.at<unsigned char>(grid_map_.rows - 1 - yi, xi) < 240)
-            continue;  //静态障碍物不处理
+            continue;  //静态障碍物不处理,偷运算
 #endif
         int zi = static_cast<int>(point.z / resolution_z);
-        if (zi > layer_z-1) {
-        //   // std::cout<<"zi "<<zi<<std::endl;
-          continue;}  //地面滤波
+        if (zi > layer_z - 1) {
+            //   // std::cout<<"zi "<<zi<<std::endl;
+            continue;
+        }  //地面滤波
         int index =
             xi + yi * grid_map_.cols + zi * grid_map_.cols * grid_map_.rows;
         //更新占据概率
@@ -280,4 +293,13 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
     TimeGoON();
 
     update_frame++;
+}
+void OccMap::UpdateStaticMap(int idx, int idy) {
+    int img_idy = grid_map_.rows - 1 - idy;
+    if (idx < 0 || idx >= grid_map_.cols || idy < 0 || idy >= grid_map_.rows)
+        return;
+    if (grid_map_.at<unsigned char>(img_idy, idx) > 252) {
+        grid_map_.at<unsigned char>(img_idy, idx) =
+            0;  // 将 pgm 上的占据点改为 0（占据）
+    }
 }

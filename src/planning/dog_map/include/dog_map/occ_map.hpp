@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "dog_map/eigen_alias.hpp"
+#include "dog_map/static_fix_map.hpp"
 using namespace analy_utils;
 template <typename T>
 T yaml_get_value(const YAML::Node& node, const std::string& key) {
@@ -24,9 +25,9 @@ T yaml_get_value(const YAML::Node& node, const std::string& key) {
         throw YAML::Exception(e.mark, ss.str());
     }
 }
-const int8_t LOG_OCC_HIT = 40;    // 占据增量
+const int8_t LOG_OCC_HIT = 40;   // 占据增量
 const int8_t LOG_OCC_FREE = -3;  // 空闲减量
-const uint8_t THR_OCC = 30;       // 判定为障碍物的阈值
+const uint8_t THR_OCC = 30;      // 判定为障碍物的阈值
 const uint8_t MAX_LOG = 250;
 const uint8_t MIN_LOG = 5;
 #define FORGET_FACTOR -30
@@ -45,7 +46,10 @@ class OccMap {
     bool IsOccupied(int ix, int iy, int iz);
     void Clear();
     void racyHandle(const Vec3i& start_idx, const std::vector<Vec3i>& obs_list);
-
+    void UpdateStaticMap(int idx, int idy);
+    static_fix_map::StaticFixMap* GetStaticFixMap() {
+        return static_fix_map_.get();
+    }
     bool IsStaticMapPoint(const Vec2i& idx);
     bool IsStaticMapPoint(int index);
     void TimeGoON();
@@ -139,6 +143,7 @@ class OccMap {
     int fake_layer_z;
     long long update_frame = 0;
     std::vector<double> cloud_at_map_origin;
-
+    std::shared_ptr<static_fix_map::StaticFixMap> static_fix_map_;
+    std::vector<int> static_indexs;       //静态地图占据点索引
     std::map<int, long long> time_list_;  //索引+未观测到的累计帧数
 };

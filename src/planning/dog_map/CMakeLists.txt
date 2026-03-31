@@ -10,7 +10,7 @@ set(CMAKE_BUILD_TYPE "Release")
 add_compile_options(-O3)
 add_compile_definitions(TBB_DO)
 add_compile_definitions(DEBUG)
-add_compile_definitions(SAVE_STATIC)
+add_compile_definitions(FIX_MAP)
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -30,6 +30,7 @@ include_directories(
 set (SOURCE_FILES
   src/occ_map.cpp
   src/node.cpp
+  src/static_fix_map.cpp
 )
 add_executable(dog_map_node ${SOURCE_FILES})
 
