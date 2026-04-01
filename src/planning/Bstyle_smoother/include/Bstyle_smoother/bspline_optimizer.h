@@ -19,13 +19,13 @@ struct BsplineConfig
   double lambda2_ = 20.0;   // 距离代价权重
   double lambda3_ = 10.0;   // 可行性（速度/加速度约束）← 全向底盘约束宽松
   double lambda4_ = 4.0;    // 终点约束
-  double lambda5_ = 0.1;    // 引导路径 ← 极低, 允许弯道处大幅偏离形成圆弧
+  double lambda5_ = 0.05;   // 引导路径 ← 极低, 允许弯道处大幅偏离形成圆弧
   double lambda6_ = 1.0;
   double lambda7_ = 1.0;  // 航路点
   double lambda8_ = 1.0;
 
   // 约束参数
-  double dist0_ = 0.5;  // 安全距离 (米)
+  double dist0_ = 0.6;  // 安全距离 (米)
   double max_vel_ = 2.0;
   double max_acc_ = 4.0;
   double visib_min_ = 0.0;
@@ -36,8 +36,8 @@ struct BsplineConfig
   int algorithm2_ = 11;  // LBFGS for general cost
 
   // stopping criteria — 只用迭代次数控制, 不用时间限制
-  int max_iteration_num1_ = 500;
-  int max_iteration_num2_ = 500;
+  int max_iteration_num1_ = 300;
+  int max_iteration_num2_ = 300;
   int max_iteration_num3_ = 300;
   int max_iteration_num4_ = 300;
   double max_iteration_time1_ = 1e9;  // 不限时间

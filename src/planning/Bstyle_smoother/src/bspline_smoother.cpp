@@ -127,13 +127,13 @@ void BSplineSmoother::pathToBspline(
 
   // 确定合理的控制点数量
   constexpr int MIN_CTRL_PTS = 10;
-  constexpr int MAX_CTRL_PTS = 100;  // 全向底盘: 更多控制点 = 更丝滑
-  constexpr double MIN_INTERVAL = 0.03;
-  constexpr double MAX_INTERVAL = 0.20;
+  constexpr int MAX_CTRL_PTS = 150;
+  constexpr double MIN_INTERVAL = 0.05;
+  constexpr double MAX_INTERVAL = 0.25;
 
-  // 每 0.15m 一个路径采样点 (密采样 = 更多自由度去雕刻丝滑曲线)
-  // parameterizeToBspline2D 会输出 K+2 个控制点
-  int desired_pts = static_cast<int>(total_dist / 0.15) + 1;
+  // 每 0.3m 一个路径采样点 (parameterizeToBspline2D 会再加 2 个控制点)
+  // 不能太密, 否则矩阵求解不稳定; 不能太稀, 否则曲线穿障碍物
+  int desired_pts = static_cast<int>(total_dist / 0.3) + 1;
   desired_pts = std::clamp(desired_pts, MIN_CTRL_PTS - 2, MAX_CTRL_PTS - 2);
 
   // 计算采样间距（用于重采样路径）

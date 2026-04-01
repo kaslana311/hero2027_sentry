@@ -444,7 +444,7 @@ void NonUniformBspline::parameterizeToBspline2D(
   vrow << -1, 0, 1;  // 速度约束系数
   arow << 1, -2, 1;  // 加速度约束系数
 
-  Eigen::MatrixXd A = Eigen::MatrixXd::Zero(K + 4, K + 2);
+  Eigen::MatrixXd A = Eigen::MatrixXd::Zero(K + 4, K + 3);
 
   // 位置约束：K 个路径点
   for (int i = 0; i < K; ++i) {
