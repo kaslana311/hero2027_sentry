@@ -503,8 +503,8 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
                 initialTimes = stage1_optimizer_->getOptimizedTimes();
 
                 // RCLCPP_INFO(logger_,
-                //             "Stage 1 (Shape) 完成: pieces=%d, total_T=%.2f s",
-                //             pieceNum, initialTimes.sum());
+                //             "Stage 1 (Shape) 完成: pieces=%d, total_T=%.2f
+                //             s", pieceNum, initialTimes.sum());
 
                 // 发布第一阶段轨迹可视化
                 if (params_.publish_trajectory && stage1_trajectory_pub_) {
@@ -1254,12 +1254,32 @@ MincoSmoother::PathProcessingResult MincoSmoother::processPath(
                  "processPath: 高密度采样完成，%zu 个点，总等效距离: %.2f m",
                  dense_samples.size(), total_equiv_length);
 
-    // Step 2: 前向-后向速度传播（考虑梯形加减速）
-    // 为每个 dense sample 计算最大允许速度
-    std::vector<double> max_velocities(dense_samples.size(), params_.max_vel);
-
-    // 2.1 前向传播：从起点开始，考虑加速限制
+    // Step 2 前向-后向速度传播
+    // 2.0 构筑允许超速缓冲的 "基准限速线"
     double start_speed = start_vel.norm();
+    std::vector<double> speed_limits(dense_samples.size(), params_.max_vel);
+
+    if (start_speed > params_.max_vel) {
+        speed_limits[0] = start_speed;
+        for (size_t i = 1; i < dense_samples.size(); ++i) {
+            double ds = dense_samples[i].equiv_distance -
+                        dense_samples[i - 1].equiv_distance;
+            double v_prev_limit = speed_limits[i - 1];
+            // 只在仍处于超速减速缓冲期时放宽限速
+            if (v_prev_limit > params_.max_vel) {
+                // 允许以最大的合理减速度降到 max_vel
+                double relaxed_v =
+                    std::sqrt(std::max(0.0, v_prev_limit * v_prev_limit -
+                                                2.0 * params_.max_acc * ds));
+                speed_limits[i] = std::max(params_.max_vel, relaxed_v);
+            }
+        }
+    }
+
+    // 为每个 dense sample 分配数组，默认继承刚计算好的基准限速线
+    std::vector<double> max_velocities = speed_limits;
+
+    // 2.1 前向传播：从起点开始，将物理加速限制叠加到限速线上
     max_velocities[0] = start_speed;
 
     for (size_t i = 1; i < dense_samples.size(); ++i) {
@@ -1267,9 +1287,11 @@ MincoSmoother::PathProcessingResult MincoSmoother::processPath(
                     dense_samples[i - 1].equiv_distance;
         // v^2 = v0^2 + 2*a*s => v_max = sqrt(v0^2 + 2*a*s)
         double v_prev = max_velocities[i - 1];
+        // 当前允许到达的最高速度
         double v_forward =
             std::sqrt(v_prev * v_prev + 2.0 * params_.max_acc * ds);
-        max_velocities[i] = std::min(max_velocities[i], v_forward);
+        // 合并前向限制与自身基准限制
+        max_velocities[i] = std::min(speed_limits[i], v_forward);
     }
 
     // 2.2 后向传播：从终点开始，考虑减速限制（终点速度为0）
@@ -1284,7 +1306,7 @@ MincoSmoother::PathProcessingResult MincoSmoother::processPath(
         max_velocities[i] = std::min(max_velocities[i], v_backward);
     }
 
-    // Step 3: 计算每个采样点的到达时间
+    // Step 3 计算每个采样点的到达时间
     std::vector<double> arrival_times(dense_samples.size(), 0.0);
 
     for (size_t i = 1; i < dense_samples.size(); ++i) {
@@ -1293,18 +1315,28 @@ MincoSmoother::PathProcessingResult MincoSmoother::processPath(
         double v_start = max_velocities[i - 1];
         double v_end = max_velocities[i];
 
-        // 使用梯形规划计算该段时间
-        double dt = evaluateDuration(ds, v_start, v_end, params_.max_vel,
-                                     params_.max_acc);
+        // 在致密的微元点间，由于速度已经过前后向加速度修整，它必定是合法的匀变速运动。
+        // 直接使用匀变速直线运动平均速度计算 t = ds /
+        // avg_v，摒弃冗长且有漏洞的宏观梯形逻辑评估。
+        double avg_v = 0.5 * (v_start + v_end);
+        double dt;
 
-        // 防止数值问题
+        // 防除零：如果速度过小，说明是刚起步或刚停下，用零初始速度的匀加速运动公式求解
+        if (avg_v > 1e-4) {
+            dt = ds / avg_v;
+        } else {
+            dt = std::sqrt(2.0 * ds / params_.max_acc);
+        }
+
+        // 兜底保护数值
         dt = std::max(dt, 1e-6);
 
         arrival_times[i] = arrival_times[i - 1] + dt;
     }
 
     double total_time = arrival_times.back();
-    RCLCPP_DEBUG(logger_, "processPath: 梯形规划总时间: %.2f s", total_time);
+    RCLCPP_DEBUG(logger_, "processPath: 运动学微元积分总时间: %.2f s",
+                 total_time);
 
     double current_real_vel = start_vel.norm();
     // 物理上刹死所需的最小时间 T = V / A_max
