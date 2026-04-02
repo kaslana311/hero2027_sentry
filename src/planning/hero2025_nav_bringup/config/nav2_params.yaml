@@ -146,9 +146,9 @@ controller_server:
       yaw_goal_tolerance: 6.28
     FollowPath:
       plugin: "hero_mpc_controller::HeroMpcController"
-      max_velocity: 3.0
+      max_velocity: 1.8
       max_omega: 1.5
-      max_acceleration: 4.0
+      max_acceleration: 3.0
       max_alpha: 1.0
       enable_yaw_tracking: false
       reference_yaw: 0.0
@@ -440,7 +440,7 @@ smoother_server:
       mean_time_lower_bound: 0.9      # T_i 下界 = avg_T * 0.9
       mean_time_upper_bound: 1.1      # T_i 上界 = avg_T * 1.1
       # ========== 动力学约束 ==========
-      max_vel: 3.0                 # 最大速度 (m/s)
+      max_vel: 1.8                 # 最大速度 (m/s)
       max_acc: 3.0                 # 最大加速度 (m/s²)
       safe_distance: 0.3           # 安全距离 (m)
       # ========== 路径处理参数 ==========
