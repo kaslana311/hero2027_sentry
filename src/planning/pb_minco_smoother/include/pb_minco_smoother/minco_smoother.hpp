@@ -38,6 +38,7 @@
 
 // 自定义消息
 #include <interfaces/msg/minco_trajectory.hpp>
+#include <interfaces/msg/tracker_output.hpp>
 
 #include "gcopter/trajectory.hpp"  // 使用 gcopter 的轨迹类
 #include "pb_minco_smoother/costmap_esdf_adapter.hpp"
@@ -395,6 +396,14 @@ class MincoSmoother : public nav2_core::Smoother {
      */
     void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
 
+    /**
+     * @brief 动态障碍物 Tracker 回调
+     *
+     * 将视觉 EKF 估计的目标转换到 map 坐标系，缓存为 DynamicObstacle。
+     * 在下一次 updateSnapshot 时注入 ESDF 适配器进行各向异性融合。
+     */
+    void trackerCallback(const interfaces::msg::TrackerOutput::SharedPtr msg);
+
     // MINCO 优化器
     std::unique_ptr<MincoOptimizer> optimizer_;
 
@@ -426,6 +435,23 @@ class MincoSmoother : public nav2_core::Smoother {
 
     // 轨迹 ID 计数器（用于生成唯一标识）
     uint32_t trajectory_id_counter_ = 0;
+
+    // ========== 动态障碍物 ==========
+    /// Tracker 订阅器（接收视觉 EKF 估计的目标）
+    rclcpp::Subscription<interfaces::msg::TrackerOutput>::SharedPtr
+        tracker_sub_;
+
+    /// 动态障碍物缓存（由 trackerCallback 写入，smooth() 读取）
+    std::vector<DynamicObstacle> cached_dyn_obs_;
+    double dyn_obs_timestamp_ = 0.0;  ///< 最近一次更新时间戳（秒）
+    std::mutex dyn_obs_cache_mutex_;  ///< 保护缓存的互斥锁
+
+    /// 动态障碍物数据有效期（秒），超时则清空
+    static constexpr double kDynObsTimeout = 0.5;
+
+    // 发布器 - 动态障碍物可视化（圆柱体 + 速度箭头）
+    rclcpp_lifecycle::LifecyclePublisher<
+        visualization_msgs::msg::MarkerArray>::SharedPtr dyn_obs_marker_pub_;
 
     // ========== 滚动规划：轨迹缓存 ==========
     Trajectory<5, 2> last_trajectory_;  ///< 上一条优化后的轨迹 (S=3, Quintic)

@@ -37,6 +37,17 @@
 namespace pb_minco {
 
 /**
+ * @brief 动态障碍物描述结构体
+ *
+ * 由 trackerCallback 填充，传入 ESDF 适配器用于各向异性场融合。
+ */
+struct DynamicObstacle {
+    Eigen::Vector2d position;  ///< 障碍物中心（map 坐标系，米）
+    Eigen::Vector2d velocity;  ///< 障碍物速度（map 坐标系，m/s）
+    double radius = 0.0;       ///< 膨胀后的碰撞半径（米）
+};
+
+/**
  * @brief 基于 Costmap 的局部 ESDF 适配器
  *
  * 核心功能：
@@ -250,15 +261,116 @@ class CostmapESDFAdapter : public ESDFInterface {
             }
         }
 
+        // ========== Step 6: 各向异性高斯动态障碍物融合 ==========
+        // 物理意义：将动态障碍物在其运动方向上"拉伸"，使优化器提前感知到
+        // 障碍物正前方的危险区域，从而提前绕行而非像躲静态柱子一样滞后。
+
+        // 各向异性参数（暂时硬编码，日后可接入 dynamic_reconfigure）
+        constexpr double kMu = 1.5;   ///< 方向增强系数：控制前向拉伸强度
+        constexpr double kKv = 1.0;   ///< 速度增强系数：速度越快拉伸越强
+
+        for (const auto& obs : dynamic_obstacles_) {
+            const double v_norm = obs.velocity.norm();
+
+            // 为每个动态障碍物划定局部 Bounding Box (ROI)
+            // 包围盒半径 = 碰撞半径 + 5.0m 的感知裕量
+            const double roi_radius = obs.radius + 5.0;
+
+            // 将世界坐标 ROI 转换为局部地图栅格范围
+            int ix_min = static_cast<int>(
+                std::floor((obs.position.x() - roi_radius - local_origin_x_) / resolution_));
+            int iy_min = static_cast<int>(
+                std::floor((obs.position.y() - roi_radius - local_origin_y_) / resolution_));
+            int ix_max = static_cast<int>(
+                std::ceil((obs.position.x() + roi_radius - local_origin_x_) / resolution_));
+            int iy_max = static_cast<int>(
+                std::ceil((obs.position.y() + roi_radius - local_origin_y_) / resolution_));
+
+            // 裁剪到局部地图边界
+            ix_min = std::max(ix_min, 0);
+            iy_min = std::max(iy_min, 0);
+            ix_max = std::min(ix_max, static_cast<int>(local_size_x_) - 1);
+            iy_max = std::min(iy_max, static_cast<int>(local_size_y_) - 1);
+
+            for (int iy = iy_min; iy <= iy_max; ++iy) {
+                for (int ix = ix_min; ix <= ix_max; ++ix) {
+                    // 计算网格点的世界坐标
+                    const double pt_x = local_origin_x_ + (ix + 0.5) * resolution_;
+                    const double pt_y = local_origin_y_ + (iy + 0.5) * resolution_;
+
+                    // Step 1: 相对位置矢量 r = P - P_obs
+                    const double rx = pt_x - obs.position.x();
+                    const double ry = pt_y - obs.position.y();
+                    const double r_norm = std::sqrt(rx * rx + ry * ry);
+
+                    // 避免除零（点与障碍物中心重合时跳过）
+                    if (r_norm < 1e-6) continue;
+
+                    // Step 2: 几何距离 d_geo = ||r|| - R
+                    const double d_geo = r_norm - obs.radius;
+
+                    // Step 3: 计算形变因子 alpha
+                    // 当速度极小时，cos_theta 无意义，退化为纯几何距离
+                    double alpha = 1.0;
+                    if (v_norm > 0.05) {
+                        // cos_theta = (V_obs · r) / (||V_obs|| * ||r||)
+                        const double cos_theta =
+                            (obs.velocity.x() * rx + obs.velocity.y() * ry) /
+                            (v_norm * r_norm);
+
+                        // alpha = (1 + mu * cos_theta) * (1 + kv * ||V||)
+                        // 物理意义：
+                        //   - cos_theta > 0：点在障碍物前方，alpha > 1，距离被压缩
+                        //   - cos_theta < 0：点在障碍物后方，alpha < 1，取 max(1,alpha)=1 恢复真实距离
+                        //   - ||V|| 越大，整体拉伸越强（高速障碍物更危险）
+                        alpha = (1.0 + kMu * cos_theta) * (1.0 + kKv * v_norm);
+                    }
+
+                    // Step 4: 动态有效压缩距离 d_dynamic = d_geo / max(1.0, alpha)
+                    // 分母取 max(1.0, alpha) 确保：
+                    //   - 前方（alpha>1）：距离被压缩，优化器误以为"快撞上了"
+                    //   - 侧后方（alpha<=1）：分母=1，恢复真实物理距离，不影响侧向通行
+                    const double d_dynamic = d_geo / std::max(1.0, alpha);
+
+                    // Step 5: 截断到 [-max_distance_, max_distance_]
+                    const float d_clamped = static_cast<float>(
+                        std::clamp(d_dynamic, -max_distance_, max_distance_));
+
+                    // Step 6: ESDF 融合：取静态与动态的最小值
+                    // ESDF_final(P) = min(ESDF_static(P), d_dynamic(P))
+                    const unsigned int idx = iy * local_size_x_ + ix;
+                    if (d_clamped < esdf_map_[idx]) {
+                        esdf_map_[idx] = d_clamped;
+                    }
+                }
+            }
+        }
+
         has_valid_esdf_ = true;
 
         RCLCPP_DEBUG(logger_,
                      "ESDF 快照更新完成: 局部地图 %ux%u, 原点 (%.2f, %.2f), "
-                     "分辨率 %.3f m",
+                     "分辨率 %.3f m, 动态障碍物 %zu 个",
                      local_size_x_, local_size_y_, local_origin_x_,
-                     local_origin_y_, resolution_);
+                     local_origin_y_, resolution_, dynamic_obstacles_.size());
 
         return true;
+    }
+
+    /**
+     * @brief 注入动态障碍物列表（由 trackerCallback 在优化前调用）
+     *
+     * 线程安全由调用方保证（在持有 dyn_obs_cache_mutex_ 时调用）。
+     */
+    void setDynamicObstacles(const std::vector<DynamicObstacle>& obstacles) {
+        dynamic_obstacles_ = obstacles;
+    }
+
+    /**
+     * @brief 清空动态障碍物列表（数据过期时调用）
+     */
+    void clearDynamicObstacles() {
+        dynamic_obstacles_.clear();
     }
 
     /**
@@ -476,6 +588,9 @@ class CostmapESDFAdapter : public ESDFInterface {
     // ========== OpenCV 图像缓存（复用以避免频繁分配） ==========
     cv::Mat obstacle_img_;  ///< 二值障碍物图像
     cv::Mat distance_img_;  ///< 距离变换结果
+
+    // ========== 动态障碍物列表（由 setDynamicObstacles 注入） ==========
+    std::vector<DynamicObstacle> dynamic_obstacles_;
 };
 
 }  // namespace pb_minco
