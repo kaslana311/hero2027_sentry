@@ -1,6 +1,7 @@
 #include "hero_lidar_scan/hero_lidar_scan_node.hpp"
 
 #include <omp.h>
+#include <pcl/filters/crop_box.h>
 
 #include <algorithm>
 
@@ -81,7 +82,11 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
 
     lidar1_sub_.subscribe(this, lidar1_topic);
     lidar2_sub_.subscribe(this, lidar2_topic);
-
+    ///////////////////////////////
+    crop_filter_.setMin(min_pt);
+    crop_filter_.setMax(max_pt);
+    // setNegative(true) 表示去除 box 内的点，保留外部点
+    crop_filter_.setNegative(true);
     sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(
         SyncPolicy(10), lidar1_sub_, lidar2_sub_);
     sync_->registerCallback(std::bind(&HeroLidarScanNode::lidarSyncCallback,
@@ -287,11 +292,17 @@ void HeroLidarScanNode::lidarSyncCallback(
     // 融合点云
     pcl::PointCloud<pcl::PointXYZI> fused_cloud = cloud1 + cloud2;
 
+    pcl::PointCloud<pcl::PointXYZI> filtered_cloud;
+    auto fused_ptr =
+        std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(fused_cloud);
+    crop_filter_.setInputCloud(fused_ptr);
+    crop_filter_.filter(filtered_cloud);
     // 转换并发布
     sensor_msgs::msg::PointCloud2 output_msg;
-    pcl::toROSMsg(fused_cloud, output_msg);
+    pcl::toROSMsg(filtered_cloud, output_msg);
     output_msg.header.stamp = stamp_end;
     output_msg.header.frame_id = "base_link";
+    //在此处添加pcl crob过滤 过滤"base_link"附近的点云.
     cloud_pub_->publish(output_msg);
 }
 

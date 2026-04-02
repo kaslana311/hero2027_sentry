@@ -18,7 +18,12 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 namespace hero_lidar_scan {
-
+const float crop_min_x = -0.3f;
+const float crop_min_y = -0.3f;
+const float crop_min_z = -0.3f;
+const float crop_max_x = 0.3f;
+const float crop_max_y = 0.3f;
+const float crop_max_z = 1.0f;
 class HeroLidarScanNode : public rclcpp::Node {
    public:
     explicit HeroLidarScanNode(const rclcpp::NodeOptions& options);
@@ -60,7 +65,11 @@ class HeroLidarScanNode : public rclcpp::Node {
     std::deque<nav_msgs::msg::Odometry> odom_buffer_;
     std::mutex odom_mutex_;
     size_t max_odom_buffer_size_;
+    pcl::CropBox<pcl::PointXYZI> crop_filter_;
+    // 可根据需要调整下面的范围（单位：米）
 
+    Eigen::Vector4f min_pt{crop_min_x, crop_min_y, crop_min_z, 1.0f};
+    Eigen::Vector4f max_pt{crop_max_x, crop_max_y, crop_max_z, 1.0f};
     // 外参矩阵
     Eigen::Matrix4d T_lidar1_to_base_;
     Eigen::Matrix4d T_lidar2_to_base_;
