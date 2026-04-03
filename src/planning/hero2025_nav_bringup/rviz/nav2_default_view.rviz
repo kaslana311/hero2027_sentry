@@ -427,9 +427,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 0.9750000238418579
+      Max Intensity: 0.8550000190734863
       Min Color: 0; 0; 0
-      Min Intensity: 0.02500000037252903
+      Min Intensity: 0.014999999664723873
       Name: PointCloud2
       Position Transformer: XYZ
       Selectable: true
@@ -520,6 +520,19 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: MarkerArray
+      Namespaces:
+        dyn_obs_cylinder: true
+        dyn_obs_velocity: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /smoother_server/dynamic_obstacles_marker
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -550,25 +563,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 9.306854248046875
+      Distance: 11.279439926147461
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.35328805446624756
-        Y: 0.08948202431201935
-        Z: 0.11688298732042313
+        X: -3.5552260875701904
+        Y: 4.7079854011535645
+        Z: -1.7783257961273193
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.05479650944471359
+      Pitch: 1.0147963762283325
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 2.6000044345855713
+      Yaw: 2.9700019359588623
     Saved: ~
 Window Geometry:
   Displays:
