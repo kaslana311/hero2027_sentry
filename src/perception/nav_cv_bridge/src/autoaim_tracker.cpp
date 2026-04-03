@@ -110,22 +110,28 @@ void AutoaimTracker::trackerCallback(
 
         abs_msg->targets.push_back(abs_target);
 
-        // Marker
+        // Marker (圆柱体)
         visualization_msgs::msg::Marker marker;
         marker.header = abs_msg->header;
-        marker.ns = "targets";
+        marker.ns = "dyn_obs_cylinder";
         marker.id = id++;
-        marker.type = visualization_msgs::msg::Marker::SPHERE;
+        marker.type = visualization_msgs::msg::Marker::CYLINDER;
         marker.action = visualization_msgs::msg::Marker::ADD;
-        marker.pose.position = abs_target.position;
+        marker.pose.position.x = abs_target.position.x;
+        marker.pose.position.y = abs_target.position.y;
+        marker.pose.position.z = 0.3;  // 圆柱体中心高度
         marker.pose.orientation.w = 1.0;
-        marker.scale.x = target.radius_1 * 2;
-        marker.scale.y = target.radius_1 * 2;
-        marker.scale.z = 0.5;
-        marker.color.a = 0.8;
-        marker.color.r = 1.0;
-        marker.color.g = 0.0;
-        marker.color.b = 0.0;
+
+        // 取 target 的较大半径作为圆柱半径
+        double radius = std::max(target.radius_1, target.radius_2);
+        marker.scale.x = radius * 2.0;  // 直径
+        marker.scale.y = radius * 2.0;
+        marker.scale.z = 0.6;  // 高度
+        marker.color.r = 1.0f;
+        marker.color.g = 0.3f;
+        marker.color.b = 0.0f;
+        marker.color.a = 0.6f;
+        marker.lifetime = rclcpp::Duration::from_seconds(0.3);
         marker_array.markers.push_back(marker);
 
         visualization_msgs::msg::Marker velocity_marker;
