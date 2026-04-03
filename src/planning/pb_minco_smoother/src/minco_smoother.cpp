@@ -75,11 +75,6 @@ void MincoSmoother::configure(
         node->create_publisher<visualization_msgs::msg::MarkerArray>(
             "~/minco_final_waypoints_marker", rclcpp::QoS(1));
 
-    // 创建动态障碍物可视化发布器（圆柱体 + 速度箭头）
-    dyn_obs_marker_pub_ =
-        node->create_publisher<visualization_msgs::msg::MarkerArray>(
-            "~/dynamic_obstacles_marker", rclcpp::QoS(1));
-
     // 创建 Costmap ESDF 适配器
     // 参数说明：
     // - max_distance: ESDF 最大距离，设为 safe_distance 的 10
@@ -95,9 +90,9 @@ void MincoSmoother::configure(
         params_.odom_topic, rclcpp::SensorDataQoS(),
         std::bind(&MincoSmoother::odomCallback, this, std::placeholders::_1));
 
-    // 创建 Tracker 订阅器（接收视觉 EKF 估计的动态障碍物）
+    // 创建 Tracker 订阅器（接收 AutoaimTracker 处理后的绝对坐标下的目标）
     tracker_sub_ = node->create_subscription<interfaces::msg::TrackerOutput>(
-        "/tracker/autoaim", rclcpp::SensorDataQoS(),
+        "/tracker/absolute_targets", rclcpp::SensorDataQoS(),
         std::bind(&MincoSmoother::trackerCallback, this,
                   std::placeholders::_1));
 
@@ -1525,83 +1520,25 @@ void MincoSmoother::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
 
 void MincoSmoother::trackerCallback(
     const interfaces::msg::TrackerOutput::SharedPtr msg) {
-    // 如果没有目标，清空缓存并返回
     if (msg->targets.empty()) {
         std::lock_guard<std::mutex> lock(dyn_obs_cache_mutex_);
         cached_dyn_obs_.clear();
         return;
     }
 
-    // ========== Step 1: 获取 TF 坐标变换 ==========
-    // Target.position 和 velocity 位于一个特殊坐标系下：
-    // 原点在 base_link，但方向与 odom 系对齐（即 base_link 旋转角归零）
-    geometry_msgs::msg::TransformStamped tf_map_base;
-    geometry_msgs::msg::TransformStamped tf_map_odom;
-    bool transform_valid = false;
-
-    if (tf_) {
-        try {
-            tf_map_base =
-                tf_->lookupTransform("map", "base_link", tf2::TimePointZero);
-            tf_map_odom =
-                tf_->lookupTransform("map", "odom", tf2::TimePointZero);
-            transform_valid = true;
-        } catch (const tf2::TransformException &ex) {
-            RCLCPP_WARN_THROTTLE(logger_, *clock_, 2000,
-                                 "[trackerCallback] TF 异常: %s", ex.what());
-        }
-    }
-
-    if (!transform_valid) {
-        std::lock_guard<std::mutex> lock(dyn_obs_cache_mutex_);
-        cached_dyn_obs_.clear();
-        return;
-    }
-
-    // ========== Step 2: 遍历所有目标，转换坐标并构造 DynamicObstacle
-    // ==========
     std::vector<DynamicObstacle> new_obs;
     new_obs.reserve(msg->targets.size());
 
-    // 提取 odom 到 map 的旋转，用于转换对齐于 odom 的方向向量
-    tf2::Quaternion q_odom_map;
-    tf2::fromMsg(tf_map_odom.transform.rotation, q_odom_map);
-    tf2::Matrix3x3 rot_odom_map(q_odom_map);
-
-    // 提取 base_link 在 map 中的平移位置
-    tf2::Vector3 pos_base_map(tf_map_base.transform.translation.x,
-                              tf_map_base.transform.translation.y,
-                              tf_map_base.transform.translation.z);
-
     for (const auto &target : msg->targets) {
-        // --- 位置转换 ---
-        // 目标的位置向量（同 odom 方向）
-        tf2::Vector3 target_pos_aligned(target.position.x, target.position.y,
-                                        target.position.z);
-        // 先旋转到 map 系方向，然后叠加上 base_link 在 map 系中的位置
-        tf2::Vector3 target_pos_map =
-            rot_odom_map * target_pos_aligned + pos_base_map;
-
-        // --- 速度处理 ---
-        // 目标速度同 odom 方向，因此只需进行 odom 到 map 的旋转转换
-        tf2::Vector3 target_vel_aligned(target.velocity.x, target.velocity.y,
-                                        target.velocity.z);
-        tf2::Vector3 target_vel_map = rot_odom_map * target_vel_aligned;
-        Eigen::Vector2d vel(target_vel_map.x(), target_vel_map.y());
-
-        // --- 半径计算 ---
-        // 取 radius_1 和 radius_2 的最大值
-        double inflated_radius = std::max(target.radius_1, target.radius_2);
-
         DynamicObstacle dyn_obs;
         dyn_obs.position =
-            Eigen::Vector2d(target_pos_map.x(), target_pos_map.y());
-        dyn_obs.velocity = vel;
-        dyn_obs.radius = inflated_radius;
+            Eigen::Vector2d(target.position.x, target.position.y);
+        dyn_obs.velocity =
+            Eigen::Vector2d(target.velocity.x, target.velocity.y);
+        dyn_obs.radius = std::max(target.radius_1, target.radius_2);
         new_obs.push_back(dyn_obs);
     }
 
-    // ========== Step 3: 线程安全地更新缓存 ==========
     {
         std::lock_guard<std::mutex> lock(dyn_obs_cache_mutex_);
         cached_dyn_obs_ = std::move(new_obs);
@@ -1610,72 +1547,6 @@ void MincoSmoother::trackerCallback(
 
     RCLCPP_DEBUG(logger_, "[trackerCallback] 更新动态障碍物缓存: %zu 个目标",
                  cached_dyn_obs_.size());
-
-    // ========== Step 4: 发布可视化 Marker ==========
-    if (!dyn_obs_marker_pub_ || !dyn_obs_marker_pub_->is_activated()) {
-        return;
-    }
-
-    visualization_msgs::msg::MarkerArray marker_array;
-    // 先发布一个 DELETEALL 清除上一帧的残留 Marker
-    visualization_msgs::msg::Marker delete_all;
-    delete_all.action = visualization_msgs::msg::Marker::DELETEALL;
-    marker_array.markers.push_back(delete_all);
-
-    int marker_id = 0;
-    for (const auto &obs : cached_dyn_obs_) {
-        // --- Marker 1: CYLINDER 表示物理障碍物大小 ---
-        visualization_msgs::msg::Marker cyl;
-        cyl.header.frame_id = "map";
-        cyl.header.stamp = msg->header.stamp;
-        cyl.ns = "dyn_obs_cylinder";
-        cyl.id = marker_id++;
-        cyl.type = visualization_msgs::msg::Marker::CYLINDER;
-        cyl.action = visualization_msgs::msg::Marker::ADD;
-        cyl.pose.position.x = obs.position.x();
-        cyl.pose.position.y = obs.position.y();
-        cyl.pose.position.z = 0.3;  // 圆柱体中心高度
-        cyl.pose.orientation.w = 1.0;
-        cyl.scale.x = obs.radius * 2.0;  // 直径
-        cyl.scale.y = obs.radius * 2.0;
-        cyl.scale.z = 0.4;  // 高度
-        cyl.color.r = 0.0f;
-        cyl.color.g = 0.0f;
-        cyl.color.b = 1.0f;
-        cyl.color.a = 0.7f;
-        cyl.lifetime = rclcpp::Duration::from_seconds(0.3);
-        marker_array.markers.push_back(cyl);
-
-        // --- Marker 2: ARROW 表示速度矢量 ---
-        visualization_msgs::msg::Marker arrow;
-        arrow.header.frame_id = "map";
-        arrow.header.stamp = msg->header.stamp;
-        arrow.ns = "dyn_obs_velocity";
-        arrow.id = marker_id++;
-        arrow.type = visualization_msgs::msg::Marker::ARROW;
-        arrow.action = visualization_msgs::msg::Marker::ADD;
-        // 用两点定义箭头：起点 = P_obs，终点 = P_obs + V_obs
-        geometry_msgs::msg::Point start_pt, end_pt;
-        start_pt.x = obs.position.x();
-        start_pt.y = obs.position.y();
-        start_pt.z = 0.3;
-        end_pt.x = obs.position.x() + obs.velocity.x();
-        end_pt.y = obs.position.y() + obs.velocity.y();
-        end_pt.z = 0.3;
-        arrow.points.push_back(start_pt);
-        arrow.points.push_back(end_pt);
-        arrow.scale.x = 0.05;  // 箭杆直径
-        arrow.scale.y = 0.12;  // 箭头直径
-        arrow.scale.z = 0.15;  // 箭头长度
-        arrow.color.r = 1.0f;
-        arrow.color.g = 1.0f;
-        arrow.color.b = 0.0f;
-        arrow.color.a = 0.9f;
-        arrow.lifetime = rclcpp::Duration::from_seconds(0.3);
-        marker_array.markers.push_back(arrow);
-    }
-
-    dyn_obs_marker_pub_->publish(marker_array);
 }
 
 }  // namespace pb_minco
