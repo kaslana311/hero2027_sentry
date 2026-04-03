@@ -159,27 +159,28 @@ class DogMapNode : public rclcpp::Node {
                    "work in real-time"
                 << std::endl;
         }
-        static pcl::PointCloud<pcl::PointXYZ> temp_pc;
+        static pcl::PointCloud<pcl::PointXYZ>::Ptr temp_pc;
         static Pose temp_pose;
 
         rc_.update_lock.lock();
-        temp_pc = rc_.pc;
+        temp_pc = rc_.pc.makeShared();
         temp_pose = rc_.pc_pose;
         rc_.unfinished_frame_cnt = 0;
         rc_.update_lock.unlock();
-        occ_map_->Update(temp_pc.makeShared(), temp_pose);
-        pcl::PointCloud<pcl::PointXYZI> occ_pc;
+        occ_map_->Update(temp_pc, temp_pose);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr occ_pc =
+            std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
         occ_map_->PubRes(occ_pc);
-        if (!occ_pc.empty()) {
+        if (!occ_pc->empty()) {
             auto msg = sensor_msgs::msg::PointCloud2();
-            pcl::toROSMsg(occ_pc, msg);
+            pcl::toROSMsg(*occ_pc, msg);
 
             msg.header.frame_id = "map";
             msg.header.stamp = this->get_clock()->now();
             cost_pub_.cost_pc_pub->publish(msg);
         }
 #ifdef FIX_MAP
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in_fix = occ_pc.makeShared();
+        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in_fix = occ_pc;
         pcl::PointCloud<pcl::PointXYZ>::Ptr fix_pc =
             std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
         occ_map_->GetStaticFixMap()->AdjustAndFixByRacying2d(

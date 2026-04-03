@@ -53,7 +53,7 @@ class OccMap {
     bool IsStaticMapPoint(const Vec2i& idx);
     bool IsStaticMapPoint(int index);
     void TimeGoON();
-    void PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc);
+    void PubRes(pcl::PointCloud<pcl::PointXYZI>::Ptr& pub_pc);
     void PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, Pose pose);
     inline void racyHandle(const Vec3i& start_idx, const Vec3i& end_idx,
                            Vec3f& start_f, Vec3f& res) {
