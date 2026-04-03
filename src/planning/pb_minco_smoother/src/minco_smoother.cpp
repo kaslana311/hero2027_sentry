@@ -97,7 +97,7 @@ void MincoSmoother::configure(
 
     // 创建 Tracker 订阅器（接收视觉 EKF 估计的动态障碍物）
     tracker_sub_ = node->create_subscription<interfaces::msg::TrackerOutput>(
-        "/tracker/output", rclcpp::SensorDataQoS(),
+        "/tracker/autoaim", rclcpp::SensorDataQoS(),
         std::bind(&MincoSmoother::trackerCallback, this,
                   std::placeholders::_1));
 
@@ -1590,10 +1590,8 @@ void MincoSmoother::trackerCallback(
         Eigen::Vector2d vel(target_vel_map.x(), target_vel_map.y());
 
         // --- 半径计算 ---
-        // 取 radius_1 和 radius_2 的最大值，加上机器人安全膨胀（30%
-        // safe_distance）
-        double inflated_radius = std::max(target.radius_1, target.radius_2) +
-                                 params_.safe_distance * 0.3;
+        // 取 radius_1 和 radius_2 的最大值
+        double inflated_radius = std::max(target.radius_1, target.radius_2);
 
         DynamicObstacle dyn_obs;
         dyn_obs.position =
@@ -1640,11 +1638,11 @@ void MincoSmoother::trackerCallback(
         cyl.pose.orientation.w = 1.0;
         cyl.scale.x = obs.radius * 2.0;  // 直径
         cyl.scale.y = obs.radius * 2.0;
-        cyl.scale.z = 0.6;  // 高度
-        cyl.color.r = 1.0f;
-        cyl.color.g = 0.3f;
-        cyl.color.b = 0.0f;
-        cyl.color.a = 0.6f;
+        cyl.scale.z = 0.4;  // 高度
+        cyl.color.r = 0.0f;
+        cyl.color.g = 0.0f;
+        cyl.color.b = 1.0f;
+        cyl.color.a = 0.7f;
         cyl.lifetime = rclcpp::Duration::from_seconds(0.3);
         marker_array.markers.push_back(cyl);
 
