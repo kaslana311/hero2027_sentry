@@ -84,7 +84,7 @@ void OccMap::TimeGoON() {  //长期未观测到的障碍物清除
     }
 }
 
-void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>::Ptr& pub_pc) {
+void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
 //三维索引
 #ifndef DEBUG
     std::unordered_map<int, bool> point_map;
@@ -139,7 +139,7 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>::Ptr& pub_pc) {
         pt.y = idy * resolution + resolution / 2.0 + cloud_at_map_origin[1];
         pt.z = idz * resolution_z + resolution_z / 2.0 + cloud_at_map_origin[2];
         pt.intensity = pt.z;  // Set intensity to 1.0 (or any other value)
-        pub_pc->points.push_back(pt);
+        pub_pc.points.push_back(pt);
 #ifdef FIX_MAP
         UpdateStaticMap(idx, idy);
 #endif
