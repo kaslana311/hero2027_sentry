@@ -1,0 +1,7 @@
+<library path="tracker_layer">
+    <class name="tracker_layer::Trackerlayer" type="tracker_layer::Trackerlayer" base_class_type="nav2_costmap_2d::Layer">
+        <description> 
+        A costmap layer that marks obstacles based on incoming point clouds.
+        </description>
+    </class>
+</library>
