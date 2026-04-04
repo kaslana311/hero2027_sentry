@@ -266,8 +266,8 @@ class CostmapESDFAdapter : public ESDFInterface {
         // 障碍物正前方的危险区域，从而提前绕行而非像躲静态柱子一样滞后。
 
         // 各向异性参数（暂时硬编码，日后可接入 dynamic_reconfigure）
-        constexpr double kMu = 1.5;   ///< 方向增强系数：控制前向拉伸强度
-        constexpr double kKv = 1.0;   ///< 速度增强系数：速度越快拉伸越强
+        constexpr double kMu = 0.5;   ///< 方向增强系数：控制前向拉伸强度
+        constexpr double kKv = 0.3;   ///< 速度增强系数：速度越快拉伸越强
 
         for (const auto& obs : dynamic_obstacles_) {
             const double v_norm = obs.velocity.norm();
