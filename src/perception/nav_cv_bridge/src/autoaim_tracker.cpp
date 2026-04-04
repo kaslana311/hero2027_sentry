@@ -53,11 +53,9 @@ void AutoaimTracker::trackerCallback(
     geometry_msgs::msg::TransformStamped map_to_odom;
     try {
         map_to_base =
-            tf_buffer_->lookupTransform("map", "base_link", rclcpp::Time(0),
-                                        rclcpp::Duration::from_seconds(0.1));
+            tf_buffer_->lookupTransform("map", "base_link", tf2::TimePointZero);
         map_to_odom =
-            tf_buffer_->lookupTransform("map", "odom", rclcpp::Time(0),
-                                        rclcpp::Duration::from_seconds(0.1));
+            tf_buffer_->lookupTransform("map", "odom", tf2::TimePointZero);
     } catch (tf2::TransformException& ex) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
                              "TF Error: %s", ex.what());
@@ -140,11 +138,18 @@ void AutoaimTracker::trackerCallback(
         velocity_marker.id = id++;
         velocity_marker.type = visualization_msgs::msg::Marker::ARROW;
         velocity_marker.action = visualization_msgs::msg::Marker::ADD;
+
+        geometry_msgs::msg::Point start_point;
+        start_point.x = abs_target.position.x;
+        start_point.y = abs_target.position.y;
+        start_point.z = 0.3;
+
         geometry_msgs::msg::Point end_point;
         end_point.x = abs_target.position.x + abs_target.velocity.x;
         end_point.y = abs_target.position.y + abs_target.velocity.y;
-        end_point.z = abs_target.position.z + abs_target.velocity.z;
-        velocity_marker.points.push_back(abs_target.position);
+        end_point.z = 0.3;
+
+        velocity_marker.points.push_back(start_point);
         velocity_marker.points.push_back(end_point);
         velocity_marker.scale.x = 0.05;
         velocity_marker.scale.y = 0.1;
