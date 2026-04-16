@@ -22,6 +22,10 @@ ament_auto_add_library(layers SHARED
   src/layers/intensity_voxel_layer.cpp
 )
 
+ament_auto_add_library(pb_is_stuck_condition_bt_node SHARED
+  src/bt_nodes/is_stuck_condition.cpp
+)
+
 if(BUILD_TESTING)
 set(ament_cmake_clang_format_CONFIG_FILE "${CMAKE_SOURCE_DIR}/.clang-format")
 find_package(ament_lint_auto REQUIRED)
