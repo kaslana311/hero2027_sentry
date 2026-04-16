@@ -25,6 +25,7 @@ ament_auto_add_library(layers SHARED
 ament_auto_add_library(pb_is_stuck_condition_bt_node SHARED
   src/bt_nodes/is_stuck_condition.cpp
 )
+target_compile_definitions(pb_is_stuck_condition_bt_node PRIVATE BT_PLUGIN_EXPORT)
 
 if(BUILD_TESTING)
 set(ament_cmake_clang_format_CONFIG_FILE "${CMAKE_SOURCE_DIR}/.clang-format")
