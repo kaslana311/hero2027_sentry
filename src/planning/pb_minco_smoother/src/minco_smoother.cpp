@@ -92,7 +92,7 @@ void MincoSmoother::configure(
 
     // 创建 Tracker 订阅器（接收 AutoaimTracker 处理后的绝对坐标下的目标）
     tracker_sub_ = node->create_subscription<interfaces::msg::TrackerOutput>(
-        "/tracker/absolute_targets", rclcpp::SensorDataQoS(),
+        "/tracker/back", rclcpp::SensorDataQoS(),
         std::bind(&MincoSmoother::trackerCallback, this,
                   std::placeholders::_1));
 

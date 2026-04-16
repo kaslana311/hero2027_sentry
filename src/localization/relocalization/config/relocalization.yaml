@@ -6,7 +6,7 @@
       init_yaw: 0.0
       init_pitch: 0.0
       init_roll: 0.0
-      init_pose: [-4.6, 2.29,0.0, 0.0, 0.0, 0.0]
+      init_pose: [0.0,0.0,0.0, 0.0, 0.0, 0.0]
       pcd_path: "src/common/point_cloud_files/filtered_pcd/fast_lio_latest_map.pcd"
       
       # 添加角度约束参数S
@@ -25,10 +25,10 @@
       fitness_threshold: 0.05 # 配准适应度阈值
 
       #过滤地图外点云
-      f_min_x: -1.6
-      f_min_y: -7.8
-      f_min_z: -0.5
+      f_min_x: -10.6
+      f_min_y: -17.8
+      f_min_z: -20.5
       f_max_x: 10.6
-      f_max_y: 0.37
-      f_max_z: 1.0
+      f_max_y: 10.37
+      f_max_z: 45.0
       # pcd_pub: False

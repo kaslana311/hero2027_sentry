@@ -201,8 +201,8 @@ class DogMapNode : public rclcpp::Node {
             std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
                                                                   start_time)
                 .count();
-         std::cout << " -- [DOG INFO] Map updated in " << time_consuming <<
-         "ms." << std::endl;
+        //  std::cout << " -- [DOG INFO] Map updated in " << time_consuming <<
+        //  "ms." << std::endl;
     }
 
     DogMapNode() : Node("dog_map_node") {

@@ -166,14 +166,14 @@ controller_server:
       # 
       time_steps: 24 # prediction horizon = time_steps x model_dt 
       model_dt: 0.05 # =1/controller_frequency
-      batch_size: 1000 # Count of randomly sampled candidate trajectories from current optimal control sequence in a given iteration. 1000 @ 50 Hz or 2000 @ 30 Hz seems to produce good results.
-      vx_std: 0.3
-      vy_std: 0.3
+      batch_size: 2000 # Count of randomly sampled candidate trajectories from current optimal control sequence in a given iteration. 1000 @ 50 Hz or 2000 @ 30 Hz seems to produce good results.
+      vx_std: 0.4
+      vy_std: 0.4
       wz_std: 0.1
-      vx_max: 2.0 # prediction horizon x vx_max = 3.0 m -->local costmap dim should larger than 3.0 x 2 = 6m
-      vx_min: -2.0 # Maximum reverse velocity (m/s).
-      vy_max: 2.0
-      vy_min: -2.0
+      vx_max: 1.8 # prediction horizon x vx_max = 3.0 m -->local costmap dim should larger than 3.0 x 2 = 6m
+      vx_min: -1.8 # Maximum reverse velocity (m/s).
+      vy_max: 1.8
+      vy_min: -1.8
       wz_max: 1.0
       wz_min: -1.0
 
@@ -191,7 +191,7 @@ controller_server:
       retry_attempt_limit: 3 # Number of attempts to find feasible trajectory on failure for soft-resets before reporting total failure.
       TrajectoryVisualizer:
         trajectory_step: 5
-        time_step: 3
+        time_step: 5
       # AckermannConstraints:
       #   min_turning_r: 0.2
       critics: ["ObstaclesCritic", "GoalCritic", "PathAlignCritic", "PathFollowCritic", "TwirlingCritic"]
@@ -209,7 +209,7 @@ controller_server:
       ObstaclesCritic: # 如果容易撞到低矮的障碍物，检查地形分析是否正确然后再调整这个参数
         enabled: true
         cost_power: 1
-        repulsion_weight: 0.2 #! Higher radii should correspond to reduced repulsion_weight due to the penalty formation (e.g. inflation_radius - min_dist_to_obstacle). 
+        repulsion_weight: 0.4 #! Higher radii should correspond to reduced repulsion_weight due to the penalty formation (e.g. inflation_radius - min_dist_to_obstacle). 
         # This is separated from the critical term to allow for fine tuning of obstacle behaviors with path alignment for dynamic scenes without impacting actions which may directly lead to near-collisions. This is applied within the inflation_radius distance from obstacles.
         critical_weight: 20.0
         consider_footprint: false # turn on this can increase computation cost
@@ -299,8 +299,10 @@ local_costmap:
       static_layer:
         plugin: "update_static_layer::UpdateStaticLayer"
         # map_subscribe_transient_local: True
-        cloud_update_topic: /rog_map/fix
-        
+        cloud_update_topic: /rog_map/fi
+      # pre_layer:"pre_layer",
+      #   plugin: "tracker_layer::Trackerlayer"
+      #   pointcloud_topic: "/tracker/absolute_targets"
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 2.5
@@ -351,11 +353,14 @@ global_costmap:
         #   obstacle_min_range: 0.0
       static_layer:
         plugin: "update_static_layer::UpdateStaticLayer"
-        cloud_update_topic: /rog_map/fix
+        cloud_update_topic: /rog_map/fi
         # map_subscribe_transient_local: True
       # pre_layer:
       #   plugin: "predict_handle_layer::PredictHandleLayer"
       #   tracker_topic: "/tracker/out"
+      # pre_layer:"pre_layer",
+      #   plugin: "tracker_layer::Trackerlayer"
+      #   pointcloud_topic: "/tracker/absolute_targets"
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 2.5

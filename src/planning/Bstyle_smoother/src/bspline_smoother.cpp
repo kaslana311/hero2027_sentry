@@ -42,15 +42,7 @@ void BSplineSmoother::configure(
   // nav2_util::declare_parameter_if_not_declared(
   //   node, name_ + ".lambda_2", rclcpp::ParameterValue(0.5));
   // nav2_util::declare_parameter_if_not_declared(
-  //   node, name_ + ".lambda_3", rclcpp::ParameterValue(0.1));
-  // nav2_util::declare_parameter_if_not_declared(
-  //   node, name_ + ".lambda_4", rclcpp::ParameterValue(0.0));  // 预留参数
-  // nav2_util::declare_parameter_if_not_declared(
-  //   node, name_ + ".lambda_5", rclcpp::ParameterValue(0.0));  // 预留参数
-  // nav2_util::declare_parameter_if_not_declared(
-  //   node, name_ + ".lambda_6", rclcpp::ParameterValue(  0.0));  // 预留参数
-  // node->get_parameter(name_ + ".bspline_order", bspline_order_);
-  // node->get_parameter(name_ + ".lambda_1", lambda_1_);
+  //   node, name_ + ".lambda_3", rclcpp::ParpathToBsplineambda_1_);
   // node->get_parameter(name_ + ".lambda_2", lambda_2_);
   // node->get_parameter(name_ + ".lambda_3", lambda_3_);
   // node->get_parameter(name_ + ".dist_threshold", dist_threshold_);
@@ -186,7 +178,8 @@ void BSplineSmoother::pathToBspline(
 
   fast_planner::NonUniformBspline::parameterizeToBspline2D(
     interval, point_set, derivatives, ctrl_pts);
-
+ctrl_pts(0,0)=path.poses[0].pose.position.x;
+ctrl_pts(0,1)=path.poses[0].pose.position.y;
   RCLCPP_INFO(
     rclcpp::get_logger("BSplineSmoother"),
     "Path: %.2fm, %zu pts -> B-spline: %ld ctrl pts, interval=%.3f", total_dist, n, ctrl_pts.rows(),

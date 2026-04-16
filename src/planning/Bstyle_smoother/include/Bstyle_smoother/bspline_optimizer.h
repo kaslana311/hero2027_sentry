@@ -36,10 +36,10 @@ struct BsplineConfig
   int algorithm2_ = 11;  // LBFGS for general cost
 
   // stopping criteria — 只用迭代次数控制, 不用时间限制
-  int max_iteration_num1_ = 300;
-  int max_iteration_num2_ = 300;
-  int max_iteration_num3_ = 300;
-  int max_iteration_num4_ = 300;
+  int max_iteration_num1_ = 500;
+  int max_iteration_num2_ = 500;
+  int max_iteration_num3_ = 500;
+  int max_iteration_num4_ = 500;
   double max_iteration_time1_ = 1e9;  // 不限时间
   double max_iteration_time2_ = 1e9;  // 不限时间
   double max_iteration_time3_ = 1e9;

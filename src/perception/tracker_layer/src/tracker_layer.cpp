@@ -104,14 +104,15 @@ void Trackerlayer::trackerCallback(
     // msg->targets.size() << std::endl; Target.position 和 velocity
     // 位于一个特殊坐标系下： 原点在 base_link，但方向与 odom 系对齐（即
     // base_link 旋转角归零）
-    geometry_msgs::msg::TransformStamped tf_global_frame_base;
+    // geometry_msgs::msg::TransformStamped tf_global_frame_base;
     geometry_msgs::msg::TransformStamped tf_map_odom;
+    if (global_frame_ == "odom") {
     if (tf_) {
         try {
-            tf_global_frame_base = tf_->lookupTransform(
-                global_frame_, "base_link", tf2::TimePointZero);
+            // tf_global_frame_base = tf_->lookupTransform(
+            //     global_frame_, "base_link", tf2::TimePointZero);
             tf_map_odom =
-                tf_->lookupTransform("map", "odom", tf2::TimePointZero);
+                tf_->lookupTransform("odom","map",  tf2::TimePointZero);
 
         } catch (const tf2::TransformException& ex) {
             std::cerr << "Transform error: " << ex.what() << std::endl;
@@ -120,27 +121,35 @@ void Trackerlayer::trackerCallback(
     } else {
         return;
     }
+    }
 
     tf2::Quaternion q_odom_map;
     tf2::fromMsg(tf_map_odom.transform.rotation, q_odom_map);
 
     tf2::Matrix3x3 rot_odom_map(q_odom_map);
 
-    tf2::Vector3 pos_base_global_frame(
-        tf_global_frame_base.transform.translation.x,
-        tf_global_frame_base.transform.translation.y,
-        tf_global_frame_base.transform.translation.z);
+    // tf2::Vector3 pos_base_global_frame(
+    //     tf_global_frame_base.transform.translation.x,
+    //     tf_global_frame_base.transform.translation.y,
+    //     tf_global_frame_base.transform.translation.z);
+    tf2::Vector3 pos_odom_map(
+    tf_map_odom.transform.translation.x,
+    tf_map_odom.transform.translation.y,
+    tf_map_odom.transform.translation.z);
 
     for (auto& target : msg->targets) {
         tf2::Vector3 target_pos_aligned(target.position.x, target.position.y,
                                         target.position.z);
-        // 先旋转到 map 系方向，然后叠加上 base_link 在 global_frame_ 系中的位置
-        tf2::Vector3 target_pos_map =
-            rot_odom_map * target_pos_aligned + pos_base_global_frame;
+        tf2::Vector3 target_pos_map;
+        if (global_frame_ == "odom"){
+        target_pos_map =rot_odom_map * target_pos_aligned + pos_odom_map;}
+        else{
+            target_pos_map=target_pos_aligned;
+            }
         // --- 速度处理 ---
         // 目标速度同 odom 方向，因此只需进行 odom 到 global_frame_ 的旋转转换
         tf2::Vector3 target_vel_global_frame_;
-        if (global_frame_ != "odom") {
+        if (global_frame_ == "odom") {
             tf2::Vector3 target_vel_aligned(
                 target.velocity.x, target.velocity.y, target.velocity.z);
             target_vel_global_frame_ = rot_odom_map * target_vel_aligned;
@@ -163,9 +172,11 @@ void Trackerlayer::trackerCallback(
             int res = gaussian(dyobs);
             if (res == -1) {
                 std::cerr << "obs discarded" << std::endl;
-            } else if (res == -2) {
-                std::cerr << "obs has no effect on map, discarded" << std::endl;
-            } else {
+            } else if (res == -2||res ==-3) {
+                std::cerr << "obs has no effect on map, discarded" <<" num "<<res<< std::endl;
+            }
+            
+             else {
                 std::cerr << "obs processed and added to list" << std::endl;
             }
         }
@@ -178,18 +189,22 @@ int Trackerlayer::gaussian(DynamicObstacle& obs) {
     }
 
     double v_norm = obs.velocity.norm();
+    if(v_norm<0.5&&v_norm>0.1) {obs.velocity=obs.velocity.normalized()*0.1;
+    v_norm=0.1;
+    }
     double angle = atan2(obs.velocity.y(), obs.velocity.x());
     double cos_a = cos(angle);
     double sin_a = sin(angle);
 
     // 参数设置
-    double r_obs = obs.radius;  // 基础半径
-    double k_speed = 0.5;       // 速度影响系数，可调
+    double r_obs = obs.radius/2;  // 基础半径
+    double k_speed = 0.8;       // 速度影响系数，可调
     double mu = 0.5;            // 公式中的方向权重因子项
-    double w_obs = 230.0;       // 峰值代价
+    double w_obs = 255.0;       // 峰值代价
 
     // 长轴（速度方向）受速度影响呈对数增长，短轴和负长轴保持半径
     double sigma_front = r_obs + k_speed * std::log(1.0 + v_norm);
+    if(sigma_front>r_obs+0.3) sigma_front=r_obs+0.3;
     double sigma_side = r_obs;
     double sigma_back = r_obs;
 
@@ -242,7 +257,7 @@ int Trackerlayer::gaussian(DynamicObstacle& obs) {
 
             // 限制代价在 0 - 230
             unsigned int final_cost =
-                static_cast<unsigned int>(std::clamp(cost_f, 0.0, 230.0));
+                static_cast<unsigned int>(std::clamp(cost_f, 0.0, 255.0));
 
             if (final_cost > 10) {
                 points_in_obs.emplace_back(mx, my, final_cost);
