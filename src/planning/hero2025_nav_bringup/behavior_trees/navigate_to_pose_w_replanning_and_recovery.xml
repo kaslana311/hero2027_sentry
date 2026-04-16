@@ -21,8 +21,8 @@
         <GoalUpdated/>
         <Sequence name="StuckRecovery">
           <IsStuckCondition costmap_topic="local_costmap/costmap_raw" check_interval="0.2" consecutive_hits="3"/>
-          <ClearEntireCostmap name="ClearLocalCostmap-Stuck" service_name="local_costmap/clear_entirely_local_costmap"/>
-          <ClearEntireCostmap name="ClearGlobalCostmap-Stuck" service_name="global_costmap/clear_entirely_global_costmap"/>
+          <!-- <ClearEntireCostmap name="ClearLocalCostmap-Stuck" service_name="local_costmap/clear_entirely_local_costmap"/>
+          <ClearEntireCostmap name="ClearGlobalCostmap-Stuck" service_name="global_costmap/clear_entirely_global_costmap"/> -->
           <BackUp backup_dist="1.0" backup_speed="1.0"/>
         </Sequence>
         <Sequence name="ClearingActions">
