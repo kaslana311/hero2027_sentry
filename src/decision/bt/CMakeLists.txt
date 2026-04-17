@@ -17,6 +17,10 @@ find_package(geometry_msgs REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(nav2_common REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(interfaces REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 include_directories(
   include
@@ -44,6 +48,10 @@ ament_target_dependencies(decision_node
   rclcpp_action
   nav2_common
   nlohmann_json
+  interfaces
+  nav_msgs
+  visualization_msgs
+  tf2_ros
 )
 ament_target_dependencies(refree_pub
   rclcpp

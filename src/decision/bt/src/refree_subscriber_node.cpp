@@ -10,6 +10,7 @@
 #include "behavior_node.hpp"
 #include "cruiser_node.hpp"
 #include "feasibility_calculate_node.hpp"
+#include "guard_with_attack_node.hpp"
 #include "thread_node.hpp"
 
 using namespace std::literals;
@@ -113,6 +114,7 @@ int main(int argc, char** argv) {
     factory.registerNodeType<ClearCalculatorNode>("ClearCalculator");
     factory.registerNodeType<PointInQuadrilateralCondition>(
         "PointInQuadrilateral");
+    factory.registerNodeType<GuardWithAttackNode>("GuardWithAttack");
 
     RCLCPP_INFO(rclcpp::get_logger("refree_sub"), "行为树节点登记成功");
     auto tree = factory.createTreeFromFile(xml_path, blackboard);
