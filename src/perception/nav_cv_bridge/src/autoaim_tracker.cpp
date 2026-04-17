@@ -108,57 +108,26 @@ void AutoaimTracker::trackerCallback(
 
         abs_msg->targets.push_back(abs_target);
 
-        // Marker (圆柱体)
-        visualization_msgs::msg::Marker marker;
-        marker.header = abs_msg->header;
-        marker.ns = "dyn_obs_cylinder";
-        marker.id = id++;
-        marker.type = visualization_msgs::msg::Marker::CYLINDER;
-        marker.action = visualization_msgs::msg::Marker::ADD;
-        marker.pose.position.x = abs_target.position.x;
-        marker.pose.position.y = abs_target.position.y;
-        marker.pose.position.z = 0.3;  // 圆柱体中心高度
-        marker.pose.orientation.w = 1.0;
-
-        // 取 target 的较大半径作为圆柱半径
-        double radius = std::max(target.radius_1, target.radius_2);
-        marker.scale.x = radius * 2.0;  // 直径
-        marker.scale.y = radius * 2.0;
-        marker.scale.z = 0.6;  // 高度
-        marker.color.r = 1.0f;
-        marker.color.g = 0.3f;
-        marker.color.b = 0.0f;
-        marker.color.a = 0.6f;
-        marker.lifetime = rclcpp::Duration::from_seconds(0.3);
-        marker_array.markers.push_back(marker);
-
-        visualization_msgs::msg::Marker velocity_marker;
-        velocity_marker.header = abs_msg->header;
-        velocity_marker.ns = "velocities";
-        velocity_marker.id = id++;
-        velocity_marker.type = visualization_msgs::msg::Marker::ARROW;
-        velocity_marker.action = visualization_msgs::msg::Marker::ADD;
-
-        geometry_msgs::msg::Point start_point;
-        start_point.x = abs_target.position.x;
-        start_point.y = abs_target.position.y;
-        start_point.z = 0.3;
-
-        geometry_msgs::msg::Point end_point;
-        end_point.x = abs_target.position.x + abs_target.velocity.x;
-        end_point.y = abs_target.position.y + abs_target.velocity.y;
-        end_point.z = 0.3;
-
-        velocity_marker.points.push_back(start_point);
-        velocity_marker.points.push_back(end_point);
-        velocity_marker.scale.x = 0.05;
-        velocity_marker.scale.y = 0.1;
-        velocity_marker.scale.z = 0.1;
-        velocity_marker.color.a = 1.0;
-        velocity_marker.color.r = 0.0;
-        velocity_marker.color.g = 1.0;
-        velocity_marker.color.b = 0.0;
-        marker_array.markers.push_back(velocity_marker);
+        visualization_msgs::msg::Marker enemy_marker;
+        enemy_marker.header = abs_msg->header;
+        enemy_marker.header.stamp = this->now();
+        enemy_marker.ns = "guard_attack";
+        enemy_marker.id = id++;
+        enemy_marker.type = visualization_msgs::msg::Marker::SPHERE;
+        enemy_marker.action = visualization_msgs::msg::Marker::ADD;
+        enemy_marker.pose.position.x = abs_target.position.x;
+        enemy_marker.pose.position.y = abs_target.position.y;
+        enemy_marker.pose.position.z = 0.1;
+        enemy_marker.pose.orientation.w = 1.0;
+        enemy_marker.scale.x = 0.2;
+        enemy_marker.scale.y = 0.2;
+        enemy_marker.scale.z = 0.2;
+        enemy_marker.color.r = 0.0;
+        enemy_marker.color.g = 0.0;
+        enemy_marker.color.b = 0.0;
+        enemy_marker.color.a = 0.8;
+        enemy_marker.lifetime = rclcpp::Duration::from_seconds(3.0);
+        marker_array.markers.push_back(enemy_marker);
     }
 
     tracker_pub_->publish(*abs_msg);
