@@ -221,7 +221,7 @@ void colorMap::ColorMapModel::ReadFileAndCreateMap()
       }
     }
   }
-  cv::imwrite("/home/z/res.png", res_mat);
+  cv::imwrite("/home/dji/hero2026_-sentry/src/planning/towords_planner/res.png", res_mat);
 #endif
   cost_coffient_map_ = nullptr;
   //代价系数准备(如果需要),不好使,内存分配太大了

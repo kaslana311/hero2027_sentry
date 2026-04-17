@@ -48,9 +48,8 @@ bool ThetaStar::generatePath(std::vector<coordsW> & raw_path)
 {
   //清空上次路径规划的关键点
   {
-    std::lock_guard<std::mutex> lock(key_point_mutex_);
-    key_point_list_.clear();
-  }
+  std::lock_guard<std::mutex> lock(key_point_mutex_);
+  key_point_list_.clear();}
   resetContainers();
   addToNodesData(index_generated_);
   double src_g_cost = getTraversalCost(src_.x, src_.y), src_h_cost = getHCost(src_.x, src_.y);

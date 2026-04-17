@@ -72,7 +72,7 @@ protected:
       try {
         current_pose = tf_->lookupTransform(
           "map",             // target
-          "base_footprint",  // source
+          "base_link",  // source
           tf2::TimePointZero);
       } catch (const std::exception & e) {
         RCLCPP_ERROR(logger_, "Exception in publishDataThread: %s", e.what());

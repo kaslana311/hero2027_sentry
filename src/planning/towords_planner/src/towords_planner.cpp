@@ -32,12 +32,12 @@ void towords_planner::configure(
   auto node = parent_node_.lock();
   nav2_util::declare_parameter_if_not_declared(
     node, name + ".color_map_path",
-    rclcpp::ParameterValue("/home/z/Desktop/rmuc_2026_info_map.png"));
+    rclcpp::ParameterValue("/home/dji/hero2026_-sentry/src/planning/towords_planner/map.png"));
   node->get_parameter(name + ".color_map_path", color_map_path);
   nav2_util::declare_parameter_if_not_declared(
     node, name + ".yaml_path",
     rclcpp::ParameterValue(
-      "/home/z/ros_ws/src/pb2025_sentry_nav/pb2025_nav_bringup/map/simulation/rmuc_2026.yaml"));
+      "/home/dji/hero2026_-sentry/src/planning/map_server/map/map.yaml"));
   node->get_parameter(name + ".yaml_path", yaml_path);
   planner_ = std::make_unique<theta_star::ThetaStar>(color_map_path, yaml_path);
 
@@ -146,7 +146,7 @@ void towords_planner::publishKeypointMarker(const KeyPoint & kp, int mode)
     marker.color.b = 0.1;
   } else {
     marker.color.r = 0.1;
-    marker.color.g = 0.4;
+    marker.color.g = 0.0;
     marker.color.b = 1.0;
   }
   marker.color.a = 1.0;

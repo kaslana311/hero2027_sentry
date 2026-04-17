@@ -138,12 +138,15 @@ public:
     double distance = std::hypot(dx, dy);
     std::cerr << "Distance to key point: " << distance * 0.05 << " meters"
               << std::endl;        // 输出距离，乘以分辨率转换为米
-    return distance * 0.05 < 1.0;  //距离小于1.2m认为到达关键点
+    return distance * 0.05 < 0.4;  //距离小于1.2m认为到达关键点
   }
   inline bool CalDistance2RecoveryPoint(double cx, double cy, unsigned int mx, unsigned int my)
   {
-    double dx = static_cast<double>(mx) - static_cast<double>(cx);
-    double dy = static_cast<double>(my) - static_cast<double>(cy);
+    unsigned int icx, icy;
+    // 1. 检查坐标是否在地图范围内
+    if (!colorMap_->World2ColorMap(cx, cy, icx, icy)) return false;
+    double dx = static_cast<double>(mx) - static_cast<double>(icx);
+    double dy = static_cast<double>(my) - static_cast<double>(icy);
     double distance = std::hypot(dx, dy);
     return distance * 0.05 > 1.0;  //距离大于1.0m认为到达恢复点
   }
