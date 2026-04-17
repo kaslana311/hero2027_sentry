@@ -242,6 +242,27 @@ void towords_planner::getPlan(nav_msgs::msg::Path & global_path)
     global_path.poses.clear();
   } else if (planner_->generatePath(path)) {
     global_path = linearInterpolation(path, planner_->costmap_->getResolution());
+    unsigned int mx, my;
+    unsigned int nx, ny;
+    for (auto it = global_path.poses.begin(); it != global_path.poses.end() - 1; it++) {
+      if (!planner_->costmap_->worldToMap(it->pose.position.x, it->pose.position.y, mx, my)) {
+        continue;
+      }
+      auto next_it = it + 1;
+      if (!planner_->costmap_->worldToMap(
+            next_it->pose.position.x, next_it->pose.position.y, nx, ny)) {
+        continue;
+      }
+      int ret = planner_->colorMap_->ReturnKeyPointType(mx, my, nx, ny);
+      if (ret > 1) {
+        KeyPoint key_point;
+        key_point.x = nx;
+        key_point.y = ny;
+        key_point.type = ret;
+        std::lock_guard<std::mutex> lock(planner_->key_point_mutex_);
+        planner_->key_point_list_.push_back(key_point);
+      }
+    }
   } else {
     RCLCPP_ERROR(logger_, "Could not generate path between the given poses");
     global_path.poses.clear();

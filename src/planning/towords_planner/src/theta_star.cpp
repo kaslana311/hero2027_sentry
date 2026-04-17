@@ -47,7 +47,10 @@ void ThetaStar::setStartAndGoal(
 bool ThetaStar::generatePath(std::vector<coordsW> & raw_path)
 {
   //清空上次路径规划的关键点
-  key_point_list_.clear();
+  {
+    std::lock_guard<std::mutex> lock(key_point_mutex_);
+    key_point_list_.clear();
+  }
   resetContainers();
   addToNodesData(index_generated_);
   double src_g_cost = getTraversalCost(src_.x, src_.y), src_h_cost = getHCost(src_.x, src_.y);
@@ -169,25 +172,25 @@ void ThetaStar::backtrace(std::vector<coordsW> & raw_points, const tree_node * c
 {
   std::vector<coordsW> path_rev;
   coordsW world{};
-  coordsM last_pose;
-  bool last_pose_set = false;
+  // coordsM last_pose;
+  // bool last_pose_set = false;
   do {
-    if (!last_pose_set) {
-      last_pose = {curr_n->x, curr_n->y};
-      last_pose_set = true;
-    } else {
-      int ret = colorMap_->ReturnKeyPointType(curr_n->x, curr_n->y, last_pose.x, last_pose.y);
-      if (ret > 1) {
-        KeyPoint key_point;
-        key_point.x = static_cast<unsigned int>(curr_n->x);
-        key_point.y = static_cast<unsigned int>(curr_n->y);
-        key_point.type = ret;
-        std::lock_guard<std::mutex> lock(key_point_mutex_);
-        key_point_list_.push_back(key_point);
-      }
-      last_pose.x = curr_n->x;
-      last_pose.y = curr_n->y;
-    }
+    // if (!last_pose_set) {
+    //   last_pose = {curr_n->x, curr_n->y};
+    //   last_pose_set = true;
+    // } else {
+    //   int ret = colorMap_->ReturnKeyPointType(curr_n->x, curr_n->y, last_pose.x, last_pose.y);
+    //   if (ret > 1) {
+    //     KeyPoint key_point;
+    //     key_point.x = static_cast<unsigned int>(curr_n->x);
+    //     key_point.y = static_cast<unsigned int>(curr_n->y);
+    //     key_point.type = ret;
+    //     std::lock_guard<std::mutex> lock(key_point_mutex_);
+    //     key_point_list_.push_back(key_point);
+    //   }
+    //   last_pose.x = curr_n->x;
+    //   last_pose.y = curr_n->y;
+    // }
     costmap_->mapToWorld(curr_n->x, curr_n->y, world.x, world.y);
     path_rev.push_back(world);
     if (path_rev.size() > 1) {

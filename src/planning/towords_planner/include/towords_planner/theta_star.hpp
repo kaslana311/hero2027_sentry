@@ -111,9 +111,8 @@ public:
     {
       std::lock_guard<std::mutex> lock(key_point_mutex_);
       if (key_point_list_.empty() || key_point_list_.size() < 2) return false;
-      int last_index = key_point_list_.size() - 1;
-      key_point_in = key_point_list_[last_index];
-      key_point_out = key_point_list_[last_index - 1];
+      key_point_in = key_point_list_[0];
+      key_point_out = key_point_list_[1];
     }
     return true;
   }
