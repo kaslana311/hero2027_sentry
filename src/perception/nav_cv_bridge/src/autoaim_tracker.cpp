@@ -59,21 +59,6 @@ void AutoaimTracker::trackerCallback(
         return;
     }
 
-    Eigen::Vector3d p_B_M(map_to_base.transform.translation.x,
-                          map_to_base.transform.translation.y,
-                          map_to_base.transform.translation.z);
-
-    Eigen::Quaterniond q_B_M(
-        map_to_base.transform.rotation.w, map_to_base.transform.rotation.x,
-        map_to_base.transform.rotation.y, map_to_base.transform.rotation.z);
-
-    Eigen::Matrix3d R_B_M = q_B_M.toRotationMatrix();
-
-    // Odom twist is in base_link frame
-    Eigen::Vector3d v_B_B(odom.twist.twist.linear.x, odom.twist.twist.linear.y,
-                          odom.twist.twist.linear.z);
-    Eigen::Vector3d v_B_M = R_B_M * v_B_B;
-
     auto abs_msg = std::make_shared<interfaces::msg::TrackerOutput>();
     abs_msg->header = msg->header;
     abs_msg->header.frame_id = "map";
@@ -82,21 +67,14 @@ void AutoaimTracker::trackerCallback(
 
     int id = 0;
     for (const auto& target : msg->targets) {
-        Eigen::Vector3d p_obs(target.position.x, target.position.y,
-                              target.position.z);
-        Eigen::Vector3d v_obs(target.velocity.x, target.velocity.y,
-                              target.velocity.z);
+        geometry_msgs::msg::Point p_base;
+        p_base = target.position;
 
-        Eigen::Vector3d p_T_M = p_B_M + R_B_M * p_obs;
-        Eigen::Vector3d v_T_M = v_B_M + R_B_M * v_obs;
+        geometry_msgs::msg::Point p_map;
+        tf2::doTransform(p_base, p_map, map_to_base);
 
         interfaces::msg::Target abs_target = target;
-        abs_target.position.x = p_T_M.x();
-        abs_target.position.y = p_T_M.y();
-        abs_target.position.z = p_T_M.z();
-        abs_target.velocity.x = v_T_M.x();
-        abs_target.velocity.y = v_T_M.y();
-        abs_target.velocity.z = v_T_M.z();
+        abs_target.position = p_map;
 
         abs_msg->targets.push_back(abs_target);
 
