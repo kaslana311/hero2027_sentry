@@ -75,7 +75,8 @@ void towords_planner::configure(
   nav2_util::declare_parameter_if_not_declared(
     node, name + ".use_final_approach_orientation", rclcpp::ParameterValue(false));
   node->get_parameter(name + ".use_final_approach_orientation", use_final_approach_orientation_);
-
+  keypoint_mark_pub_ =
+    rclcpp::create_publisher<visualization_msgs::msg::Marker>(node, "/keypoint_marker", 1);
   keypoint_pub_ = rclcpp::create_publisher<std_msgs::msg::Int32>(node, "/keypoint_type", 1);
   pub_data_thread_ = new std::thread(&towords_planner::publishDataThread, this);
 }
@@ -103,7 +104,55 @@ void towords_planner::deactivate()
 {
   RCLCPP_INFO(logger_, "Deactivating plugin %s of type towords_planner", name_.c_str());
 }
+void towords_planner::publishKeypointMarker(const KeyPoint & kp, int mode)
+{
+  if (!keypoint_mark_pub_) {
+    return;
+  }
 
+  visualization_msgs::msg::Marker marker;
+  marker.header.frame_id = global_frame_;  // 通常是 "map"
+  marker.header.stamp = clock_->now();
+  marker.ns = "towords_keypoints";
+  marker.id = 0;
+  marker.type = visualization_msgs::msg::Marker::SPHERE;
+  marker.action = visualization_msgs::msg::Marker::ADD;
+
+  double wx = static_cast<double>(kp.x);
+  double wy = static_cast<double>(kp.y);
+  if (
+    planner_->costmap_ && kp.x < planner_->costmap_->getSizeInCellsX() &&
+    kp.y < planner_->costmap_->getSizeInCellsY()) {
+    planner_->costmap_->mapToWorld(kp.x, kp.y, wx, wy);
+  }
+
+  marker.pose.position.x = wx;
+  marker.pose.position.y = wy;
+  marker.pose.position.z = 0.15;
+  marker.pose.orientation.w = 1.0;
+
+  marker.scale.x = 0.25;
+  marker.scale.y = 0.25;
+  marker.scale.z = 0.25;
+
+  // mode 区分颜色：1红 2绿 其他蓝
+  if (mode == 1) {
+    marker.color.r = 1.0;
+    marker.color.g = 0.1;
+    marker.color.b = 0.1;
+  } else if (mode == 2) {
+    marker.color.r = 0.1;
+    marker.color.g = 1.0;
+    marker.color.b = 0.1;
+  } else {
+    marker.color.r = 0.1;
+    marker.color.g = 0.4;
+    marker.color.b = 1.0;
+  }
+  marker.color.a = 1.0;
+
+  keypoint_mark_pub_->publish(marker);
+}
 nav_msgs::msg::Path towords_planner::createPlan(
   const geometry_msgs::msg::PoseStamped & start, const geometry_msgs::msg::PoseStamped & goal)
 {

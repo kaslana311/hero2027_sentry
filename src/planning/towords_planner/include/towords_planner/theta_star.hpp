@@ -134,11 +134,7 @@ public:
     if (!colorMap_->World2ColorMap(cx, cy, mx, my)) return false;
     double dx = static_cast<double>(mx) - static_cast<double>(key_point.x);
     double dy = static_cast<double>(my) - static_cast<double>(key_point.y);
-    std::cerr << "Current position in " << cx << ", " << cy << " in map coordinates: (" << mx
-              << ", " << my << ")" << std::endl;
-    std::cerr << "Key point position in map coordinates: (" << key_point.x << ", " << key_point.y
-              << ")" << std::endl;
-    std ::cerr << "Difference in coordinates: dx = " << dx << ", dy = " << dy << std::endl;
+
     // 3. 计算欧式距离
     double distance = std::hypot(dx, dy);
     std::cerr << "Distance to key point: " << distance * 0.05 << " meters"
