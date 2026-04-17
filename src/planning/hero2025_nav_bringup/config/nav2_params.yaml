@@ -380,6 +380,8 @@ planner_server:
     expected_planner_frequency: 20.0
     planner_plugins: ["GridBased"]
     GridBased:
+      # plugin: "towords_planner/towords_planner"
+      
       plugin: "nav2_smac_planner/SmacPlannerHybrid"
       tolerance: 1.5                      # 如果无法到达精确位置的规划容差，单位：米
       allow_unknown: true                 # 允许在未知空间中行驶
