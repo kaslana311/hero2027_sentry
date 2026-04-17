@@ -408,6 +408,8 @@ class GuardWithAttackNode : public StatefulActionNode {
 
             out_x = cx;
             out_y = cy;
+
+            publishVisualization(enemy_x, enemy_y, out_x, out_y);
             return true;
         }
 
