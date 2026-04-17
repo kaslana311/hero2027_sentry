@@ -1,0 +1,5 @@
+ <library path="towords_planner">
+    <class name="towords_planner/towords_planner" type="towords_planner::towords_planner" base_class_type="nav2_core::GlobalPlanner">
+        <description>An implementation of the Theta* Algorithm</description>
+    </class>
+</library>
