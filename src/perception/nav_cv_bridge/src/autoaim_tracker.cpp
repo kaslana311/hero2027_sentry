@@ -50,12 +50,9 @@ void AutoaimTracker::trackerCallback(
     }
 
     geometry_msgs::msg::TransformStamped map_to_base;
-    geometry_msgs::msg::TransformStamped map_to_odom;
     try {
         map_to_base =
             tf_buffer_->lookupTransform("map", "base_link", tf2::TimePointZero);
-        map_to_odom =
-            tf_buffer_->lookupTransform("map", "odom", tf2::TimePointZero);
     } catch (tf2::TransformException& ex) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
                              "TF Error: %s", ex.what());
@@ -70,11 +67,6 @@ void AutoaimTracker::trackerCallback(
         map_to_base.transform.rotation.w, map_to_base.transform.rotation.x,
         map_to_base.transform.rotation.y, map_to_base.transform.rotation.z);
 
-    Eigen::Quaterniond q_O_M(
-        map_to_odom.transform.rotation.w, map_to_odom.transform.rotation.x,
-        map_to_odom.transform.rotation.y, map_to_odom.transform.rotation.z);
-
-    Eigen::Matrix3d R_O_M = q_O_M.toRotationMatrix();
     Eigen::Matrix3d R_B_M = q_B_M.toRotationMatrix();
 
     // Odom twist is in base_link frame
@@ -95,8 +87,8 @@ void AutoaimTracker::trackerCallback(
         Eigen::Vector3d v_obs(target.velocity.x, target.velocity.y,
                               target.velocity.z);
 
-        Eigen::Vector3d p_T_M = p_B_M + R_O_M * p_obs;
-        Eigen::Vector3d v_T_M = v_B_M + R_O_M * v_obs;
+        Eigen::Vector3d p_T_M = p_B_M + R_B_M * p_obs;
+        Eigen::Vector3d v_T_M = v_B_M + R_B_M * v_obs;
 
         interfaces::msg::Target abs_target = target;
         abs_target.position.x = p_T_M.x();
