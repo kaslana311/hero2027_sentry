@@ -690,9 +690,9 @@ void HeroMpcController::publishPredictedPath(
             // 才发布，避免导航过冲时产生原地掉头
             double dist_to_base = std::hypot(carrot_in_base.pose.position.x,
                                              carrot_in_base.pose.position.y);
-            // if (dist_to_base > 0.15) {
+            if (dist_to_base > 0.15) {
                 carrot_pose_pub_->publish(carrot_in_base);
-            // }
+            }
         } catch (const tf2::TransformException& ex) {
             RCLCPP_WARN_THROTTLE(logger_, *clock_, 1000,
                                  "[%s] 无法获取 map->base_link 变换: %s",
