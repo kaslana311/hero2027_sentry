@@ -76,3 +76,4 @@ doc/_build/
 *.dat
 *.pgm
 *.pcd
+src/planning/map_server/map/map.pgm

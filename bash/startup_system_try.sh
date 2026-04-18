@@ -37,8 +37,8 @@ gnome-terminal --tab --title="chassis" -- bash -c \
 "ros2 launch hero_serial chassis_node.launch.py 2>&1 | tee  \"$LOG_DIR/chassis.log\" ; exec bash"
 
 # 启动云台节点
-# gnome-terminal --tab --title="gimbal" -- bash -c \
-# "ros2 launch hero_serial gimbal_node.launch.py 2>&1 | tee \"$LOG_DIR/gimbal.log\"; exec bash"
+gnome-terminal --tab --title="bridge" -- bash -c \
+"ros2 run nav_cv_bridge autoaim_tracker_node 2>&1 | tee \"$LOG_DIR/bridge.log\"; exec bash"
 
 # 启动雷达节点
 gnome-terminal --tab --title="start_lidar" -- bash -c \
@@ -69,10 +69,6 @@ gnome-terminal --tab --title="plan" -- bash -c \
 gnome-terminal --tab --title="map" -- bash -c \
 " export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/home/dji/hero2026_-sentry/src/third_party/acados/lib;
      ros2 launch map_server map_server.launch.py 2>&1 | tee \"$LOG_DIR/map_server.log\" ; exec bash"
-
-# 启动速度变换节点
-# gnome-terminal --tab --title="fake_vel_trans" -- bash -c \
-# "ros2 launch fake_vel_transform fake_vel_transform_launch.py 2>&1 | tee \"$LOG_DIR/vel_transform.log\"; exec bash"
 
 # 启动RViz可视化
 gnome-terminal --tab --title="rviz" -- bash -c \

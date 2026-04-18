@@ -86,9 +86,6 @@ class GuardWithAttackNode : public StatefulActionNode {
         // 读取话题名（构造时读取一次，避免每次 tick 解析）
         std::string tracker_topic = "/tracker/absolute_targets";
         std::string costmap_topic = "/global_costmap/costmap";
-        // 尝试从端口读取，失败则用默认值
-        getInput("tracker_topic", tracker_topic);
-        getInput("costmap_topic", costmap_topic);
 
         // 创建独立 callback group（不阻塞主线程）
         cb_group_ = node_->create_callback_group(
@@ -149,7 +146,7 @@ class GuardWithAttackNode : public StatefulActionNode {
             InputPort<int>("occ_threshold", 50, "OccupancyGrid cost 可行阈值"),
             InputPort<double>("nav_update_interval", 2.0,
                               "导航目标最小更新间隔（秒）"),
-            InputPort<std::string>("tracker_topic", "/tracker/autoaim",
+            InputPort<std::string>("tracker_topic", "/tracker/absolute_targets",
                                    "TrackerOutput 话题"),
             InputPort<std::string>("costmap_topic", "/global_costmap/costmap",
                                    "代价地图话题"),
