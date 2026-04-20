@@ -1,87 +1,76 @@
+#include <pcl/features/normal_3d_omp.h>
+#include <pcl/io/pcd_io.h>
+
+#include <fstream>
+#include <limits>
+
 #include "relocalization_node.hpp"
 
-#include <pcl/filters/passthrough.h>
-using namespace small_gicp;
 RelocalizationNode::RelocalizationNode(QObject* parent)
     : QObject(parent),
       Node("relocalization_node"),
       global_map_(new pcl::PointCloud<pcl::PointXYZ>),
       result_t_(Eigen::Isometry3d::Identity()),
       cur_scan_(new pcl::PointCloud<pcl::PointXYZ>),
-      accumulated_cloud(new pcl::PointCloud<pcl::PointXYZ>),
-      TDTresult(new pcl::PointCloud<pcl::PointXYZ>) {
-    RCLCPP_INFO(this->get_logger(), "RelocalizationNode init");
+      accumulated_cloud_(new pcl::PointCloud<pcl::PointXYZ>) {
+    RCLCPP_INFO(this->get_logger(),
+                "RelocalizationNode (2D Correlative Matching) init");
+
     this->declare_parameter("init_pose",
                             std::vector<double>{0., 0., 0., 0., 0., 0.});
-
     this->declare_parameter(
         "pcd_path",
-        "/home/fyk/Projects/ros2_ws/src/relocalization/PCD/voxel2025RMUC.pcd");
+        "/home/dji/hero2026_-sentry/src/planning/map_server/map/map.pgm");
 
-    // New registration gating and policy parameters
-    this->declare_parameter("gate_yaw_deg", gate_yaw_deg_);
-    this->declare_parameter("gate_roll_deg", gate_roll_deg_);
-    this->declare_parameter("gate_pitch_deg", gate_pitch_deg_);
-    this->declare_parameter("gate_trans_m", gate_trans_m_);
+    // 2D BEV Match Config
+    this->declare_parameter("map_z_min", -0.1);
+    this->declare_parameter("map_z_max", 0.2);
+    this->declare_parameter("scan_z_min", -0.1);
+    this->declare_parameter("scan_z_max", 0.3);
 
-    this->declare_parameter("enforce_rp_zero", enforce_rp_zero_);
-    this->declare_parameter("yaw_search_step_deg", yaw_search_step_deg_);
-    this->declare_parameter("max_fail_before_fallback",
-                            max_fail_before_fallback_);
-    this->declare_parameter("fallback_policy", fallback_policy_);
+    this->declare_parameter("resolution", 0.01);  // 1cm 精度
+    this->declare_parameter("use_precomputed_contour_map", true);
+    this->declare_parameter(
+        "contour_map_pgm_path",
+        "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/"
+        "fast_lio_latest_map_contour.pgm");
+    this->declare_parameter("contour_map_origin_x", -1.90625);
+    this->declare_parameter("contour_map_origin_y", -3.93145);
+    this->declare_parameter("match_tolerance_cells", 1);
+    this->declare_parameter("search_x_bounds", 0.1);  // X搜索 +-8cm
+    this->declare_parameter("search_y_bounds", 0.1);  // Y搜索 +-8cm
+    this->declare_parameter("search_yaw_bounds_deg",
+                            20.0);                 // 偏航角搜索 +-10度
+    this->declare_parameter("trans_step", 0.01);   // 平移搜索步长 1cm
+    this->declare_parameter("yaw_step_deg", 0.2);  // 角度搜索步长 0.5度
 
-    //------------
-    this->declare_parameter("fitness_threshold", fitness_threshold_);
-    this->declare_parameter("num_neighbors", 20);
-    this->declare_parameter("smgicp_global_leaf_size", 0.01);
-    this->declare_parameter("smgicp_local_leaf_size", 0.05);
-    this->declare_parameter("smgicp_max_iterations", 50);
-    this->declare_parameter("smgicp_num_threads", 5);
-    this->declare_parameter("smgicp_max_dist_sq", 3.0);
-    this->declare_parameter("f_min_x", -3.2);
-    this->declare_parameter("f_min_y", -9.2);
-    this->declare_parameter("f_min_z", 0.0);
-    this->declare_parameter("f_max_x", 24.3);
-    this->declare_parameter("f_max_y", 5.3);
-    this->declare_parameter("f_max_z", 3.5);
+    this->declare_parameter("max_scan_count", 10);  // 累积多少帧雷达数据
 
-    this->declare_parameter("pcd_pub", pcdPub);
-    this->get_parameter("pcd_pub", pcdPub);
-
-    fparams.min_x = this->get_parameter("f_min_x").as_double();
-    fparams.min_y = this->get_parameter("f_min_y").as_double();
-    fparams.min_z = this->get_parameter("f_min_z").as_double();
-    fparams.max_x = this->get_parameter("f_max_x").as_double();
-    fparams.max_y = this->get_parameter("f_max_y").as_double();
-    fparams.max_z = this->get_parameter("f_max_z").as_double();
-
-    //初始位姿设定
     this->get_parameter("init_pose", init_pose_);
-    //先验地图路径
-    pcd_path_ = this->get_parameter("pcd_path").as_string();
 
-    // Load runtime-configurable params into member variables
-    gate_yaw_deg_ = this->get_parameter("gate_yaw_deg").as_double();
-    gate_trans_m_ = this->get_parameter("gate_trans_m").as_double();
-    enforce_rp_zero_ = this->get_parameter("enforce_rp_zero").as_bool();
-    yaw_search_step_deg_ =
-        this->get_parameter("yaw_search_step_deg").as_double();
-    max_fail_before_fallback_ =
-        this->get_parameter("max_fail_before_fallback").as_int();
-    fallback_policy_ = this->get_parameter("fallback_policy").as_string();
-    fitness_threshold_ = this->get_parameter("fitness_threshold").as_double();
-    gate_roll_deg_ = this->get_parameter("gate_roll_deg").as_double();
-    gate_pitch_deg_ = this->get_parameter("gate_pitch_deg").as_double();
-    // small-gicp配置
-    smgicp_max_dist_sq_ = this->get_parameter("smgicp_max_dist_sq").as_double();
-    smgicp_max_iterations_ =
-        this->get_parameter("smgicp_max_iterations").as_int();
-    smgicp_num_threads_ = this->get_parameter("smgicp_num_threads").as_int();
-    smgicp_global_leaf_size_ =
-        this->get_parameter("smgicp_global_leaf_size").as_double();
-    smgicp_local_leaf_size_ =
-        this->get_parameter("smgicp_local_leaf_size").as_double();
-    nebhor_num = this->get_parameter("num_neighbors").as_int();
+    pcd_path_ = this->get_parameter("pcd_path").as_string();
+    map_z_min_ = this->get_parameter("map_z_min").as_double();
+    map_z_max_ = this->get_parameter("map_z_max").as_double();
+    scan_z_min_ = this->get_parameter("scan_z_min").as_double();
+    scan_z_max_ = this->get_parameter("scan_z_max").as_double();
+    resolution_ = this->get_parameter("resolution").as_double();
+    use_precomputed_contour_map_ =
+        this->get_parameter("use_precomputed_contour_map").as_bool();
+    contour_map_pgm_path_ =
+        this->get_parameter("contour_map_pgm_path").as_string();
+    contour_map_origin_x_ =
+        this->get_parameter("contour_map_origin_x").as_double();
+    contour_map_origin_y_ =
+        this->get_parameter("contour_map_origin_y").as_double();
+    match_tolerance_cells_ =
+        this->get_parameter("match_tolerance_cells").as_int();
+    search_x_bounds_ = this->get_parameter("search_x_bounds").as_double();
+    search_y_bounds_ = this->get_parameter("search_y_bounds").as_double();
+    search_yaw_bounds_deg_ =
+        this->get_parameter("search_yaw_bounds_deg").as_double();
+    trans_step_ = this->get_parameter("trans_step").as_double();
+    yaw_step_deg_ = this->get_parameter("yaw_step_deg").as_double();
+    max_scan_count_ = this->get_parameter("max_scan_count").as_int();
 
     if (!init_pose_.empty() && init_pose_.size() >= 6) {
         result_t_.translation() << init_pose_[0], init_pose_[1], init_pose_[2];
@@ -91,290 +80,372 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
             Eigen::AngleAxisd(init_pose_[3], Eigen::Vector3d::UnitX())
                 .toRotationMatrix();
     }
-    this->pose_estimation_ = result_t_.matrix();  // pose_est yuce ,res,pub
-    std::cout << "pose_estimation:\n" << pose_estimation_ << std::endl;
-    std::cout << "pcd_path:" << pcd_path_ << std::endl;
+    pose_estimation_ = result_t_.matrix();
+
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     tf_broadcaster_ =
         std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
-    InitGlobalMap(pcd_path_);  //加载地图
-    //先验地图处理
-    target_ = small_gicp::voxelgrid_sampling_omp<
-        pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
-        *global_map_, smgicp_global_leaf_size_);
-    // Estimate covariances of points
 
-    small_gicp::estimate_covariances_omp(*target_, nebhor_num,
-                                         smgicp_num_threads_);
-    // Create KdTree for target
-    target_tree_ = std::make_shared<
-        small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
-        target_, small_gicp::KdTreeBuilderOMP(smgicp_num_threads_));
-    //匹配器初始化
-    register_ = std::make_shared<small_gicp::Registration<
-        small_gicp::GICPFactor, small_gicp::ParallelReductionOMP,
-        small_gicp::RestrictDoFFactor>>();
-    register_->general_factor.set_rotation_mask(
-        Eigen::Vector3d(0, 0, 1));  // 只优化yaw
-    register_->reduction.num_threads = smgicp_num_threads_;
-    register_->rejector.max_dist_sq = smgicp_max_dist_sq_;
-    register_->optimizer.max_iterations = smgicp_max_iterations_;
+    // Publishers
+    pub_map_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+        "pcd_init_map_cloud", 1);
+    pub_scan_2d_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+        "cloud_2d_matched", 1);
+
+    if (InitGlobalMap(pcd_path_)) {
+        if (use_precomputed_contour_map_ && loadContourMapFromPgm()) {
+            RCLCPP_INFO(this->get_logger(),
+                        "Loaded precomputed contour PGM for matching.");
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Failed to load contour PGM");
+        }
+    }
 
     sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "/cloud_registered", 1,
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
                   std::placeholders::_1));
-    std::cout << "running relocazation" << std::endl;
+
     timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(1000),
+        std::chrono::milliseconds(100),
         std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
-
-    if (pcdPub) {
-        pub_pcd_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-            "pcd_init", 1);
-        auto msg = sensor_msgs::msg::PointCloud2();
-        //降采一下发布
-        pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(
-            new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
-        voxel_grid.setInputCloud(global_map_);
-        voxel_grid.setLeafSize(0.15f, 0.15f, 0.15f);
-        voxel_grid.filter(*filtered_cloud);
-        pcl::toROSMsg(*filtered_cloud, msg);
-        msg.header.frame_id = "odom";
-        msg.header.stamp = this->now();
-        pub_pcd_->publish(msg);
-    }
-}
-void RelocalizationNode::publishTransform() {
-    if (result_t_.matrix().isZero()) {
-        return;
-    }
-    geometry_msgs::msg::TransformStamped transform_stamped;
-    transform_stamped.header.stamp =
-        this->now() + rclcpp::Duration::from_seconds(0.1);
-    transform_stamped.header.frame_id = "map";
-    transform_stamped.child_frame_id = "odom";
-
-    const Eigen::Vector3d translation = result_t_.translation();
-    const Eigen::Quaterniond rotation(result_t_.rotation());
-
-    transform_stamped.transform.translation.x = translation.x();
-    transform_stamped.transform.translation.y = translation.y();
-    transform_stamped.transform.translation.z = translation.z();
-    transform_stamped.transform.rotation.x = rotation.x();
-    transform_stamped.transform.rotation.y = rotation.y();
-    transform_stamped.transform.rotation.z = rotation.z();
-    transform_stamped.transform.rotation.w = rotation.w();
-
-    tf_broadcaster_->sendTransform(transform_stamped);
-}
-void RelocalizationNode::SaveCurScanCallback(
-    const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-    //累计10帧
-    if (this->scan_count >= max_scan_count_) return;
-    std::lock_guard<std::mutex> lock(mtx);
-    pcl::fromROSMsg(*msg, *cur_scan_);
-    //滤波
-    PassThroughFilter(cur_scan_, cur_scan_, fparams.min_z, fparams.max_z,
-                      fparams.min_y, fparams.max_y, fparams.min_x,
-                      fparams.max_x);
-    *accumulated_cloud += *cur_scan_;
-    this->scan_count++;
-    //至少积累10帧才进行匹配
-    if (this->scan_count == max_scan_count_) {
-        // pcl::io::savePCDFile("/home/dji/hero2026_-sentry/src/localization/relocalization/test.pcd",
-        // *accumulated_cloud);
-        has_scan_ = true;
-    }
-}
-
-void RelocalizationNode::PassThroughFilter(
-    pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_in,
-    pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_out, double min_z, double max_z,
-    double min_y, double max_y, double min_x, double max_x) {
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud(cloud_in);
-
-    pass.setFilterFieldName("z");
-    pass.setFilterLimits(min_z, max_z);
-    pass.filter(*cloud_out);
-
-    pass.setInputCloud(cloud_out);
-    pass.setFilterFieldName("y");
-    pass.setFilterLimits(min_y, max_y);
-    pass.filter(*cloud_out);
-
-    pass.setInputCloud(cloud_out);
-    pass.setFilterFieldName("x");
-    pass.setFilterLimits(min_x, max_x);
-    pass.filter(*cloud_out);
-}
-
-void RelocalizationNode::GlobalLocalizationTimerCallback() {
-    if (registration_success_) return;
-    if (!has_scan_) {
-        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                             "no scan msg");
-        return;
-    }
-    rclcpp::Time begin_icp_time = this->now();
-    TDThandle();
-    // 小范围多 yaw 初始值搜索
-    const double yaw_gate = gate_yaw_deg_ * M_PI / 180.0;
-    const double yaw_step = std::max(0.5, yaw_search_step_deg_) * M_PI / 180.0;
-    std::vector<double> yaw_seeds;
-    yaw_seeds.push_back(0.0);
-    for (double a = yaw_step; a <= yaw_gate + 1e-6; a += yaw_step) {
-        yaw_seeds.push_back(+a);
-        yaw_seeds.push_back(-a);
-    }
-    static bool first = true;
-    double best_fitness = 0.05;
-    Eigen::Matrix4d best_T = pose_estimation_;
-    for (double dyaw : yaw_seeds) {
-        Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
-        double f = 1e9;
-        Eigen::Isometry3d res = SmallIcpRegistration(TDTresult, seed, f);
-        if (f < best_fitness) {
-            best_fitness = f;
-            best_T = res.matrix();
-            if (first) break;
-        }
-    }
-    // first = false;
-    //此时得到了最好的变幻关系
-    rclcpp::Time end_icp_time = this->now();
-    RCLCPP_INFO(this->get_logger(), "Registration time: %f, best fitness: %f",
-                (end_icp_time - begin_icp_time).seconds(), best_fitness);
-    reloc_res relocResult;
-
-    relocResult.fitness = best_fitness;
-    relocResult.dtrans = TransDelta(best_T, result_t_.matrix());
-    relocResult.dpitch = PitchDelta(best_T, result_t_.matrix());
-    relocResult.droll = RollDelta(best_T, result_t_.matrix());
-    relocResult.dyaw = YawDelta(best_T, result_t_.matrix());
-    const bool fitness_ok = best_fitness < fitness_threshold_;
-    const bool trans_ok = relocResult.dtrans <= gate_trans_m_;
-    const bool yaw_ok = relocResult.dyaw <= yaw_gate;
-    const double roll_gate = gate_roll_deg_ * M_PI / 180.0;
-    const double pitch_gate = gate_pitch_deg_ * M_PI / 180.0;
-    const bool roll_ok = relocResult.droll <= roll_gate;
-    const bool pitch_ok = relocResult.dpitch <= pitch_gate;
-    bool judge_ok = fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok;
-
-    if (judge_ok) {
-        Eigen::Matrix4d T_pub = best_T;
-        if (enforce_rp_zero_) {
-            ZeroRollPitchKeepYaw(best_T);
-        }
-        relocResult.isOk = true;
-        result_t_.matrix() = T_pub;
-        if (!qt_control.load()) {
-            publishTransform();
-            registration_success_ = true;  // 设置配准成功标志
-        }
-    } else {
-        registration_fail_count_++;
-
-        if (registration_fail_count_ >= max_fail_before_fallback_) {
-            RCLCPP_WARN(this->get_logger(),
-                        "Registration failed over %d times, publishing "
-                        "fallback (%s)!",
-                        max_fail_before_fallback_, fallback_policy_.c_str());
-            publishTransform();
-            registration_success_ = true;
-            registration_fail_count_ = 0;  // 重置计数
-        } else {                           //重新来过
-            has_scan_ = false;
-            this->scan_count = 0;
-        }
-        relocResult.isOk = false;
-    }
-    emit alignResultSignal(relocResult);  //发送配准结果
-
-    this->accumulated_cloud->clear();
-    this->TDTresult->clear();
-}
-// converged return res,false return pre
-Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan, Eigen::Matrix4d pre,
-    double& fitness) {
-    // 扫描点云处理
-    this->source_ = small_gicp::voxelgrid_sampling_omp<
-        pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
-        *pc_scan, this->smgicp_local_leaf_size_);
-    small_gicp::estimate_covariances_omp(*source_, nebhor_num,
-                                         this->smgicp_num_threads_);
-    this->source_tree_ = std::make_shared<
-        small_gicp::KdTree<pcl::PointCloud<pcl::PointCovariance>>>(
-        this->source_, small_gicp::KdTreeBuilderOMP(this->smgicp_num_threads_));
-    //初始位姿估计
-
-    Eigen::Isometry3d init_T_target_source;
-    init_T_target_source.matrix() = pre;  //复制预测转换
-    if (!source_ || !source_tree_) {
-        return init_T_target_source;
-    }
-    //匹配
-    auto result = register_->align(*target_, *source_, *target_tree_,
-                                   init_T_target_source);
-    size_t num_inliers = result.num_inliers;  // Number of inlier source points
-    fitness = result.error / num_inliers;     // Fitness score
-    if (result.converged) {
-        Eigen::Isometry3d T = result.T_target_source;
-        std::cout << "Gicp registration converged" << std::endl;
-        std::cout << "Transformation matrix:\n"
-                  << T.matrix() << std::endl;  // Estimated transformation
-        std::cout << "fitness" << fitness << std::endl;
-        std::cout << "Number of inlier source points:" << num_inliers
-                  << std::endl;
-        return T;
-    } else {
-        std::cout << "Gicp registration not converged" << std::endl;
-        return init_T_target_source;
-    }
 }
 
 bool RelocalizationNode::InitGlobalMap(std::string map_path) {
-    // 耗时
     if (pcl::io::loadPCDFile<pcl::PointXYZ>(map_path, *global_map_) == -1) {
-        PCL_ERROR("Couldn't read file scans.pcd \n");
+        RCLCPP_ERROR(this->get_logger(), "Couldn't read file %s",
+                     map_path.c_str());
         return false;
     }
     return true;
 }
-void RelocalizationNode::TDThandle() {
-    for (const auto& point : *this->accumulated_cloud) {
-        double azimuth = std::atan2(point.y, point.x);
-        double elevation = std::atan2(
-            point.z, std::sqrt(point.x * point.x + point.y * point.y));
 
-        int azimuthIndex =
-            static_cast<int>(floor(azimuth * 180.0 / M_PI / gridSizeDegrees));
-        int elevationIndex =
-            static_cast<int>(floor(elevation * 180.0 / M_PI / gridSizeDegrees));
+bool RelocalizationNode::loadContourMapFromPgm() {
+    if (contour_map_pgm_path_.empty()) {
+        RCLCPP_WARN(
+            this->get_logger(),
+            "contour_map_pgm_path is empty, fallback to online contour build.");
+        return false;
+    }
 
-        double distance = std::sqrt(point.x * point.x + point.y * point.y +
-                                    point.z * point.z);
+    std::ifstream in(contour_map_pgm_path_, std::ios::binary);
+    if (!in.is_open()) {
+        RCLCPP_ERROR(this->get_logger(), "Cannot open contour map PGM: %s",
+                     contour_map_pgm_path_.c_str());
+        return false;
+    }
 
-        auto& grid = gridMap[std::make_pair(azimuthIndex, elevationIndex)];
-        if (distance > grid.maxDistance) {
-            grid.farthestPoint = point;
-            grid.maxDistance = distance;
+    std::string magic;
+    in >> magic;
+    if (magic != "P5") {
+        RCLCPP_ERROR(this->get_logger(),
+                     "Unsupported PGM format %s, require P5.", magic.c_str());
+        return false;
+    }
+
+    // 鲁棒地读取接下来的数字（跳过所有的空白符和 `#` 注释行）
+    auto read_next_int = [&in]() -> int {
+        int val;
+        while (true) {
+            // 跳过空白符
+            while (std::isspace(in.peek())) {
+                in.get();
+            }
+            // 如果遇到 '#'，则忽略这一整行
+            if (in.peek() == '#') {
+                while (in.peek() != '\n' && in.peek() != EOF) {
+                    in.get();
+                }
+            } else {
+                in >> val;
+                return val;
+            }
+        }
+    };
+    map_width_ = read_next_int();
+    map_height_ = read_next_int();
+    int maxval = read_next_int();
+    in.get();  // consume single whitespace after header
+    if (map_width_ <= 0 || map_height_ <= 0 || maxval <= 0) {
+        RCLCPP_ERROR(this->get_logger(), "Invalid PGM header in %s.",
+                     contour_map_pgm_path_.c_str());
+        return false;
+    }
+
+    std::vector<uint8_t> raw(static_cast<size_t>(map_width_) * map_height_,
+                             255);
+    in.read(reinterpret_cast<char*>(raw.data()),
+            static_cast<std::streamsize>(raw.size()));
+    if (in.gcount() != static_cast<std::streamsize>(raw.size())) {
+        RCLCPP_ERROR(this->get_logger(), "PGM payload size mismatch in %s.",
+                     contour_map_pgm_path_.c_str());
+        return false;
+    }
+
+    map_x_min_ = contour_map_origin_x_;
+    map_y_min_ = contour_map_origin_y_;
+    map_x_max_ = map_x_min_ + map_width_ * resolution_;
+    map_y_max_ = map_y_min_ + map_height_ * resolution_;
+
+    grid_map_data_.assign(raw.size(), 0);
+    for (int y = 0; y < map_height_; ++y) {
+        const int src_y = map_height_ - 1 - y;
+        for (int x = 0; x < map_width_; ++x) {
+            const uint8_t pix = raw[src_y * map_width_ + x];
+            grid_map_data_[y * map_width_ + x] = (pix < 128) ? 1 : 0;
         }
     }
-    //然后把gripMap中的数据转换为点云
 
-    for (const auto& item : gridMap) {
-        if (item.second.maxDistance > 0.0) {
-            TDTresult->push_back(item.second.farthestPoint);
+    buildMatchGrid();
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr map_pc(
+        new pcl::PointCloud<pcl::PointXYZRGB>);
+    for (int y = 0; y < map_height_; ++y) {
+        for (int x = 0; x < map_width_; ++x) {
+            if (grid_map_data_[y * map_width_ + x] > 0) {
+                pcl::PointXYZRGB p;
+                p.x = map_x_min_ + x * resolution_;
+                p.y = map_y_min_ + y * resolution_;
+                p.z = 0.0;
+                p.r = 255;
+                p.g = 0;
+                p.b = 0;  // 红色代表地图轮廓
+                map_pc->points.push_back(p);
+            }
+        }
+    }
+    pcl::toROSMsg(*map_pc, map_cloud_msg_);
+    map_cloud_msg_.header.frame_id = "map";
+    map_cloud_msg_.header.stamp = this->now();
+    pub_map_cloud_->publish(map_cloud_msg_);
+
+    has_global_map_ = true;
+    RCLCPP_INFO(this->get_logger(),
+                "Contour PGM loaded: %dx%d, res %.3f, origin(%.3f, %.3f)",
+                map_width_, map_height_, resolution_, map_x_min_, map_y_min_);
+    return true;
+}
+
+void RelocalizationNode::buildMatchGrid() {
+    match_grid_data_ = grid_map_data_;
+    const int tol = std::max(0, match_tolerance_cells_);
+    if (tol == 0 || grid_map_data_.empty()) {
+        return;
+    }
+    match_grid_data_.assign(grid_map_data_.size(), 0);
+    for (int y = 0; y < map_height_; ++y) {
+        for (int x = 0; x < map_width_; ++x) {
+            if (grid_map_data_[y * map_width_ + x] == 0) continue;
+            for (int dy = -tol; dy <= tol; ++dy) {
+                const int ny = y + dy;
+                if (ny < 0 || ny >= map_height_) continue;
+                for (int dx = -tol; dx <= tol; ++dx) {
+                    const int nx = x + dx;
+                    if (nx < 0 || nx >= map_width_) continue;
+                    match_grid_data_[ny * map_width_ + nx] = 1;
+                }
+            }
         }
     }
 }
+
+void RelocalizationNode::SaveCurScanCallback(
+    const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+    if (registration_success_ || scan_count >= max_scan_count_) return;
+    std::lock_guard<std::mutex> lock(mtx);
+    pcl::fromROSMsg(*msg, *cur_scan_);
+    *accumulated_cloud_ += *cur_scan_;
+    scan_count++;
+    if (scan_count == max_scan_count_) {
+        has_scan_ = true;
+    }
+}
+
+void RelocalizationNode::GlobalLocalizationTimerCallback() {
+    if (registration_success_) return;
+    if (!has_global_map_) return;
+    if (!has_scan_) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                             "Accumulating lidar scan, wait...");
+        return;
+    }
+
+    rclcpp::Time begin_time = this->now();
+
+    // 根据 Sensor 高度截断扫描轮廓
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(
+        new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PassThrough<pcl::PointXYZ> pass;
+    pass.setInputCloud(accumulated_cloud_);
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(scan_z_min_, scan_z_max_);
+    pass.filter(*cloud_filtered);
+
+    scan_2d_points_.clear();
+    for (const auto& pt : cloud_filtered->points) {
+        scan_2d_points_.emplace_back(pt.x, pt.y);
+    }
+
+    if (scan_2d_points_.empty()) {
+        RCLCPP_WARN(this->get_logger(),
+                    "No scan points retained after Z-filter [%f, %f]!",
+                    scan_z_min_, scan_z_max_);
+        scan_count = 0;
+        has_scan_ = false;
+        accumulated_cloud_->clear();
+        return;
+    }
+
+    // 核心匹配算法
+    Eigen::Matrix4d best_T = CorrelativeMatch();
+    rclcpp::Time end_time = this->now();
+    RCLCPP_INFO(this->get_logger(),
+                "Correlative Matching Done! Time cost: %f ms",
+                (end_time - begin_time).seconds() * 1000.0);
+
+    // 回设配准参数并发布TF
+    result_t_.matrix() = best_T;
+    if (!qt_control.load()) {
+        publishTransform();
+        registration_success_ = true;
+
+        // --- 可视化: 将最后匹配出来的扫描点标为蓝色 ---
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_scan(
+            new pcl::PointCloud<pcl::PointXYZRGB>);
+        for (const auto& pt2 : scan_2d_points_) {
+            // 注意: 这里为了核对是否贴合，我们将点本身变换到匹配好的 map
+            // 坐标系下发布
+            Eigen::Matrix4d T = best_T;
+            double final_x = T(0, 0) * pt2.x() + T(0, 1) * pt2.y() + T(0, 3);
+            double final_y = T(1, 0) * pt2.x() + T(1, 1) * pt2.y() + T(1, 3);
+
+            pcl::PointXYZRGB p;
+            p.x = final_x;
+            p.y = final_y;
+            p.z = 0.0;
+            p.r = 0;
+            p.g = 150;
+            p.b = 255;  // 扫描线浅蓝色
+            colored_scan->points.push_back(p);
+        }
+        sensor_msgs::msg::PointCloud2 out_msg;
+        pcl::toROSMsg(*colored_scan, out_msg);
+        out_msg.header.frame_id = "map";
+        out_msg.header.stamp = this->now();
+        pub_scan_2d_->publish(out_msg);
+
+        // 刷新发布一次红色地图框以便于与蓝色点云对比
+        map_cloud_msg_.header.stamp = this->now();
+        pub_map_cloud_->publish(map_cloud_msg_);
+    }
+
+    reloc_res relocResult;
+    relocResult.isOk = true;
+    emit alignResultSignal(relocResult);
+
+    accumulated_cloud_->clear();
+}
+
+Eigen::Matrix4d RelocalizationNode::CorrelativeMatch() {
+    double init_x = pose_estimation_(0, 3);
+    double init_y = pose_estimation_(1, 3);
+    double init_yaw = YawFromMat(pose_estimation_);
+
+    int best_score = -1;
+    double best_x = init_x, best_y = init_y, best_yaw = init_yaw;
+
+    double yaw_rad_limit = search_yaw_bounds_deg_ * M_PI / 180.0;
+    double yaw_step_rad = yaw_step_deg_ * M_PI / 180.0;
+
+    // 滑动窗口搜索
+    for (double dyaw = -yaw_rad_limit; dyaw <= yaw_rad_limit + 1e-6;
+         dyaw += yaw_step_rad) {
+        double c_yaw = std::cos(init_yaw + dyaw);
+        double s_yaw = std::sin(init_yaw + dyaw);
+
+        // 每转一个大角度，生成一批被旋转的点，省去后续循环重复计算
+        std::vector<Eigen::Vector2d> rot_pts;
+        rot_pts.reserve(scan_2d_points_.size());
+        for (const auto& pt : scan_2d_points_) {
+            rot_pts.emplace_back(c_yaw * pt.x() - s_yaw * pt.y(),
+                                 s_yaw * pt.x() + c_yaw * pt.y());
+        }
+
+        for (double dx = -search_x_bounds_; dx <= search_x_bounds_ + 1e-6;
+             dx += trans_step_) {
+            for (double dy = -search_y_bounds_; dy <= search_y_bounds_ + 1e-6;
+                 dy += trans_step_) {
+                double tx = init_x + dx;
+                double ty = init_y + dy;
+                int score = 0;
+
+                // 计算重合度得分
+                for (const auto& rpt : rot_pts) {
+                    double final_x = rpt.x() + tx;
+                    double final_y = rpt.y() + ty;
+
+                    int cx = std::floor((final_x - map_x_min_) / resolution_);
+                    int cy = std::floor((final_y - map_y_min_) / resolution_);
+
+                    // 如果坐标合法，且正中地图轮廓黑线
+                    if (cx >= 0 && cx < map_width_ && cy >= 0 &&
+                        cy < map_height_) {
+                        if (match_grid_data_[cy * map_width_ + cx] > 0) {
+                            score++;
+                        }
+                    }
+                }
+
+                if (score > best_score) {
+                    best_score = score;
+                    best_x = tx;
+                    best_y = ty;
+                    best_yaw = init_yaw + dyaw;
+                }
+            }
+        }
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Best Hit Score: %d / %zu", best_score,
+                scan_2d_points_.size());
+
+    Eigen::Matrix4d best_T = pose_estimation_;
+    // 覆盖新的 x, y, yaw，Roll与Pitch维持初始估算（保证三维不倾斜）
+    best_T(0, 3) = best_x;
+    best_T(1, 3) = best_y;
+    Eigen::Matrix3d r_mat;
+    r_mat = Eigen::AngleAxisd(best_yaw, Eigen::Vector3d::UnitZ()) *
+            Eigen::AngleAxisd(PitchFromMat(pose_estimation_),
+                              Eigen::Vector3d::UnitY()) *
+            Eigen::AngleAxisd(RollFromMat(pose_estimation_),
+                              Eigen::Vector3d::UnitX());
+    best_T.block<3, 3>(0, 0) = r_mat;
+
+    return best_T;
+}
+
+void RelocalizationNode::publishTransform() {
+    if (result_t_.matrix().isZero()) return;
+    geometry_msgs::msg::TransformStamped t_stamped;
+    t_stamped.header.stamp = this->now() + rclcpp::Duration::from_seconds(0.1);
+    t_stamped.header.frame_id = "map";
+    t_stamped.child_frame_id = "odom";
+
+    t_stamped.transform.translation.x = result_t_.translation().x();
+    t_stamped.transform.translation.y = result_t_.translation().y();
+    t_stamped.transform.translation.z = result_t_.translation().z();
+
+    Eigen::Quaterniond q(result_t_.rotation());
+    t_stamped.transform.rotation.x = q.x();
+    t_stamped.transform.rotation.y = q.y();
+    t_stamped.transform.rotation.z = q.z();
+    t_stamped.transform.rotation.w = q.w();
+
+    tf_broadcaster_->sendTransform(t_stamped);
+}
+
 void RelocalizationNode::onSetAlignSignal(align_res alignResult) {
-    // 处理设置结果
     qt_control.store(true);
     result_t_.translation() << alignResult.x, alignResult.y, alignResult.z;
     result_t_.linear() =
@@ -387,14 +458,14 @@ void RelocalizationNode::onSetAlignSignal(align_res alignResult) {
     std::cout << "Manual align set to:\n" << result_t_.matrix() << std::endl;
     emit setResultSignal(true);
 }
+
 void RelocalizationNode::OnRetrySet(bool isOk) {
     std::cout << "Retry relocalization requested." << std::endl;
     if (isOk) {
         qt_control.store(false);
-        //成功匹配取消标志位,没成功在定位循环中已经处理了,不需要重复执行
         if (!registration_success_) return;
         registration_success_ = false;
-        this->scan_count = 0;
-        this->has_scan_ = false;
+        scan_count = 0;
+        has_scan_ = false;
     }
 }
