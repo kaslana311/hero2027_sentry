@@ -1,16 +1,16 @@
 #include "pcd2pgm/pcd2pgm.hpp"
 
-#include <algorithm>
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/search/kdtree.h>
 
+#include <algorithm>
 #include <fstream>
 #include <rclcpp/qos.hpp>
 
 namespace pcd2pgm {
-PCLFiltersNode::PCLFiltersNode(const rclcpp::NodeOptions& options)
+PCLFiltersNode::PCLFiltersNode(const rclcpp::NodeOptions &options)
     : Node("pcd2pgm", options) {
     declareParameters();
     getParameters();
@@ -42,7 +42,7 @@ PCLFiltersNode::PCLFiltersNode(const rclcpp::NodeOptions& options)
         int contour_height = 0;
         double contour_x_min = 0.0;
         double contour_y_min = 0.0;
-        if (buildContourGrid(pcd_cloud, contour_grid, contour_width,
+        if (buildContourGrid(cloud_after_Radius_, contour_grid, contour_width,
                              contour_height, contour_x_min, contour_y_min)) {
             saveContourMapFiles(contour_grid, contour_width, contour_height,
                                 contour_x_min, contour_y_min);
@@ -98,9 +98,9 @@ void PCLFiltersNode::getParameters() {
     pcd_file_ = file_directory_ + file_name_ + ".pcd";
 }
 
-void PCLFiltersNode::passThroughFilter(const double& thre_low,
-                                       const double& thre_high,
-                                       const bool& flag_in) {
+void PCLFiltersNode::passThroughFilter(const double &thre_low,
+                                       const double &thre_high,
+                                       const bool &flag_in) {
     // 将 std::shared_ptr 转换为 boost::shared_ptr，并将其转换为常量指针
     // boost::shared_ptr <const pcl::PointCloud<pcl::PointXYZ>> ptr(new
     // pcl::PointCloud<pcl::PointXYZ>(*pcd_cloud)); 将 boost::shared_ptr 转换为
@@ -125,8 +125,8 @@ void PCLFiltersNode::passThroughFilter(const double& thre_low,
 }
 
 void PCLFiltersNode::radiusOutlierFilter(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& pcd_cloud0, const double& radius,
-    const int& thre_count) {
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr &pcd_cloud0, const double &radius,
+    const int &thre_count) {
     // 将 std::shared_ptr 转换为 boost::shared_ptr，并将其转换为常量指针
     // boost::shared_ptr <const pcl::PointCloud<pcl::PointXYZ>> ptr0(new
     // pcl::PointCloud<pcl::PointXYZ>(*pcd_cloud0)); 将 boost::shared_ptr 转换为
@@ -151,7 +151,7 @@ void PCLFiltersNode::radiusOutlierFilter(
 
 void PCLFiltersNode::setMapTopicMsg(
     const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
-    nav_msgs::msg::OccupancyGrid& msg) {
+    nav_msgs::msg::OccupancyGrid &msg) {
     msg.header.stamp = now();
     msg.header.frame_id = "map";
 
@@ -168,7 +168,7 @@ void PCLFiltersNode::setMapTopicMsg(
         return;
     }
 
-    for (const auto& point : cloud->points) {
+    for (const auto &point : cloud->points) {
         x_min = std::min(x_min, (double)point.x);
         x_max = std::max(x_max, (double)point.x);
         y_min = std::min(y_min, (double)point.y);
@@ -187,7 +187,7 @@ void PCLFiltersNode::setMapTopicMsg(
     msg.info.height = std::ceil((y_max - y_min) / map_resolution_);
     msg.data.assign(msg.info.width * msg.info.height, 0);
 
-    for (const auto& point : cloud->points) {
+    for (const auto &point : cloud->points) {
         int i = std::floor((point.x - x_min) / map_resolution_);
         int j = std::floor((point.y - y_min) / map_resolution_);
 
@@ -200,20 +200,31 @@ void PCLFiltersNode::setMapTopicMsg(
 }
 
 bool PCLFiltersNode::buildContourGrid(
-    const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& cloud,
-    std::vector<uint8_t>& contour_grid, int& width, int& height, double& x_min,
-    double& y_min) const {
+    const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud,
+    std::vector<uint8_t> &contour_grid, int &width, int &height, double &x_min,
+    double &y_min) const {
     pcl::PointCloud<pcl::PointXYZ>::Ptr z_filtered(
         new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PassThrough<pcl::PointXYZ> pass;
+
+    double x_max = std::numeric_limits<double>::lowest();
+    double y_max = std::numeric_limits<double>::lowest();
+    x_min = std::numeric_limits<double>::max();
+    y_min = std::numeric_limits<double>::max();
+    for (const auto &pt : cloud->points) {
+        x_min = std::min(x_min, static_cast<double>(pt.x));
+        x_max = std::max(x_max, static_cast<double>(pt.x));
+        y_min = std::min(y_min, static_cast<double>(pt.y));
+        y_max = std::max(y_max, static_cast<double>(pt.y));
+    }
+
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("z");
     pass.setFilterLimits(contour_z_min_, contour_z_max_);
     pass.filter(*z_filtered);
 
     if (z_filtered->empty()) {
-        RCLCPP_WARN(get_logger(),
-                    "Contour map: empty after z filter [%f, %f].",
+        RCLCPP_WARN(get_logger(), "Contour map: empty after z filter [%f, %f].",
                     contour_z_min_, contour_z_max_);
         return false;
     }
@@ -232,38 +243,25 @@ bool PCLFiltersNode::buildContourGrid(
         new pcl::PointCloud<pcl::PointXYZ>);
     contour_pts->reserve(z_filtered->size());
     for (size_t i = 0; i < z_filtered->size(); ++i) {
-        if (std::abs(normals->points[i].normal_z) <= contour_normal_z_abs_max_) {
+        if (std::abs(normals->points[i].normal_z) <=
+            contour_normal_z_abs_max_) {
             contour_pts->push_back(z_filtered->points[i]);
         }
     }
 
     if (contour_pts->empty()) {
-        RCLCPP_WARN(get_logger(), "Contour map: no points after normal filter.");
+        RCLCPP_WARN(get_logger(),
+                    "Contour map: no points after normal filter.");
         return false;
     }
 
-    double x_max = std::numeric_limits<double>::lowest();
-    double y_max = std::numeric_limits<double>::lowest();
-    x_min = std::numeric_limits<double>::max();
-    y_min = std::numeric_limits<double>::max();
-    for (const auto& pt : contour_pts->points) {
-        x_min = std::min(x_min, static_cast<double>(pt.x));
-        x_max = std::max(x_max, static_cast<double>(pt.x));
-        y_min = std::min(y_min, static_cast<double>(pt.y));
-        y_max = std::max(y_max, static_cast<double>(pt.y));
-    }
-
-    x_min -= contour_padding_;
-    y_min -= contour_padding_;
-    x_max += contour_padding_;
-    y_max += contour_padding_;
-
-    width = std::max(1, static_cast<int>(std::ceil((x_max - x_min) / contour_resolution_)));
-    height =
-        std::max(1, static_cast<int>(std::ceil((y_max - y_min) / contour_resolution_)));
+    width = std::max(
+        1, static_cast<int>(std::ceil((x_max - x_min) / contour_resolution_)));
+    height = std::max(
+        1, static_cast<int>(std::ceil((y_max - y_min) / contour_resolution_)));
     contour_grid.assign(width * height, 0);
 
-    for (const auto& pt : contour_pts->points) {
+    for (const auto &pt : contour_pts->points) {
         const int cx =
             static_cast<int>(std::floor((pt.x - x_min) / contour_resolution_));
         const int cy =
@@ -279,14 +277,16 @@ bool PCLFiltersNode::buildContourGrid(
     return true;
 }
 
-bool PCLFiltersNode::saveContourMapFiles(const std::vector<uint8_t>& contour_grid,
-                                         int width, int height, double x_min,
-                                         double y_min) const {
+bool PCLFiltersNode::saveContourMapFiles(
+    const std::vector<uint8_t> &contour_grid, int width, int height,
+    double x_min, double y_min) const {
     if (contour_grid.empty() || width <= 0 || height <= 0) {
         return false;
     }
 
-    const std::string base = "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/" + contour_file_name_;
+    const std::string base =
+        "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/" +
+        contour_file_name_;
     const std::string pgm_path = base + ".pgm";
     const std::string yaml_path = base + ".yaml";
 
@@ -300,7 +300,7 @@ bool PCLFiltersNode::saveContourMapFiles(const std::vector<uint8_t>& contour_gri
     for (int y = height - 1; y >= 0; --y) {
         for (int x = 0; x < width; ++x) {
             const uint8_t occupied = contour_grid[y * width + x] > 0 ? 0 : 255;
-            pgm.write(reinterpret_cast<const char*>(&occupied), 1);
+            pgm.write(reinterpret_cast<const char *>(&occupied), 1);
         }
     }
     pgm.close();
