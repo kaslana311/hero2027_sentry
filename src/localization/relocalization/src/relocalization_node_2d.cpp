@@ -1,10 +1,10 @@
-#include "relocalization_node.hpp"
-
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/io/pcd_io.h>
 
 #include <fstream>
 #include <limits>
+
+#include "relocalization_node.hpp"
 
 RelocalizationNode::RelocalizationNode(QObject* parent)
     : QObject(parent),
@@ -30,7 +30,10 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
 
     this->declare_parameter("resolution", 0.01);  // 1cm 精度
     this->declare_parameter("use_precomputed_contour_map", true);
-    this->declare_parameter("contour_map_pgm_path", "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/fast_lio_latest_map_contour.pgm");
+    this->declare_parameter(
+        "contour_map_pgm_path",
+        "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/"
+        "fast_lio_latest_map_contour.pgm");
     this->declare_parameter("contour_map_origin_x", -1.90817);
     this->declare_parameter("contour_map_origin_y", -3.93145);
     this->declare_parameter("match_tolerance_cells", 1);
@@ -141,8 +144,28 @@ bool RelocalizationNode::loadContourMapFromPgm() {
         return false;
     }
 
-    int maxval = 0;
-    in >> map_width_ >> map_height_ >> maxval;
+    // 鲁棒地读取接下来的数字（跳过所有的空白符和 `#` 注释行）
+    auto read_next_int = [&in]() -> int {
+        int val;
+        while (true) {
+            // 跳过空白符
+            while (std::isspace(in.peek())) {
+                in.get();
+            }
+            // 如果遇到 '#'，则忽略这一整行
+            if (in.peek() == '#') {
+                while (in.peek() != '\n' && in.peek() != EOF) {
+                    in.get();
+                }
+            } else {
+                in >> val;
+                return val;
+            }
+        }
+    };
+    map_width_ = read_next_int();
+    map_height_ = read_next_int();
+    int maxval = read_next_int();
     in.get();  // consume single whitespace after header
     if (map_width_ <= 0 || map_height_ <= 0 || maxval <= 0) {
         RCLCPP_ERROR(this->get_logger(), "Invalid PGM header in %s.",
