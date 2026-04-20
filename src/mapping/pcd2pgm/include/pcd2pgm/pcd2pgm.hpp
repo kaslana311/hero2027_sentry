@@ -1,4 +1,5 @@
 #include <pcl/filters/passthrough.h>
+#include <pcl/point_types.h>
 
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -11,10 +12,18 @@ class PCLFiltersNode : public rclcpp::Node {
     float thre_radius_;
     bool flag_pass_through_;
     float map_resolution_;
+    float contour_resolution_;
+    float contour_z_min_;
+    float contour_z_max_;
+    float contour_normal_radius_;
+    float contour_normal_z_abs_max_;
+    float contour_padding_;
+    bool generate_contour_map_;
     int thres_point_count_;
     std::string pcd_file_;
     std::string map_topic_name_;
     std::string file_directory_, file_name_;
+    std::string contour_file_name_;
 
     std::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> pcd_cloud;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_PassThrough_;
@@ -39,6 +48,11 @@ class PCLFiltersNode : public rclcpp::Node {
 
     void setMapTopicMsg(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
                         nav_msgs::msg::OccupancyGrid& msg);
+    bool buildContourGrid(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& cloud,
+                          std::vector<uint8_t>& contour_grid, int& width,
+                          int& height, double& x_min, double& y_min) const;
+    bool saveContourMapFiles(const std::vector<uint8_t>& contour_grid, int width,
+                             int height, double x_min, double y_min) const;
 
     void publishMap();
 

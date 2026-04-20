@@ -2,11 +2,19 @@
   ros__parameters:
     file_directory: /home/dji/hero2026_-sentry/src/common/point_cloud_files/source_pcd/
     file_name: fast_lio_latest_map
+    contour_file_name: fast_lio_latest_map_contour
+    generate_contour_map: true
     flag_pass_through: false
     map_resolution: 0.05
+    contour_resolution: 0.01
     map_topic_name: map
     thre_radius: 0.5
     thre_z_max: 0.1
     thre_z_min: -0.1
     thres_point_count: 10
+    contour_z_min: -0.05
+    contour_z_max: 0.2
+    contour_normal_radius: 0.15
+    contour_normal_z_abs_max: 0.5
+    contour_padding: 1.0
     use_sim_time: false

@@ -65,10 +65,18 @@ ros2 run nav2_map_server map_saver_cli -f YOUR_MAP_NAME
       file_name: RMUC  # PCD文件名（不包含后缀）
       flag_pass_through: false  # 是否使用Pass Through滤波器
       map_resolution: 0.05  # 地图分辨率
+      generate_contour_map: true  # 是否额外生成轮廓线定位图
+      contour_file_name: RMUC_contour  # 输出轮廓地图文件名前缀（.pgm/.yaml）
+      contour_resolution: 0.01  # 轮廓图分辨率（建议高于导航图）
       map_topic_name: map  # 发布地图的ROS话题名
       thre_radius: 0.5  # Radius Outlier滤波器半径
       thre_z_max: 2.0  # Z轴最大值（用于Pass Through滤波器）
       thre_z_min: 0.1  # Z轴最小值（用于Pass Through滤波器）
       thres_point_count: 10  # 最小点数阈值（用于Radius Outlier滤波器）
+      contour_z_min: 0.1  # 轮廓提取最低高度
+      contour_z_max: 0.5  # 轮廓提取最高高度
+      contour_normal_radius: 0.15  # 法线估计半径
+      contour_normal_z_abs_max: 0.5  # |normal_z|阈值（越小越偏向竖直面）
+      contour_padding: 1.0  # 轮廓图边界扩展
       use_sim_time: false  # 是否使用仿真时间
   ```
