@@ -17,6 +17,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <memory>
 #include <mutex>
@@ -38,36 +39,38 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
     bool registration_success_ = false;
 
    public slots:
-    void onSetAlignSignal(align_res alignResult);  
+    void onSetAlignSignal(align_res alignResult);
     void OnRetrySet(bool isOk);
 
    signals:
-    void alignResultSignal(reloc_res res);  
-    void setResultSignal(bool isok);        
+    void alignResultSignal(reloc_res res);
+    void setResultSignal(bool isok);
 
    private:
     std::atomic<bool> qt_control{false};
-    void GlobalLocalizationTimerCallback();  
+    void GlobalLocalizationTimerCallback();
 
-    void SaveCurScanCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);  
-    void publishTransform();                                  
+    void SaveCurScanCallback(
+        const sensor_msgs::msg::PointCloud2::SharedPtr msg);
+    void publishTransform();
     bool InitGlobalMap(std::string map_path);
-    
+
     // 2D BEV matching components
-    void createGridMap();
+    bool loadContourMapFromPgm();
+    void buildMatchGrid();
     Eigen::Matrix4d CorrelativeMatch();
 
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_scan_;
-    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr pub_map_grid_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_map_cloud_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_scan_2d_;
 
     std::mutex mtx;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cur_scan_ = nullptr;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_cloud_;  
+    pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_cloud_;
     std::string pcd_path_;
 
     rclcpp::TimerBase::SharedPtr timer_;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_ = nullptr;  
+    pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_ = nullptr;
     bool has_global_map_ = false;
     bool has_scan_ = false;
 
@@ -81,6 +84,11 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
     double scan_z_min_ = -0.2;
     double scan_z_max_ = 0.2;
     double resolution_ = 0.01;
+    bool use_precomputed_contour_map_ = true;
+    std::string contour_map_pgm_path_;
+    double contour_map_origin_x_ = 0.0;
+    double contour_map_origin_y_ = 0.0;
+    int match_tolerance_cells_ = 1;
     double search_x_bounds_ = 0.08;
     double search_y_bounds_ = 0.08;
     double search_yaw_bounds_deg_ = 10.0;
@@ -89,19 +97,20 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
 
     // Grid data
     std::vector<uint8_t> grid_map_data_;
+    std::vector<uint8_t> match_grid_data_;
     double map_x_min_ = 0.0;
     double map_x_max_ = 0.0;
     double map_y_min_ = 0.0;
     double map_y_max_ = 0.0;
     int map_width_ = 0;
     int map_height_ = 0;
-    nav_msgs::msg::OccupancyGrid map_grid_msg_;
+    sensor_msgs::msg::PointCloud2 map_cloud_msg_;
     std::vector<Eigen::Vector2d> scan_2d_points_;
 
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
     std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
     std::unique_ptr<tf2_ros::StaticTransformBroadcaster> tf_broadcaster_;
-    Eigen::Isometry3d result_t_; 
+    Eigen::Isometry3d result_t_;
     Eigen::Matrix4d pose_estimation_;
     std::vector<double> init_pose_;
 

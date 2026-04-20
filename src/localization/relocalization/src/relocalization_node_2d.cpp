@@ -1,6 +1,10 @@
 #include "relocalization_node_2d.hpp"
 
+#include <pcl/features/normal_3d_omp.h>
 #include <pcl/io/pcd_io.h>
+
+#include <fstream>
+#include <limits>
 
 RelocalizationNode::RelocalizationNode(QObject* parent)
     : QObject(parent),
@@ -19,12 +23,17 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
         "/home/fyk/Projects/ros2_ws/src/relocalization/PCD/voxel2025RMUC.pcd");
 
     // 2D BEV Match Config
-    this->declare_parameter("map_z_min", 0.1);
-    this->declare_parameter("map_z_max", 0.5);
-    this->declare_parameter("scan_z_min", -0.2);
+    this->declare_parameter("map_z_min", -0.05);
+    this->declare_parameter("map_z_max", 0.2);
+    this->declare_parameter("scan_z_min", -0.05);
     this->declare_parameter("scan_z_max", 0.2);
 
-    this->declare_parameter("resolution", 0.01);       // 1cm 精度
+    this->declare_parameter("resolution", 0.01);  // 1cm 精度
+    this->declare_parameter("use_precomputed_contour_map", true);
+    this->declare_parameter("contour_map_pgm_path", "");
+    this->declare_parameter("contour_map_origin_x", 0.0);
+    this->declare_parameter("contour_map_origin_y", 0.0);
+    this->declare_parameter("match_tolerance_cells", 1);
     this->declare_parameter("search_x_bounds", 0.08);  // X搜索 +-8cm
     this->declare_parameter("search_y_bounds", 0.08);  // Y搜索 +-8cm
     this->declare_parameter("search_yaw_bounds_deg",
@@ -42,6 +51,16 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     scan_z_min_ = this->get_parameter("scan_z_min").as_double();
     scan_z_max_ = this->get_parameter("scan_z_max").as_double();
     resolution_ = this->get_parameter("resolution").as_double();
+    use_precomputed_contour_map_ =
+        this->get_parameter("use_precomputed_contour_map").as_bool();
+    contour_map_pgm_path_ =
+        this->get_parameter("contour_map_pgm_path").as_string();
+    contour_map_origin_x_ =
+        this->get_parameter("contour_map_origin_x").as_double();
+    contour_map_origin_y_ =
+        this->get_parameter("contour_map_origin_y").as_double();
+    match_tolerance_cells_ =
+        this->get_parameter("match_tolerance_cells").as_int();
     search_x_bounds_ = this->get_parameter("search_x_bounds").as_double();
     search_y_bounds_ = this->get_parameter("search_y_bounds").as_double();
     search_yaw_bounds_deg_ =
@@ -66,13 +85,18 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
         std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
 
     // Publishers
-    pub_map_grid_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
-        "pcd_init_map_grid", 1);
+    pub_map_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+        "pcd_init_map_cloud", 1);
     pub_scan_2d_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
         "cloud_2d_matched", 1);
 
     if (InitGlobalMap(pcd_path_)) {
-        createGridMap();
+        if (use_precomputed_contour_map_ && loadContourMapFromPgm()) {
+            RCLCPP_INFO(this->get_logger(),
+                        "Loaded precomputed contour PGM for matching.");
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Failed to load contour PGM");
+        }
     }
 
     sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
@@ -94,74 +118,113 @@ bool RelocalizationNode::InitGlobalMap(std::string map_path) {
     return true;
 }
 
-void RelocalizationNode::createGridMap() {
-    if (global_map_->empty()) return;
-
-    // Z轴截取先验场地障碍物点云
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(
-        new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud(global_map_);
-    pass.setFilterFieldName("z");
-    pass.setFilterLimits(map_z_min_, map_z_max_);
-    pass.filter(*cloud_filtered);
-
-    if (cloud_filtered->empty()) {
-        RCLCPP_WARN(this->get_logger(),
-                    "Map PC is empty after PassThrough (z:[%f, %f])!",
-                    map_z_min_, map_z_max_);
-        return;
+bool RelocalizationNode::loadContourMapFromPgm() {
+    if (contour_map_pgm_path_.empty()) {
+        RCLCPP_WARN(
+            this->get_logger(),
+            "contour_map_pgm_path is empty, fallback to online contour build.");
+        return false;
     }
 
-    map_x_min_ = std::numeric_limits<double>::max();
-    map_x_max_ = std::numeric_limits<double>::lowest();
-    map_y_min_ = std::numeric_limits<double>::max();
-    map_y_max_ = std::numeric_limits<double>::lowest();
-
-    for (const auto& pt : cloud_filtered->points) {
-        map_x_min_ = std::min(map_x_min_, (double)pt.x);
-        map_x_max_ = std::max(map_x_max_, (double)pt.x);
-        map_y_min_ = std::min(map_y_min_, (double)pt.y);
-        map_y_max_ = std::max(map_y_max_, (double)pt.y);
+    std::ifstream in(contour_map_pgm_path_, std::ios::binary);
+    if (!in.is_open()) {
+        RCLCPP_ERROR(this->get_logger(), "Cannot open contour map PGM: %s",
+                     contour_map_pgm_path_.c_str());
+        return false;
     }
 
-    // 给栅格边缘增加Padding避免越界
-    map_x_min_ -= 1.0;
-    map_x_max_ += 1.0;
-    map_y_min_ -= 1.0;
-    map_y_max_ += 1.0;
+    std::string magic;
+    in >> magic;
+    if (magic != "P5") {
+        RCLCPP_ERROR(this->get_logger(),
+                     "Unsupported PGM format %s, require P5.", magic.c_str());
+        return false;
+    }
 
-    map_width_ = std::ceil((map_x_max_ - map_x_min_) / resolution_);
-    map_height_ = std::ceil((map_y_max_ - map_y_min_) / resolution_);
-    grid_map_data_.assign(map_width_ * map_height_, 0);
+    int maxval = 0;
+    in >> map_width_ >> map_height_ >> maxval;
+    in.get();  // consume single whitespace after header
+    if (map_width_ <= 0 || map_height_ <= 0 || maxval <= 0) {
+        RCLCPP_ERROR(this->get_logger(), "Invalid PGM header in %s.",
+                     contour_map_pgm_path_.c_str());
+        return false;
+    }
 
-    for (const auto& pt : cloud_filtered->points) {
-        int cx = std::floor((pt.x - map_x_min_) / resolution_);
-        int cy = std::floor((pt.y - map_y_min_) / resolution_);
-        if (cx >= 0 && cx < map_width_ && cy >= 0 && cy < map_height_) {
-            // 给像素上色(占据)
-            grid_map_data_[cy * map_width_ + cx] = 1;
+    std::vector<uint8_t> raw(static_cast<size_t>(map_width_) * map_height_,
+                             255);
+    in.read(reinterpret_cast<char*>(raw.data()),
+            static_cast<std::streamsize>(raw.size()));
+    if (in.gcount() != static_cast<std::streamsize>(raw.size())) {
+        RCLCPP_ERROR(this->get_logger(), "PGM payload size mismatch in %s.",
+                     contour_map_pgm_path_.c_str());
+        return false;
+    }
+
+    map_x_min_ = contour_map_origin_x_;
+    map_y_min_ = contour_map_origin_y_;
+    map_x_max_ = map_x_min_ + map_width_ * resolution_;
+    map_y_max_ = map_y_min_ + map_height_ * resolution_;
+
+    grid_map_data_.assign(raw.size(), 0);
+    for (int y = 0; y < map_height_; ++y) {
+        const int src_y = map_height_ - 1 - y;
+        for (int x = 0; x < map_width_; ++x) {
+            const uint8_t pix = raw[src_y * map_width_ + x];
+            grid_map_data_[y * map_width_ + x] = (pix < 128) ? 1 : 0;
         }
     }
 
-    map_grid_msg_.header.frame_id = "map";
-    map_grid_msg_.info.resolution = resolution_;
-    map_grid_msg_.info.width = map_width_;
-    map_grid_msg_.info.height = map_height_;
-    map_grid_msg_.info.origin.position.x = map_x_min_;
-    map_grid_msg_.info.origin.position.y = map_y_min_;
-    map_grid_msg_.info.origin.position.z = 0.0;
-    map_grid_msg_.info.origin.orientation.w = 1.0;
+    buildMatchGrid();
 
-    map_grid_msg_.data.assign(map_width_ * map_height_, 0);
-    for (size_t i = 0; i < grid_map_data_.size(); ++i) {
-        map_grid_msg_.data[i] = grid_map_data_[i] > 0 ? 100 : 0;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr map_pc(
+        new pcl::PointCloud<pcl::PointXYZRGB>);
+    for (int y = 0; y < map_height_; ++y) {
+        for (int x = 0; x < map_width_; ++x) {
+            if (grid_map_data_[y * map_width_ + x] > 0) {
+                pcl::PointXYZRGB p;
+                p.x = map_x_min_ + x * resolution_;
+                p.y = map_y_min_ + y * resolution_;
+                p.z = 0.0;
+                p.r = 255;
+                p.g = 0;
+                p.b = 0;  // 红色代表地图轮廓
+                map_pc->points.push_back(p);
+            }
+        }
     }
-    pub_map_grid_->publish(map_grid_msg_);
+    pcl::toROSMsg(*map_pc, map_cloud_msg_);
+    map_cloud_msg_.header.frame_id = "map";
+    map_cloud_msg_.header.stamp = this->now();
+    pub_map_cloud_->publish(map_cloud_msg_);
+
     has_global_map_ = true;
     RCLCPP_INFO(this->get_logger(),
-                "2D Map Generated: Width %d, Height %d, Resolution %f",
-                map_width_, map_height_, resolution_);
+                "Contour PGM loaded: %dx%d, res %.3f, origin(%.3f, %.3f)",
+                map_width_, map_height_, resolution_, map_x_min_, map_y_min_);
+    return true;
+}
+
+void RelocalizationNode::buildMatchGrid() {
+    match_grid_data_ = grid_map_data_;
+    const int tol = std::max(0, match_tolerance_cells_);
+    if (tol == 0 || grid_map_data_.empty()) {
+        return;
+    }
+    match_grid_data_.assign(grid_map_data_.size(), 0);
+    for (int y = 0; y < map_height_; ++y) {
+        for (int x = 0; x < map_width_; ++x) {
+            if (grid_map_data_[y * map_width_ + x] == 0) continue;
+            for (int dy = -tol; dy <= tol; ++dy) {
+                const int ny = y + dy;
+                if (ny < 0 || ny >= map_height_) continue;
+                for (int dx = -tol; dx <= tol; ++dx) {
+                    const int nx = x + dx;
+                    if (nx < 0 || nx >= map_width_) continue;
+                    match_grid_data_[ny * map_width_ + nx] = 1;
+                }
+            }
+        }
+    }
 }
 
 void RelocalizationNode::SaveCurScanCallback(
@@ -250,8 +313,8 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
         pub_scan_2d_->publish(out_msg);
 
         // 刷新发布一次红色地图框以便于与蓝色点云对比
-        map_grid_msg_.header.stamp = this->now();
-        pub_map_grid_->publish(map_grid_msg_);
+        map_cloud_msg_.header.stamp = this->now();
+        pub_map_cloud_->publish(map_cloud_msg_);
     }
 
     reloc_res relocResult;
@@ -305,7 +368,7 @@ Eigen::Matrix4d RelocalizationNode::CorrelativeMatch() {
                     // 如果坐标合法，且正中地图轮廓黑线
                     if (cx >= 0 && cx < map_width_ && cy >= 0 &&
                         cy < map_height_) {
-                        if (grid_map_data_[cy * map_width_ + cx] > 0) {
+                        if (match_grid_data_[cy * map_width_ + cx] > 0) {
                             score++;
                         }
                     }
@@ -369,9 +432,8 @@ void RelocalizationNode::onSetAlignSignal(align_res alignResult) {
             .toRotationMatrix();
     publishTransform();
     registration_success_ = true;
-    std::cout << "Manual align set to:
-                 " << result_t_.matrix() << std::endl;
-        emit setResultSignal(true);
+    std::cout << "Manual align set to:\n" << result_t_.matrix() << std::endl;
+    emit setResultSignal(true);
 }
 
 void RelocalizationNode::OnRetrySet(bool isOk) {
