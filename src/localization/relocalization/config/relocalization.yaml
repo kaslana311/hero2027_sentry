@@ -40,8 +40,8 @@
       contour_map_origin_x: -1.90625
       contour_map_origin_y: -3.93145
       match_tolerance_cells: 1
-      search_x_bounds: 0.1
-      search_y_bounds: 0.1
+      search_x_bounds: 0.20
+      search_y_bounds: 0.20
       search_yaw_bounds_deg: 20.0
       trans_step: 0.01
       yaw_step_deg: 0.2

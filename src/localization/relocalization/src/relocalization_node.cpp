@@ -37,8 +37,8 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     this->declare_parameter("contour_map_origin_x", -1.90625);
     this->declare_parameter("contour_map_origin_y", -3.93145);
     this->declare_parameter("match_tolerance_cells", 1);
-    this->declare_parameter("search_x_bounds", 0.1);  // X搜索 +-8cm
-    this->declare_parameter("search_y_bounds", 0.1);  // Y搜索 +-8cm
+    this->declare_parameter("search_x_bounds", 0.15);  // X搜索 +-8cm
+    this->declare_parameter("search_y_bounds", 0.15);  // Y搜索 +-8cm
     this->declare_parameter("search_yaw_bounds_deg",
                             20.0);                 // 偏航角搜索 +-10度
     this->declare_parameter("trans_step", 0.01);   // 平移搜索步长 1cm

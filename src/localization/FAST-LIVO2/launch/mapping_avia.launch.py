@@ -28,14 +28,14 @@ def generate_launch_description():
     )
     ld.add_action(livo)
 
-    rviz_cmd = Node(
-        condition=IfCondition(use_rviz),
-        package='rviz2',
-        executable='rviz2',
-        name='rviz2',
-        arguments=['-d', rviz_config_file],
-        output="screen"
-    )
-    ld.add_action(rviz_cmd)
+    # rviz_cmd = Node(
+    #     condition=IfCondition(use_rviz),
+    #     package='rviz2',
+    #     executable='rviz2',
+    #     name='rviz2',
+    #     arguments=['-d', rviz_config_file],
+    #     output="screen"
+    # )
+    # ld.add_action(rviz_cmd)
     return ld
     
