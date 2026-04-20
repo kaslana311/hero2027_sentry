@@ -31,4 +31,18 @@
       f_max_x: 10.6
       f_max_y: 10.37
       f_max_z: 45.0
-      # pcd_pub: False
+
+      scan_z_min: -0.1
+      scan_z_max: 0.3
+      resolution: 0.01
+      use_precomputed_contour_map: true
+      contour_map_pgm_path: "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/fast_lio_latest_map_contour.pgm"
+      contour_map_origin_x: -1.90625
+      contour_map_origin_y: -3.93145
+      match_tolerance_cells: 1
+      search_x_bounds: 0.1
+      search_y_bounds: 0.1
+      search_yaw_bounds_deg: 20.0
+      trans_step: 0.01
+      yaw_step_deg: 0.2
+      max_scan_count: 10
