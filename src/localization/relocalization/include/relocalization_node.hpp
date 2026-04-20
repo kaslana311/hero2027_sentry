@@ -67,6 +67,8 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
     std::mutex mtx;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cur_scan_ = nullptr;
     pcl::PointCloud<pcl::PointXYZ>::Ptr accumulated_cloud_;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_to_process;
+
     std::string pcd_path_;
 
     rclcpp::TimerBase::SharedPtr timer_;

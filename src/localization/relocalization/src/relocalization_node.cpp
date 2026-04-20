@@ -1,10 +1,10 @@
+#include "relocalization_node.hpp"
+
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/io/pcd_io.h>
 
 #include <fstream>
 #include <limits>
-
-#include "relocalization_node.hpp"
 
 RelocalizationNode::RelocalizationNode(QObject* parent)
     : QObject(parent),
@@ -12,7 +12,8 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
       global_map_(new pcl::PointCloud<pcl::PointXYZ>),
       result_t_(Eigen::Isometry3d::Identity()),
       cur_scan_(new pcl::PointCloud<pcl::PointXYZ>),
-      accumulated_cloud_(new pcl::PointCloud<pcl::PointXYZ>) {
+      accumulated_cloud_(new pcl::PointCloud<pcl::PointXYZ>),
+      cloud_to_process(new pcl::PointCloud<pcl::PointXYZ>) {
     RCLCPP_INFO(this->get_logger(),
                 "RelocalizationNode (2D Correlative Matching) init");
 
@@ -252,8 +253,8 @@ void RelocalizationNode::buildMatchGrid() {
 
 void RelocalizationNode::SaveCurScanCallback(
     const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-    if (registration_success_ || scan_count >= max_scan_count_) return;
     std::lock_guard<std::mutex> lock(mtx);
+    if (registration_success_ || scan_count >= max_scan_count_) return;
     pcl::fromROSMsg(*msg, *cur_scan_);
     *accumulated_cloud_ += *cur_scan_;
     scan_count++;
@@ -265,10 +266,19 @@ void RelocalizationNode::SaveCurScanCallback(
 void RelocalizationNode::GlobalLocalizationTimerCallback() {
     if (registration_success_) return;
     if (!has_global_map_) return;
-    if (!has_scan_) {
-        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                             "Accumulating lidar scan, wait...");
-        return;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (!has_scan_) {
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                 "Accumulating lidar scan, wait...");
+            return;
+        }
+        *cloud_to_process = *accumulated_cloud_;
+
+        // 数据切走以后立刻重置累加状态以接收下一轮新数据
+        scan_count = 0;
+        has_scan_ = false;
+        accumulated_cloud_->clear();
     }
 
     rclcpp::Time begin_time = this->now();
@@ -277,7 +287,7 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(
         new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud(accumulated_cloud_);
+    pass.setInputCloud(cloud_to_process);
     pass.setFilterFieldName("z");
     pass.setFilterLimits(scan_z_min_, scan_z_max_);
     pass.filter(*cloud_filtered);
@@ -343,8 +353,6 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     reloc_res relocResult;
     relocResult.isOk = true;
     emit alignResultSignal(relocResult);
-
-    accumulated_cloud_->clear();
 }
 
 Eigen::Matrix4d RelocalizationNode::CorrelativeMatch() {
@@ -463,9 +471,11 @@ void RelocalizationNode::OnRetrySet(bool isOk) {
     std::cout << "Retry relocalization requested." << std::endl;
     if (isOk) {
         qt_control.store(false);
+        std::lock_guard<std::mutex> lock(mtx);
         if (!registration_success_) return;
         registration_success_ = false;
         scan_count = 0;
         has_scan_ = false;
+        accumulated_cloud_->clear();
     }
 }
