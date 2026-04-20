@@ -286,7 +286,7 @@ bool PCLFiltersNode::saveContourMapFiles(const std::vector<uint8_t>& contour_gri
         return false;
     }
 
-    const std::string base = file_directory_ + contour_file_name_;
+    const std::string base = "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/" + contour_file_name_;
     const std::string pgm_path = base + ".pgm";
     const std::string yaml_path = base + ".yaml";
 

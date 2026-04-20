@@ -12,9 +12,9 @@
     thre_z_max: 0.1
     thre_z_min: -0.1
     thres_point_count: 10
-    contour_z_min: -0.05
+    contour_z_min: -0.10
     contour_z_max: 0.2
     contour_normal_radius: 0.15
-    contour_normal_z_abs_max: 0.5
+    contour_normal_z_abs_max: 0.6
     contour_padding: 1.0
     use_sim_time: false

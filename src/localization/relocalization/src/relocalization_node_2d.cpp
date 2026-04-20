@@ -1,4 +1,4 @@
-#include "relocalization_node_2d.hpp"
+#include "relocalization_node.hpp"
 
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/io/pcd_io.h>
@@ -20,19 +20,19 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
                             std::vector<double>{0., 0., 0., 0., 0., 0.});
     this->declare_parameter(
         "pcd_path",
-        "/home/fyk/Projects/ros2_ws/src/relocalization/PCD/voxel2025RMUC.pcd");
+        "/home/dji/hero2026_-sentry/src/planning/map_server/map/map.pgm");
 
     // 2D BEV Match Config
-    this->declare_parameter("map_z_min", -0.05);
+    this->declare_parameter("map_z_min", -0.1);
     this->declare_parameter("map_z_max", 0.2);
     this->declare_parameter("scan_z_min", -0.05);
     this->declare_parameter("scan_z_max", 0.2);
 
     this->declare_parameter("resolution", 0.01);  // 1cm 精度
     this->declare_parameter("use_precomputed_contour_map", true);
-    this->declare_parameter("contour_map_pgm_path", "");
-    this->declare_parameter("contour_map_origin_x", 0.0);
-    this->declare_parameter("contour_map_origin_y", 0.0);
+    this->declare_parameter("contour_map_pgm_path", "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/fast_lio_latest_map_contour.pgm");
+    this->declare_parameter("contour_map_origin_x", -1.90817);
+    this->declare_parameter("contour_map_origin_y", -3.93145);
     this->declare_parameter("match_tolerance_cells", 1);
     this->declare_parameter("search_x_bounds", 0.08);  // X搜索 +-8cm
     this->declare_parameter("search_y_bounds", 0.08);  // Y搜索 +-8cm
