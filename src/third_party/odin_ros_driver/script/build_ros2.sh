@@ -3,7 +3,7 @@
 # Get the directory where the script is located (Odin_ROS_Driver directory)
 PKG_DIR="$(cd "$(dirname "$0")/.."; pwd)"
 # Calculate the workspace root directory (contains devel, build, src)
-WORKSPACE_ROOT="$(dirname "$(dirname "$PKG_DIR")")"
+WORKSPACE_ROOT="$(dirname "$(dirname "$(dirname "$PKG_DIR")")")"
 # Workspace source directory (contains all packages)
 WORKSPACE_SRC="${WORKSPACE_ROOT}/src"
 PROJECT_NAME="odin_ros_driver"
@@ -65,8 +65,7 @@ build_workspace() {
     
     echo -e "${YELLOW}Starting ROS2 project build...${NC}"
 
-    cd $WS_DIR
-    rm -rf build install log
+    cd "${WORKSPACE_ROOT}"
     # Ensure ROS2 environment is loaded
     if [ -f "/opt/ros/foxy/setup.bash" ]; then
         source "/opt/ros/foxy/setup.bash"
@@ -109,6 +108,7 @@ build_workspace() {
     # Build with correct package name
     colcon build \
         --packages-select "${PACKAGE_NAME}" \
+        --symlink-install \
         --parallel-workers $(nproc) \
         --cmake-args \
             -DBUILD_SYSTEM=ROS2 \

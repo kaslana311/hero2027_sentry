@@ -12,6 +12,11 @@ def generate_launch_description():
     # Get package directory
     package_dir = get_package_share_directory('odin_ros_driver')
     
+    # Fallback to source directory if config folder is missing in the install space
+    if not os.path.exists(os.path.join(package_dir, 'config')):
+        package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        print(f"[Warning] Config not found in share directory, using source directory: {package_dir}")
+    
     # Declare configuration parameter
     config_file_arg = DeclareLaunchArgument(
         'config_file',
@@ -77,6 +82,14 @@ def generate_launch_description():
         parameters=[overlay_params]
     )
 
+    # Static TF from base_link to odin1_base_link
+    static_tf_node = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_base_to_odin1',
+        arguments=['0.19', '0', '0', '0', '0', '0', 'base_link', 'odin1_base_link']
+    )
+
     # Create RViz2 node - loads specified configuration file
     rviz_node = Node(
         package='rviz2',
@@ -94,6 +107,7 @@ def generate_launch_description():
     ld.add_action(pcd2depth_node)
     ld.add_action(cloud_reprojection_node)
     ld.add_action(image_overlay_node)
+    ld.add_action(static_tf_node)   # Add Static TF node
     ld.add_action(rviz_node)  # Add RViz node
     
     return ld
