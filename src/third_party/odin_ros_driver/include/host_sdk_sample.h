@@ -1464,22 +1464,23 @@ class MultiSensorPublisher {
             case OdometryType::TRANSFORM: {
                 geometry_msgs::msg::TransformStamped transformStamped;
                 transformStamped.header.stamp = msg.header.stamp;
-                transformStamped.header.frame_id = "odom";
-                transformStamped.child_frame_id = "map";
-                transformStamped.transform.translation.x =
-                    msg.pose.pose.position.x;
-                transformStamped.transform.translation.y =
-                    msg.pose.pose.position.y;
-                transformStamped.transform.translation.z =
-                    msg.pose.pose.position.z;
-                transformStamped.transform.rotation.x =
-                    msg.pose.pose.orientation.x;
-                transformStamped.transform.rotation.y =
-                    msg.pose.pose.orientation.y;
-                transformStamped.transform.rotation.z =
-                    msg.pose.pose.orientation.z;
-                transformStamped.transform.rotation.w =
-                    msg.pose.pose.orientation.w;
+                transformStamped.header.frame_id = "map";
+                transformStamped.child_frame_id = "odom";
+
+                // 计算逆矩阵: 从 odom->map 变为 map->odom
+                Eigen::Quaterniond q(msg.pose.pose.orientation.w, msg.pose.pose.orientation.x,
+                                     msg.pose.pose.orientation.y, msg.pose.pose.orientation.z);
+                Eigen::Vector3d t(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
+                Eigen::Quaterniond q_inv = q.inverse();
+                Eigen::Vector3d t_inv = -(q_inv * t);
+
+                transformStamped.transform.translation.x = t_inv.x();
+                transformStamped.transform.translation.y = t_inv.y();
+                transformStamped.transform.translation.z = t_inv.z();
+                transformStamped.transform.rotation.x = q_inv.x();
+                transformStamped.transform.rotation.y = q_inv.y();
+                transformStamped.transform.rotation.z = q_inv.z();
+                transformStamped.transform.rotation.w = q_inv.w();
                 tf_broadcaster->sendTransform(transformStamped);
             } break;
         }
@@ -1574,22 +1575,23 @@ class MultiSensorPublisher {
             case OdometryType::TRANSFORM: {
                 geometry_msgs::TransformStamped transformStamped;
                 transformStamped.header.stamp = msg.header.stamp;
-                transformStamped.header.frame_id = "odom";
-                transformStamped.child_frame_id = "map";
-                transformStamped.transform.translation.x =
-                    msg.pose.pose.position.x;
-                transformStamped.transform.translation.y =
-                    msg.pose.pose.position.y;
-                transformStamped.transform.translation.z =
-                    msg.pose.pose.position.z;
-                transformStamped.transform.rotation.x =
-                    msg.pose.pose.orientation.x;
-                transformStamped.transform.rotation.y =
-                    msg.pose.pose.orientation.y;
-                transformStamped.transform.rotation.z =
-                    msg.pose.pose.orientation.z;
-                transformStamped.transform.rotation.w =
-                    msg.pose.pose.orientation.w;
+                transformStamped.header.frame_id = "map";
+                transformStamped.child_frame_id = "odom";
+
+                // 计算逆矩阵: 从 odom->map 变为 map->odom
+                Eigen::Quaterniond q(msg.pose.pose.orientation.w, msg.pose.pose.orientation.x,
+                                     msg.pose.pose.orientation.y, msg.pose.pose.orientation.z);
+                Eigen::Vector3d t(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
+                Eigen::Quaterniond q_inv = q.inverse();
+                Eigen::Vector3d t_inv = -(q_inv * t);
+
+                transformStamped.transform.translation.x = t_inv.x();
+                transformStamped.transform.translation.y = t_inv.y();
+                transformStamped.transform.translation.z = t_inv.z();
+                transformStamped.transform.rotation.x = q_inv.x();
+                transformStamped.transform.rotation.y = q_inv.y();
+                transformStamped.transform.rotation.z = q_inv.z();
+                transformStamped.transform.rotation.w = q_inv.w();
                 tf_broadcaster->sendTransform(transformStamped);
             } break;
         }
