@@ -1,7 +1,7 @@
 #include "hero_lidar_scan/hero_lidar_scan_node.hpp"
 
 #include <omp.h>
-#include <pcl/filters/crop_box.h>
+
 
 #include <algorithm>
 

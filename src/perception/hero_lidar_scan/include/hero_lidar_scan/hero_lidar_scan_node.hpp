@@ -7,7 +7,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
-
+#include <pcl/filters/crop_box.h>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <deque>
