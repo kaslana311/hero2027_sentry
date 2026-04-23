@@ -47,7 +47,7 @@ class HeroLidarScanNode : public rclcpp::Node {
     // 处理单个雷达点云去畸变
     void processLidar(
         const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr& msg,
-        const Eigen::Matrix4d& T_ext,
+        const Eigen::Matrix4d& T_ext, const Eigen::Matrix4d& pose_end,
         const std::deque<nav_msgs::msg::Odometry>& local_odom_buffer,
         pcl::PointCloud<pcl::PointXYZI>& cloud_out);
 
