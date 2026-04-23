@@ -10,7 +10,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     # Get package directory
-    package_dir = get_package_share_directory('odin_ros_driver')
+    package_dir = "/home/dji/hero2026_-sentry/src/third_party/odin_ros_driver/"
     
     # Fallback to source directory if config folder is missing in the install space
     if not os.path.exists(os.path.join(package_dir, 'config')):
@@ -87,7 +87,7 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_tf_base_to_odin1',
-        arguments=['0.19', '0', '0', '0', '0', '0', 'base_link', 'odin1_base_link']
+        arguments=['0.188', '0', '0', '0', '0', '0', 'base_link', 'odin1_base_link']
     )
 
     # Create RViz2 node - loads specified configuration file
