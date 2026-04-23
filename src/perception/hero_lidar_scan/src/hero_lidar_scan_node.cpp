@@ -2,7 +2,6 @@
 
 #include <omp.h>
 
-
 #include <algorithm>
 
 namespace hero_lidar_scan {
@@ -30,6 +29,9 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
     this->declare_parameter<double>("lidar2_roll", 0.0);
     this->declare_parameter<double>("lidar2_pitch", 0.0);
     this->declare_parameter<double>("lidar2_yaw", 0.0);
+
+    this->declare_parameter<double>("time_offset", 0.0);
+    this->declare_parameter<double>("filter_size", 0.05);
 
     // 读取参数
     auto lidar1_topic = this->get_parameter("lidar1_topic").as_string();
@@ -73,6 +75,9 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
     T_lidar2_to_base_(0, 3) = l2_x;
     T_lidar2_to_base_(1, 3) = l2_y;
     T_lidar2_to_base_(2, 3) = l2_z;
+
+    time_offset_ = this->get_parameter("time_offset").as_double();
+    filter_size_ = this->get_parameter("filter_size").as_double();
 
     // 创建订阅器和发布器
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -176,11 +181,10 @@ bool HeroLidarScanNode::getPoseAtTimeLocal(
 // 处理单个雷达点云去畸变：引入降频桶优化与无锁本地化查询
 void HeroLidarScanNode::processLidar(
     const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr& msg,
-    const Eigen::Matrix4d& T_ext, const Eigen::Matrix4d& pose_end,
+    const Eigen::Matrix4d& T_ext,
     const std::deque<nav_msgs::msg::Odometry>& local_odom_buffer,
     pcl::PointCloud<pcl::PointXYZI>& cloud_out) {
     double timebase = msg->timebase * 1e-9;  // 纳秒转秒
-    Eigen::Matrix4d pose_end_inv = pose_end.inverse();
 
     size_t point_num = msg->point_num;
     cloud_out.points.resize(point_num);
@@ -203,11 +207,13 @@ void HeroLidarScanNode::processLidar(
 // 这里的桶大小大概也就 10-20 个，顺带并行处理
 #pragma omp parallel for
     for (size_t b = 0; b < num_buckets; ++b) {
-        double bucket_time = timebase + b * BUCKET_TIME_RESOLUTION;
+        double bucket_time =
+            timebase + b * BUCKET_TIME_RESOLUTION + time_offset_;
         Eigen::Matrix4d pose_i;
         if (getPoseAtTimeLocal(local_odom_buffer, bucket_time, pose_i)) {
-            // 预计算出当前桶的转换矩阵: pose_end^-1 * pose_i * T_ext
-            bucket_transforms[b] = pose_end_inv * pose_i * T_ext;
+            // 预计算出当前桶的转换矩阵: pose_i * T_ext
+            // (去掉pose_end_inv，发布到odom系)
+            bucket_transforms[b] = pose_i * T_ext;
             bucket_valid[b] = true;
         }
     }
@@ -284,10 +290,8 @@ void HeroLidarScanNode::lidarSyncCallback(
 
     // 4. 处理两个雷达点云，传入本地缓存队列
     pcl::PointCloud<pcl::PointXYZI> cloud1, cloud2;
-    processLidar(lidar1_msg, T_lidar1_to_base_, pose_end, local_odom_buffer,
-                 cloud1);
-    processLidar(lidar2_msg, T_lidar2_to_base_, pose_end, local_odom_buffer,
-                 cloud2);
+    processLidar(lidar1_msg, T_lidar1_to_base_, local_odom_buffer, cloud1);
+    processLidar(lidar2_msg, T_lidar2_to_base_, local_odom_buffer, cloud2);
 
     // 融合点云
     pcl::PointCloud<pcl::PointXYZI> fused_cloud = cloud1 + cloud2;
@@ -297,11 +301,24 @@ void HeroLidarScanNode::lidarSyncCallback(
         std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(fused_cloud);
     crop_filter_.setInputCloud(fused_ptr);
     crop_filter_.filter(filtered_cloud);
+
+    pcl::PointCloud<pcl::PointXYZI> voxel_filtered_cloud;
+    if (filter_size_ > 0.0) {
+        pcl::VoxelGrid<pcl::PointXYZI> voxel_filter;
+        auto crop_ptr =
+            std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(filtered_cloud);
+        voxel_filter.setInputCloud(crop_ptr);
+        voxel_filter.setLeafSize(filter_size_, filter_size_, filter_size_);
+        voxel_filter.filter(voxel_filtered_cloud);
+    } else {
+        voxel_filtered_cloud = filtered_cloud;
+    }
+
     // 转换并发布
     sensor_msgs::msg::PointCloud2 output_msg;
-    pcl::toROSMsg(filtered_cloud, output_msg);
+    pcl::toROSMsg(voxel_filtered_cloud, output_msg);
     output_msg.header.stamp = stamp_end;
-    output_msg.header.frame_id = "base_link";
+    output_msg.header.frame_id = "odom";
     //在此处添加pcl crob过滤 过滤"base_link"附近的点云.
     cloud_pub_->publish(output_msg);
 }

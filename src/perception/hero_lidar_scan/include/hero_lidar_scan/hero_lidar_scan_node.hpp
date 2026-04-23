@@ -4,10 +4,12 @@
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/synchronizer.h>
+#include <pcl/filters/crop_box.h>
+#include <pcl/filters/voxel_grid.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <pcl/filters/crop_box.h>
+
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <deque>
@@ -45,7 +47,7 @@ class HeroLidarScanNode : public rclcpp::Node {
     // 处理单个雷达点云去畸变
     void processLidar(
         const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr& msg,
-        const Eigen::Matrix4d& T_ext, const Eigen::Matrix4d& pose_end,
+        const Eigen::Matrix4d& T_ext,
         const std::deque<nav_msgs::msg::Odometry>& local_odom_buffer,
         pcl::PointCloud<pcl::PointXYZI>& cloud_out);
 
@@ -73,6 +75,10 @@ class HeroLidarScanNode : public rclcpp::Node {
     // 外参矩阵
     Eigen::Matrix4d T_lidar1_to_base_;
     Eigen::Matrix4d T_lidar2_to_base_;
+
+    // 新增参数
+    double time_offset_;
+    double filter_size_;
 };
 
 }  // namespace hero_lidar_scan
