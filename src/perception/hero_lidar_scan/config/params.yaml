@@ -21,3 +21,6 @@ hero_lidar_scan_node:
     lidar2_roll: 0.0
     lidar2_pitch: 0.61086
     lidar2_yaw: -1.57079
+
+    time_offset: 0.0
+    filter_size: -1.0
