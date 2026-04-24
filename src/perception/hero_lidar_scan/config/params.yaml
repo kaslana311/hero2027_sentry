@@ -23,4 +23,4 @@ hero_lidar_scan_node:
     lidar2_yaw: -1.57079
 
     time_offset: 0.0
-    filter_size: -1.0
+    filter_size: 0.05

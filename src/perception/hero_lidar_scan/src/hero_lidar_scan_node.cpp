@@ -133,7 +133,7 @@ bool HeroLidarScanNode::getPoseAtTimeLocal(
 
     if (idx_after == 0) {
         // 目标时间早于队列最早时间，使用最早帧
-        auto& odom = local_odom_buffer[0];
+        auto& odom = local_odom_buffer.back();
         Eigen::Quaterniond q(
             odom.pose.pose.orientation.w, odom.pose.pose.orientation.x,
             odom.pose.pose.orientation.y, odom.pose.pose.orientation.z);
@@ -304,9 +304,22 @@ void HeroLidarScanNode::lidarSyncCallback(
         std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(fused_cloud);
     crop_filter_.setInputCloud(fused_ptr);
     crop_filter_.filter(filtered_cloud);
+    
+    pcl::PointCloud<pcl::PointXYZI> voxel_filtered_cloud;
+    if (filter_size_ > 0.0) {
+        pcl::VoxelGrid<pcl::PointXYZI> voxel_filter;
+        auto crop_ptr =
+            std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(filtered_cloud);
+        voxel_filter.setInputCloud(crop_ptr);
+        voxel_filter.setLeafSize(filter_size_, filter_size_, filter_size_);
+        voxel_filter.filter(voxel_filtered_cloud);
+    } else {
+        voxel_filtered_cloud = filtered_cloud;
+    }
+
     // 转换并发布
     sensor_msgs::msg::PointCloud2 output_msg;
-    pcl::toROSMsg(filtered_cloud, output_msg);
+    pcl::toROSMsg(voxel_filtered_cloud, output_msg);
     output_msg.header.stamp = stamp_end;
     output_msg.header.frame_id = "base_link";
     //在此处添加pcl crob过滤 过滤"base_link"附近的点云.

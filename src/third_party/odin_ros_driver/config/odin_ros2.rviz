@@ -9,6 +9,7 @@ Panels:
         - /Image1/Topic1
         - /cloudslam_reprojected1
         - /Odometry1
+        - /Odometry1/Odometry_high1
         - /slam1
         - /dense_depth_demo1
       Splitter Ratio: 0.5
@@ -176,7 +177,7 @@ Visualization Manager:
               Scale: 1
               Value: true
             Value: true
-          Enabled: true
+          Enabled: false
           Keep: 1
           Name: Odometry
           Position Tolerance: 0.10000000149011612
@@ -197,7 +198,7 @@ Visualization Manager:
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /odin1/odometry
-          Value: true
+          Value: false
         - Angle Tolerance: 0.10000000149011612
           Class: rviz_default_plugins/Odometry
           Covariance:
@@ -215,8 +216,8 @@ Visualization Manager:
               Scale: 1
               Value: true
             Value: true
-          Enabled: false
-          Keep: 10
+          Enabled: true
+          Keep: 1
           Name: Odometry_high
           Position Tolerance: 0.10000000149011612
           Shape:
@@ -236,7 +237,7 @@ Visualization Manager:
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /odin1/odometry_highfreq
-          Value: false
+          Value: true
         - Class: rviz_default_plugins/MarkerArray
           Enabled: false
           Name: camera_view
@@ -456,25 +457,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 10.9336576461792
+      Distance: 7.946586608886719
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.2568470537662506
-        Y: 2.1451337337493896
-        Z: 0.3774382472038269
+        X: 0.8327510356903076
+        Y: 0.4638209939002991
+        Z: 0.3780019283294678
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6503980159759521
+      Pitch: 1.5697963237762451
       Target Frame: odom
       Value: Orbit (rviz)
-      Yaw: 2.645402431488037
+      Yaw: 3.0254037380218506
     Saved: ~
 Window Geometry:
   Displays:
