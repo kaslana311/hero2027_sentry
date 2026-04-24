@@ -1462,25 +1462,29 @@ class MultiSensorPublisher {
             } break;
             case OdometryType::HIGHFREQ: {
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
-                    geometry_msgs::msg::TransformStamped transformStamped;
-                    transformStamped.header.stamp = msg.header.stamp;
-                    transformStamped.header.frame_id = "odom";
-                    transformStamped.child_frame_id = "base_link";
-                    transformStamped.transform.translation.x =
-                        msg.pose.pose.position.x;
-                    transformStamped.transform.translation.y =
-                        msg.pose.pose.position.y;
-                    transformStamped.transform.translation.z =
-                        msg.pose.pose.position.z;
-                    transformStamped.transform.rotation.x =
-                        msg.pose.pose.orientation.x;
-                    transformStamped.transform.rotation.y =
-                        msg.pose.pose.orientation.y;
-                    transformStamped.transform.rotation.z =
-                        msg.pose.pose.orientation.z;
-                    transformStamped.transform.rotation.w =
-                        msg.pose.pose.orientation.w;
-                    tf_broadcaster->sendTransform(transformStamped);
+                    static int tf_throttle_counter = 0;
+                    if (++tf_throttle_counter >= 4) {  // 400Hz 降频至 100Hz
+                        tf_throttle_counter = 0;
+                        geometry_msgs::msg::TransformStamped transformStamped;
+                        transformStamped.header.stamp = msg.header.stamp;
+                        transformStamped.header.frame_id = "odom";
+                        transformStamped.child_frame_id = "base_link";
+                        transformStamped.transform.translation.x =
+                            msg.pose.pose.position.x;
+                        transformStamped.transform.translation.y =
+                            msg.pose.pose.position.y;
+                        transformStamped.transform.translation.z =
+                            msg.pose.pose.position.z;
+                        transformStamped.transform.rotation.x =
+                            msg.pose.pose.orientation.x;
+                        transformStamped.transform.rotation.y =
+                            msg.pose.pose.orientation.y;
+                        transformStamped.transform.rotation.z =
+                            msg.pose.pose.orientation.z;
+                        transformStamped.transform.rotation.w =
+                            msg.pose.pose.orientation.w;
+                        tf_broadcaster->sendTransform(transformStamped);
+                    }
                 }
                 odom_highfreq_publisher_->publish(std::move(msg));
             } break;
@@ -1599,25 +1603,29 @@ class MultiSensorPublisher {
             } break;
             case OdometryType::HIGHFREQ: {
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
-                    geometry_msgs::TransformStamped transformStamped;
-                    transformStamped.header.stamp = msg.header.stamp;
-                    transformStamped.header.frame_id = "odom";
-                    transformStamped.child_frame_id = "base_link";
-                    transformStamped.transform.translation.x =
-                        msg.pose.pose.position.x;
-                    transformStamped.transform.translation.y =
-                        msg.pose.pose.position.y;
-                    transformStamped.transform.translation.z =
-                        msg.pose.pose.position.z;
-                    transformStamped.transform.rotation.x =
-                        msg.pose.pose.orientation.x;
-                    transformStamped.transform.rotation.y =
-                        msg.pose.pose.orientation.y;
-                    transformStamped.transform.rotation.z =
-                        msg.pose.pose.orientation.z;
-                    transformStamped.transform.rotation.w =
-                        msg.pose.pose.orientation.w;
-                    tf_broadcaster->sendTransform(transformStamped);
+                    static int tf_throttle_counter = 0;
+                    if (++tf_throttle_counter >= 4) {  // 400Hz 降频至 100Hz
+                        tf_throttle_counter = 0;
+                        geometry_msgs::TransformStamped transformStamped;
+                        transformStamped.header.stamp = msg.header.stamp;
+                        transformStamped.header.frame_id = "odom";
+                        transformStamped.child_frame_id = "base_link";
+                        transformStamped.transform.translation.x =
+                            msg.pose.pose.position.x;
+                        transformStamped.transform.translation.y =
+                            msg.pose.pose.position.y;
+                        transformStamped.transform.translation.z =
+                            msg.pose.pose.position.z;
+                        transformStamped.transform.rotation.x =
+                            msg.pose.pose.orientation.x;
+                        transformStamped.transform.rotation.y =
+                            msg.pose.pose.orientation.y;
+                        transformStamped.transform.rotation.z =
+                            msg.pose.pose.orientation.z;
+                        transformStamped.transform.rotation.w =
+                            msg.pose.pose.orientation.w;
+                        tf_broadcaster->sendTransform(transformStamped);
+                    }
                 }
                 odom_highfreq_publisher_.publish(msg);
             } break;
