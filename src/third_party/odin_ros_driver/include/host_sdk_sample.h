@@ -1326,8 +1326,8 @@ class MultiSensorPublisher {
             msg.twist.twist.angular.y = wy;
             msg.twist.twist.angular.z = wz;
 
-            // 杆臂补偿：机器人中心速度 = 传感器速度 - w x r (其中 r = [0.188, 0,
-            // 0]^T)
+            // 杆臂补偿：机器人中心速度 = 传感器速度 - w x r (其中 r = [0.188,
+            // 0, 0]^T)
             msg.twist.twist.linear.x = vx;
             msg.twist.twist.linear.y = vy - 0.188 * wz;
             msg.twist.twist.linear.z = vz + 0.188 * wy;
@@ -1377,6 +1377,7 @@ class MultiSensorPublisher {
 #ifdef ROS2
         switch (odom_type) {
             case OdometryType::STANDARD: {
+                /*
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
                     geometry_msgs::msg::TransformStamped transformStamped;
                     transformStamped.header.stamp = msg.header.stamp;
@@ -1398,6 +1399,7 @@ class MultiSensorPublisher {
                         msg.pose.pose.orientation.w;
                     tf_broadcaster->sendTransform(transformStamped);
                 }
+                */
                 odom_publisher_->publish(msg);
 
                 // Publish odom trajectory as visualization markers (green lines
@@ -1458,9 +1460,30 @@ class MultiSensorPublisher {
                                                  msg.header);
                 }
             } break;
-            case OdometryType::HIGHFREQ:
+            case OdometryType::HIGHFREQ: {
+                if (getRosNodeControl()->sendOdomBaseLinkTF()) {
+                    geometry_msgs::msg::TransformStamped transformStamped;
+                    transformStamped.header.stamp = msg.header.stamp;
+                    transformStamped.header.frame_id = "odom";
+                    transformStamped.child_frame_id = "base_link";
+                    transformStamped.transform.translation.x =
+                        msg.pose.pose.position.x;
+                    transformStamped.transform.translation.y =
+                        msg.pose.pose.position.y;
+                    transformStamped.transform.translation.z =
+                        msg.pose.pose.position.z;
+                    transformStamped.transform.rotation.x =
+                        msg.pose.pose.orientation.x;
+                    transformStamped.transform.rotation.y =
+                        msg.pose.pose.orientation.y;
+                    transformStamped.transform.rotation.z =
+                        msg.pose.pose.orientation.z;
+                    transformStamped.transform.rotation.w =
+                        msg.pose.pose.orientation.w;
+                    tf_broadcaster->sendTransform(transformStamped);
+                }
                 odom_highfreq_publisher_->publish(std::move(msg));
-                break;
+            } break;
             case OdometryType::TRANSFORM: {
                 geometry_msgs::msg::TransformStamped transformStamped;
                 transformStamped.header.stamp = msg.header.stamp;
@@ -1468,9 +1491,12 @@ class MultiSensorPublisher {
                 transformStamped.child_frame_id = "odom";
 
                 // 计算逆矩阵: 从 odom->map 变为 map->odom
-                Eigen::Quaterniond q(msg.pose.pose.orientation.w, msg.pose.pose.orientation.x,
-                                     msg.pose.pose.orientation.y, msg.pose.pose.orientation.z);
-                Eigen::Vector3d t(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
+                Eigen::Quaterniond q(
+                    msg.pose.pose.orientation.w, msg.pose.pose.orientation.x,
+                    msg.pose.pose.orientation.y, msg.pose.pose.orientation.z);
+                Eigen::Vector3d t(msg.pose.pose.position.x,
+                                  msg.pose.pose.position.y,
+                                  msg.pose.pose.position.z);
                 Eigen::Quaterniond q_inv = q.inverse();
                 Eigen::Vector3d t_inv = -(q_inv * t);
 
@@ -1487,6 +1513,7 @@ class MultiSensorPublisher {
 #else
         switch (odom_type) {
             case OdometryType::STANDARD: {
+                /*
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
                     geometry_msgs::TransformStamped transformStamped;
                     transformStamped.header.stamp = msg.header.stamp;
@@ -1508,7 +1535,8 @@ class MultiSensorPublisher {
                         msg.pose.pose.orientation.w;
                     tf_broadcaster->sendTransform(transformStamped);
                 }
-                odom_publisher_.publish(msg);
+                */
+                // odom_publisher_.publish(msg);
 
                 if (show_path) {
                     // Publish odom trajectory as visualization markers (green
@@ -1569,9 +1597,30 @@ class MultiSensorPublisher {
                                                  msg.header);
                 }
             } break;
-            case OdometryType::HIGHFREQ:
+            case OdometryType::HIGHFREQ: {
+                if (getRosNodeControl()->sendOdomBaseLinkTF()) {
+                    geometry_msgs::TransformStamped transformStamped;
+                    transformStamped.header.stamp = msg.header.stamp;
+                    transformStamped.header.frame_id = "odom";
+                    transformStamped.child_frame_id = "base_link";
+                    transformStamped.transform.translation.x =
+                        msg.pose.pose.position.x;
+                    transformStamped.transform.translation.y =
+                        msg.pose.pose.position.y;
+                    transformStamped.transform.translation.z =
+                        msg.pose.pose.position.z;
+                    transformStamped.transform.rotation.x =
+                        msg.pose.pose.orientation.x;
+                    transformStamped.transform.rotation.y =
+                        msg.pose.pose.orientation.y;
+                    transformStamped.transform.rotation.z =
+                        msg.pose.pose.orientation.z;
+                    transformStamped.transform.rotation.w =
+                        msg.pose.pose.orientation.w;
+                    tf_broadcaster->sendTransform(transformStamped);
+                }
                 odom_highfreq_publisher_.publish(msg);
-                break;
+            } break;
             case OdometryType::TRANSFORM: {
                 geometry_msgs::TransformStamped transformStamped;
                 transformStamped.header.stamp = msg.header.stamp;
@@ -1579,9 +1628,12 @@ class MultiSensorPublisher {
                 transformStamped.child_frame_id = "odom";
 
                 // 计算逆矩阵: 从 odom->map 变为 map->odom
-                Eigen::Quaterniond q(msg.pose.pose.orientation.w, msg.pose.pose.orientation.x,
-                                     msg.pose.pose.orientation.y, msg.pose.pose.orientation.z);
-                Eigen::Vector3d t(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
+                Eigen::Quaterniond q(
+                    msg.pose.pose.orientation.w, msg.pose.pose.orientation.x,
+                    msg.pose.pose.orientation.y, msg.pose.pose.orientation.z);
+                Eigen::Vector3d t(msg.pose.pose.position.x,
+                                  msg.pose.pose.position.y,
+                                  msg.pose.pose.position.z);
                 Eigen::Quaterniond q_inv = q.inverse();
                 Eigen::Vector3d t_inv = -(q_inv * t);
 
