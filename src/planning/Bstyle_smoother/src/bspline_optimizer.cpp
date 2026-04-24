@@ -221,8 +221,8 @@ void BsplineOptimizer::optimize()
   opt.set_min_objective(BsplineOptimizer::costFunction, this);
   opt.set_maxeval(max_iteration_num_[max_num_id_]);
   opt.set_maxtime(max_iteration_time_[max_time_id_]);
-  opt.set_xtol_rel(1e-6);  // 收紧: 控制点相对变化 < 1e-6 才停
-  opt.set_ftol_rel(1e-7);  // 收紧: 代价函数相对变化 < 1e-7 才停
+  opt.set_xtol_rel(1e-5);  // 收紧: 控制点相对变化 < 1e-6 才停
+  opt.set_ftol_rel(1e-5);  // 收紧: 代价函数相对变化 < 1e-7 才停
 
   std::vector<double> q(variable_num_);
   for (int i = start_fixed_; i < pt_num; ++i) {
@@ -423,7 +423,7 @@ void BsplineOptimizer::evaluateEDTWithGrad(
     buildESDFCache();
   }
   if (!esdf_valid_) {
-    dist = -1.0;
+     dist = 0.0;
     grad = Eigen::Vector2d::Zero();
     return;
   }
@@ -433,7 +433,7 @@ void BsplineOptimizer::evaluateEDTWithGrad(
 
   // 二次插值需要 3x3 窗口，中心点周围各需 1 像素，安全起见留 2 像素边界
   if (fx < 2.0 || fx >= esdf_size_x_ - 2.0 || fy < 2.0 || fy >= esdf_size_y_ - 2.0) {
-    dist = -1.0;
+    dist = 0.0;
     grad = Eigen::Vector2d::Zero();
     return;
   }
@@ -525,7 +525,7 @@ void BsplineOptimizer::calcDistanceCost(
   for (int i = start_fixed_; i < end_idx; i++) {
     evaluateEDTWithGrad(q[i], -1.0, dist, dist_grad);
 
-    if (dist < dist0_) {
+    if (dist < dist0_&&dist_grad.squaredNorm()>1e-10) {
       double diff = dist0_ - dist;
       // ---- 连续惩罚: 使用三次函数, C1 连续, 无梯度跳变 ----
       // penalty = (dist0 - dist)^3 / dist0

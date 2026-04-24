@@ -99,14 +99,15 @@ RelocalizationNode::RelocalizationNode()
     register_->rejector.max_dist_sq = smgicp_max_dist_sq_;
     register_->optimizer.max_iterations = smgicp_max_iterations_;
 
-    sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "/cloud_registered", 1,
-        std::bind(&RelocalizationNode::SaveCurScanCallback, this,
-                  std::placeholders::_1));
+    // sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+    //     "/cloud_registered", 1,
+    //     std::bind(&RelocalizationNode::SaveCurScanCallback, this,
+    //               std::placeholders::_1));
     std::cout << "running relocazation" << std::endl;
-    timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(20),
-        std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
+    publishTransform();
+    // timer_ = this->create_wall_timer(
+    //     std::chrono::milliseconds(20),
+    //     std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
 }
 void RelocalizationNode::publishTransform() {
     if (result_t_.matrix().isZero()) {
@@ -134,7 +135,7 @@ void RelocalizationNode::publishTransform() {
 void RelocalizationNode::SaveCurScanCallback(
     const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     //累计10帧
-    if (registration_success_) return;
+    if (1) return;
     std::lock_guard<std::mutex> lock(mtx);
     pcl::fromROSMsg(*msg, *cur_scan_);
     //滤波
@@ -168,7 +169,7 @@ void RelocalizationNode::PassThroughFilter(
 }
 
 void RelocalizationNode::GlobalLocalizationTimerCallback() {
-    if (registration_success_) return;
+    if (1) return;
     if (!has_scan_) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
                              "no scan msg");

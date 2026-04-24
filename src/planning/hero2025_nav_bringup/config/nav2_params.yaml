@@ -1,6 +1,6 @@
 dog_map_node:
     ros__parameters:
-      use_sim_time: True
+     
       odom_topic: "/odin1/odometry_highfreq"
       cloud_topic: "/odin1/cloud_slam"
       half_map_size: 10.0 #以车为中心的局部地图,也就是点云分析范围
