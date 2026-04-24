@@ -36,16 +36,31 @@ PCLFiltersNode::PCLFiltersNode(const rclcpp::NodeOptions &options)
     radiusOutlierFilter(cloud_after_PassThrough_, thre_radius_,
                         thres_point_count_);
     setMapTopicMsg(cloud_after_Radius_, map_topic_msg_);
+
+    // 独立输出主地图
+    std::string main_map_base_path =
+        "/home/dji/hero2026_-sentry/src/planning/map_server/map/";
+    std::string main_map_name = "map";
+    saveMapFiles(map_topic_msg_.data, map_topic_msg_.info.width,
+                 map_topic_msg_.info.height, map_topic_msg_.info.resolution,
+                 map_topic_msg_.info.origin.position.x,
+                 map_topic_msg_.info.origin.position.y, main_map_base_path,
+                 main_map_name);
+
     if (generate_contour_map_) {
-        std::vector<uint8_t> contour_grid;
+        std::vector<int8_t> contour_grid;
         int contour_width = 0;
         int contour_height = 0;
         double contour_x_min = 0.0;
         double contour_y_min = 0.0;
         if (buildContourGrid(cloud_after_Radius_, contour_grid, contour_width,
                              contour_height, contour_x_min, contour_y_min)) {
-            saveContourMapFiles(contour_grid, contour_width, contour_height,
-                                contour_x_min, contour_y_min);
+            std::string contour_map_base_path =
+                "/home/dji/hero2026_-sentry/src/planning/map_server/"
+                "contour_map/";
+            saveMapFiles(contour_grid, contour_width, contour_height,
+                         contour_resolution_, contour_x_min, contour_y_min,
+                         contour_map_base_path, contour_file_name_);
         }
     }
 
@@ -201,7 +216,7 @@ void PCLFiltersNode::setMapTopicMsg(
 
 bool PCLFiltersNode::buildContourGrid(
     const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud,
-    std::vector<uint8_t> &contour_grid, int &width, int &height, double &x_min,
+    std::vector<int8_t> &contour_grid, int &width, int &height, double &x_min,
     double &y_min) const {
     pcl::PointCloud<pcl::PointXYZ>::Ptr z_filtered(
         new pcl::PointCloud<pcl::PointXYZ>);
@@ -267,7 +282,7 @@ bool PCLFiltersNode::buildContourGrid(
         const int cy =
             static_cast<int>(std::floor((pt.y - y_min) / contour_resolution_));
         if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
-            contour_grid[cy * width + cx] = 1;
+            contour_grid[cy * width + cx] = 100;
         }
     }
 
@@ -277,29 +292,31 @@ bool PCLFiltersNode::buildContourGrid(
     return true;
 }
 
-bool PCLFiltersNode::saveContourMapFiles(
-    const std::vector<uint8_t> &contour_grid, int width, int height,
-    double x_min, double y_min) const {
-    if (contour_grid.empty() || width <= 0 || height <= 0) {
+bool PCLFiltersNode::saveMapFiles(const std::vector<int8_t> &grid, int width,
+                                  int height, double resolution, double x_min,
+                                  double y_min, const std::string &base_path,
+                                  const std::string &file_name) const {
+    if (grid.empty() || width <= 0 || height <= 0) {
         return false;
     }
 
-    const std::string base =
-        "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/" +
-        contour_file_name_;
+    const std::string base = base_path + file_name;
     const std::string pgm_path = base + ".pgm";
     const std::string yaml_path = base + ".yaml";
 
     std::ofstream pgm(pgm_path, std::ios::binary);
     if (!pgm.is_open()) {
-        RCLCPP_ERROR(get_logger(), "Failed to open contour pgm for write: %s",
+        RCLCPP_ERROR(get_logger(), "Failed to open pgm for write: %s",
                      pgm_path.c_str());
         return false;
     }
     pgm << "P5\n" << width << " " << height << "\n255\n";
     for (int y = height - 1; y >= 0; --y) {
         for (int x = 0; x < width; ++x) {
-            const uint8_t occupied = contour_grid[y * width + x] > 0 ? 0 : 255;
+            const int8_t value = grid[y * width + x];
+            // 按照占用栅格的要求：大于等于占用阈值为黑色 (0)，未占用为白色
+            // (255)
+            const uint8_t occupied = (value >= 50 && value <= 100) ? 0 : 255;
             pgm.write(reinterpret_cast<const char *>(&occupied), 1);
         }
     }
@@ -307,19 +324,19 @@ bool PCLFiltersNode::saveContourMapFiles(
 
     std::ofstream yaml(yaml_path);
     if (!yaml.is_open()) {
-        RCLCPP_ERROR(get_logger(), "Failed to open contour yaml for write: %s",
+        RCLCPP_ERROR(get_logger(), "Failed to open yaml for write: %s",
                      yaml_path.c_str());
         return false;
     }
-    yaml << "image: " << contour_file_name_ << ".pgm\n";
-    yaml << "resolution: " << contour_resolution_ << "\n";
+    yaml << "image: " << file_name << ".pgm\n";
+    yaml << "resolution: " << resolution << "\n";
     yaml << "origin: [" << x_min << ", " << y_min << ", 0.0]\n";
     yaml << "negate: 0\n";
     yaml << "occupied_thresh: 0.65\n";
     yaml << "free_thresh: 0.196\n";
     yaml.close();
 
-    RCLCPP_INFO(get_logger(), "Contour map saved: %s and %s", pgm_path.c_str(),
+    RCLCPP_INFO(get_logger(), "Map files saved: %s and %s", pgm_path.c_str(),
                 yaml_path.c_str());
     return true;
 }

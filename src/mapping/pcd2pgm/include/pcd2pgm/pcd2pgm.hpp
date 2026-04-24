@@ -49,10 +49,12 @@ class PCLFiltersNode : public rclcpp::Node {
     void setMapTopicMsg(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
                         nav_msgs::msg::OccupancyGrid& msg);
     bool buildContourGrid(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& cloud,
-                          std::vector<uint8_t>& contour_grid, int& width,
+                          std::vector<int8_t>& contour_grid, int& width,
                           int& height, double& x_min, double& y_min) const;
-    bool saveContourMapFiles(const std::vector<uint8_t>& contour_grid, int width,
-                             int height, double x_min, double y_min) const;
+    bool saveMapFiles(const std::vector<int8_t>& grid, int width, int height,
+                      double resolution, double x_min, double y_min,
+                      const std::string& base_path,
+                      const std::string& file_name) const;
 
     void publishMap();
 
