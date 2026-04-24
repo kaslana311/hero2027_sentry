@@ -1,0 +1,6 @@
+image: fast_lio_latest_map_contour.pgm
+resolution: 0.01
+origin: [-1.91931, -3.93145, 0.0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196
