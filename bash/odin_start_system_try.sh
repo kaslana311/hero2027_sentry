@@ -41,23 +41,23 @@ gnome-terminal --tab --title="bridge" -- bash -c \
 "ros2 run nav_cv_bridge autoaim_tracker_node 2>&1 | tee \"$LOG_DIR/bridge.log\"; exec bash"
 
 # 启动雷达节点
-gnome-terminal --tab --title="start_lidar" -- bash -c \
-"ros2 launch livox_ros_driver2 msg_MID360_launch.py 2>&1 | tee \"$LOG_DIR/lidar.log\" ; exec bash"
+# gnome-terminal --tab --title="start_lidar" -- bash -c \
+# "ros2 launch livox_ros_driver2 msg_MID360_launch.py 2>&1 | tee \"$LOG_DIR/lidar.log\" ; exec bash"
 
 # 等待雷达初始化完成
-wait_for_topic "/livox/imu" 60
+# wait_for_topic "/livox/imu" 60
 
-gnome-terminal --tab --title="fast_livo" -- bash -c \
-"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch fast_livo mapping_avia.launch.py; bash"
+gnome-terminal --tab --title="odin" -- bash -c \
+"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch odin_ros_driver odin1_ros2.launch.py; bash"
 
-wait_for_topic "/aft_mapped_to_init" 60
+# wait_for_topic "/aft_mapped_to_init" 60
 
-gnome-terminal --tab --title="ekf_fusion" -- bash -c \
-"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch tf_manager fusion_launch.py; bash"
+# gnome-terminal --tab --title="ekf_fusion" -- bash -c \
+# "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch tf_manager fusion_launch.py; bash"
 
 # 启动重定位节点
-gnome-terminal --tab --title="relocalization" -- bash -c \
-"ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\" ; exec bash"
+# gnome-terminal --tab --title="relocalization" -- bash -c \
+# "ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\" ; exec bash"
 
 sleep 5  # 适当调整时间或使用话题检测
 
@@ -76,9 +76,9 @@ gnome-terminal --tab --title="rviz" -- bash -c \
 
 # sleep 10
 # 启动决策节点（特殊日志处理）
-DECISION_LOG="$LOG_DIR/decision.log"
-gnome-terminal --tab --title="decision" -- bash -c \
-"script -q -f \"$DECISION_LOG\" -c 'ros2 launch bt decision_launch.py'; exec bash"
+# DECISION_LOG="$LOG_DIR/decision.log"
+# gnome-terminal --tab --title="decision" -- bash -c \
+# "script -q -f \"$DECISION_LOG\" -c 'ros2 launch bt decision_launch.py'; exec bash"
 
 echo "所有节点已启动，系统初始化完成！"
 echo "完整日志目录: $LOG_DIR"

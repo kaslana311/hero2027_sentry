@@ -6,16 +6,16 @@ register_keys:
   # 0: use odin internal system time as data time stamp, typical and recommended;
   # 1: use host ros time (upon receive) as data time stamp, only use if you specifically require this setup, not recommended for most users
   # 2: align odin1 time to host time, timestamp is the sensor data reception time on host time axis
-  use_host_ros_time: 0  # Changed to 0 to use device timestamp without PTP offset correction
+  use_host_ros_time: 1  # Changed to 0 to use device timestamp without PTP offset correction
 
   streamctrl: 1           # 0: off; 1: on
 
   # original rgb data in jpeg format from device
-  sendrgbcompressed: 1    # 0: off; 1: on
+  sendrgbcompressed: 0    # 0: off; 1: on
 
   # RGB data, decoded from original jpeg data from device, bgr8 format
   # Processed on host device
-  sendrgb: 1              # 0: off; 1: on
+  sendrgb: 0              # 0: off; 1: on
 
   # undistort rgb image processed from decoded rgb data.
   # depends on sendrgb. related camera parameters can be found in ws/src/odin_ros_driver/config/calib.yaml
@@ -23,7 +23,7 @@ register_keys:
   sendrgbundistort: 0    # 0: off; 1: on.
 
   # IMU data
-  sendimu: 1              # 0: off; 1: on
+  sendimu: 0              # 0: off; 1: on
 
   # SDK IMU smooth sending feature
   # When enabled, SDK will send IMU data at precise intervals (default 400Hz) 
@@ -54,7 +54,7 @@ register_keys:
 
   # processed with raw point cloud, rgb image, and calib.yaml from device
   # Processed on host device
-  sendcloudrender: 1      # 0: off; 1: on
+  sendcloudrender: 0      # 0: off; 1: on
 
   # depth completion demo, high computing resource usage. 
   # for more information please refer to the readme file.
@@ -76,10 +76,10 @@ register_keys:
   # record rgb, odometry, and slam cloud data as proprietary olx format for further processing in MindCloud(TM) software. 
   # save path: ws/src/odin_ros_driver/recorddata/{record_start_time}/
   # ATTENTION: please copy the full folder for post-processing.
-  recorddata: 1           # 0: off; 1: on
+  recorddata: 0           # 0: off; 1: on
 
   # Save device runtime status info to ws/src/odin_ros_driver/log/Driver_{drvier_start_time}/Conn_{device_connection_time}/dev_status.csv
-  devstatuslog: 1         # 0: off; 1: on.
+  devstatuslog: 0         # 0: off; 1: on.
 
   save_log: 0 # 0: off; 1: on; 
 
@@ -89,7 +89,7 @@ register_keys:
   showpath: 0             # 0: off; 1: on
   showcamerapose: 0       # 0: off; 1: on
   
-  custom_map_mode: 1      # 0: Odometry mode 1: SLAM mode 2: Relocalization mode
+  custom_map_mode: 0      # 0: Odometry mode 1: SLAM mode 2: Relocalization mode
   custom_init_pos: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
   relocalization_map_abs_path: "/home/dji/hero2026_-sentry/src/common/point_cloud_files/odin_file/odin_map.bin" # must be set for Relocalization mode or will fail
 

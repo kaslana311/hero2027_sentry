@@ -1,11 +1,13 @@
 #!/bin/bash
-
+gnome-terminal --tab --title="delete" -- bash -c \
+"bash /home/dji/hero2026_-sentry/bash/kill_all_ros2_nodes.sh; bash "
+sleep 2
 # 设置必要的环境变量
 export DISPLAY=:0
 export XAUTHORITY=/home/dji/.Xauthority
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 source /opt/ros/humble/setup.bash
-source /home/dji/project/HERO2025_Sentry/install/setup.bash
-
+source /home/dji/hero2026_-sentry/install/setup.bash
 # 创建日志目录
 LOG_DIR="$HOME/ros_logs/$(date +"%Y%m%d_%H%M%S")"
 mkdir -p "$LOG_DIR"
@@ -26,47 +28,47 @@ wait_for_topic() {
     done
 }
 
+# zenoh 网线通信桥接
+gnome-terminal --tab --title="zenoh_bridge" -- bash -c \
+"ros2 run zenoh_bridge_dds zenoh_bridge_dds -d 1 -e tcp/192.168.123.20:7447 -a '.*/tracker/autoaim\$|.*/carrot_pose\$' 2>&1 | tee \"$LOG_DIR/zenoh_bridge.log\"; exec bash"
+
 # 启动底盘节点
 gnome-terminal --tab --title="chassis" -- bash -c \
-"ros2 launch hero_serial chassis_node.launch.py 2>&1 | tee \"$LOG_DIR/chassis.log\"; exec bash"
+"ros2 launch hero_serial chassis_node.launch.py 2>&1 | tee  \"$LOG_DIR/chassis.log\" ; exec bash"
 
 # 启动云台节点
-gnome-terminal --tab --title="gimbal" -- bash -c \
-"ros2 launch hero_serial gimbal_node.launch.py 2>&1 | tee \"$LOG_DIR/gimbal.log\"; exec bash"
+gnome-terminal --tab --title="bridge" -- bash -c \
+"ros2 run nav_cv_bridge autoaim_tracker_node 2>&1 | tee \"$LOG_DIR/bridge.log\"; exec bash"
 
 # 启动雷达节点
 gnome-terminal --tab --title="start_lidar" -- bash -c \
-"ros2 launch livox_ros_driver2 msg_MID360_launch.py 2>&1 | tee \"$LOG_DIR/lidar.log\"; exec bash"
+"ros2 launch livox_ros_driver2 msg_MID360_launch.py 2>&1 | tee \"$LOG_DIR/lidar.log\" ; exec bash"
 
 # 等待雷达初始化完成
 wait_for_topic "/livox/imu" 60
 
-# 启动LIO节点
-gnome-terminal --tab --title="lio" -- bash -c \
-"ros2 launch point_lio point_lio.launch.py 2>&1 | tee \"$LOG_DIR/lio.log\"; exec bash"
+gnome-terminal --tab --title="fast_livo" -- bash -c \
+"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch fast_livo mapping_avia.launch.py; bash"
 
-# 等待建图初始化完成
-sleep 5  # 适当调整时间或使用话题检测
+wait_for_topic "/aft_mapped_to_init" 60
+
+gnome-terminal --tab --title="ekf_fusion" -- bash -c \
+"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch tf_manager fusion_launch.py; bash"
 
 # 启动重定位节点
 gnome-terminal --tab --title="relocalization" -- bash -c \
-"ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\"; exec bash"
+"ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\" ; exec bash"
 
-gnome-terminal --tab --title="tf_manager" -- bash -c \
-"ros2 launch tf_manager tf_manager.launch.py 2>&1 | tee \"$LOG_DIR/tf_manager.log\"; exec bash"
 sleep 5  # 适当调整时间或使用话题检测
 
 # 启动导航规划节点
 gnome-terminal --tab --title="plan" -- bash -c \
-"ros2 launch hero2025_nav_bringup navigation_launch.py 2>&1 | tee \"$LOG_DIR/navigation.log\"; exec bash"
+"ros2 launch hero2025_nav_bringup navigation_launch.py 2>&1 | tee \"$LOG_DIR/navigation.log\" ; exec bash"
 
 # 启动地图服务器
 gnome-terminal --tab --title="map" -- bash -c \
-"ros2 launch map_server map_server.launch.py 2>&1 | tee \"$LOG_DIR/map_server.log\"; exec bash"
-
-# 启动速度变换节点
-gnome-terminal --tab --title="fake_vel_trans" -- bash -c \
-"ros2 launch fake_vel_transform fake_vel_transform_launch.py 2>&1 | tee \"$LOG_DIR/vel_transform.log\"; exec bash"
+" export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/home/dji/hero2026_-sentry/src/third_party/acados/lib;
+     ros2 launch map_server map_server.launch.py 2>&1 | tee \"$LOG_DIR/map_server.log\" ; exec bash"
 
 # 启动RViz可视化
 gnome-terminal --tab --title="rviz" -- bash -c \
