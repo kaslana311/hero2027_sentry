@@ -1462,9 +1462,11 @@ class MultiSensorPublisher {
             } break;
             case OdometryType::HIGHFREQ: {
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
-                    static int tf_throttle_counter = 0;
-                    if (++tf_throttle_counter >= 4) {  // 400Hz 降频至 100Hz
-                        tf_throttle_counter = 0;
+                    static std::atomic<int> tf_throttle_counter{0};
+                    if (tf_throttle_counter.fetch_add(
+                            1, std::memory_order_relaxed) %
+                            4 ==
+                        0) {  // 400Hz 降频至 100Hz
                         geometry_msgs::msg::TransformStamped transformStamped;
                         transformStamped.header.stamp = msg.header.stamp;
                         transformStamped.header.frame_id = "odom";
@@ -1603,9 +1605,11 @@ class MultiSensorPublisher {
             } break;
             case OdometryType::HIGHFREQ: {
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
-                    static int tf_throttle_counter = 0;
-                    if (++tf_throttle_counter >= 4) {  // 400Hz 降频至 100Hz
-                        tf_throttle_counter = 0;
+                    static std::atomic<int> tf_throttle_counter{0};
+                    if (tf_throttle_counter.fetch_add(
+                            1, std::memory_order_relaxed) %
+                            4 ==
+                        0) {  // 400Hz 降频至 100Hz
                         geometry_msgs::TransformStamped transformStamped;
                         transformStamped.header.stamp = msg.header.stamp;
                         transformStamped.header.frame_id = "odom";
@@ -1873,6 +1877,12 @@ class MultiSensorPublisher {
                              .reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE)
                              .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
 
+        // BEST_EFFORT QoS for high frequency telemetry
+        auto qos_telemetry =
+            rclcpp::QoS(10)
+                .reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT)
+                .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
+
         // Large sensor data with larger queue to avoid blocking
         auto qos_sensor = rclcpp::QoS(10)
                               .reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE)
@@ -1888,7 +1898,7 @@ class MultiSensorPublisher {
         odom_publisher_ =
             node_->create_publisher<ros::Odometry>("odin1/odometry", qos_small);
         odom_highfreq_publisher_ = node_->create_publisher<ros::Odometry>(
-            "odin1/odometry_highfreq", qos_small);
+            "odin1/odometry_highfreq", qos_telemetry);
         path_publisher_ =
             node_->create_publisher<visualization_msgs::msg::MarkerArray>(
                 "odin1/path", qos_sensor);
