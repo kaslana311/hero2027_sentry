@@ -8,6 +8,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <cstdint>
+#include <memory>
 #include <opencv2/core/mat.hpp>
 #include <pcl/impl/point_types.hpp>
 #include <vector>
@@ -144,6 +145,7 @@ class OccMap {
     long long update_frame = 0;
     std::vector<double> cloud_at_map_origin;
     std::shared_ptr<static_fix_map::StaticFixMap> static_fix_map_;
+    std::atomic<bool>* pub_map_ptr_;
     std::vector<int> static_indexs;       //静态地图占据点索引
     std::map<int, long long> time_list_;  //索引+未观测到的累计帧数
 };

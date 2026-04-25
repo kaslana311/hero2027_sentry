@@ -57,6 +57,9 @@ void OccMap::InitMap(cv::Mat& grid_map) {
     grid_map_ = grid_map;
     layer_z = static_cast<int>(1.0 / resolution_z);  // 1m高度
     occ_map = new uint8_t[grid_map_.rows * grid_map_.cols * layer_z];
+#ifndef DEBUG
+    pub_map_ptr_ = new bool[grid_map_.rows * grid_map_.cols];
+#endif
     fake_layer_z = static_cast<int>(0.35 / resolution_z);  //平移避免越界
     std::fill_n(occ_map, grid_map_.rows * grid_map_.cols * layer_z, 0);
 }
@@ -65,84 +68,107 @@ void OccMap::Clear() {
 }
 
 void OccMap::TimeGoON() {  //长期未观测到的障碍物清除
-    for (auto it = time_list_.begin(); it != time_list_.end();) {
-        if (update_frame - it->second > frame_save_) {
-            int index = it->first;
-            // 更新 Free 状态
+    std::vector<int> to_erase;
+    to_erase.reserve(time_list_.size() / 4);  // 预估
+
+    for (auto& [index, last_frame] : time_list_) {
+        if (update_frame - last_frame > frame_save_) {
             occ_map[index] =
-                std::max(static_cast<int>(occ_map[index]) + FORGET_FACTOR,
+                std::max(static_cast<int>(occ_map[index]) + LOG_OCC_FREE / 2,
                          static_cast<int>(MIN_LOG));
-            // it = time_list_.erase(it);
-            // continue;
         }
-        //非战据点清除
-        if (!IsOccupied(it->first)) {
-            it = time_list_.erase(it);
-            continue;
+        if (occ_map[index] < THR_OCC) {
+            to_erase.push_back(index);
         }
-        ++it;
+    }
+
+    // 批量删除
+    for (int idx : to_erase) {
+        time_list_.erase(idx);
     }
 }
 
 void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
-//三维索引
+    //三维索引
 #ifndef DEBUG
-    std::unordered_map<int, bool> point_map;
+    std::fill_n(pub_map_ptr_, grid_map_.rows * grid_map_.cols, false);
 #endif
-    for (auto& item : time_list_) {
-        int index = item.first;
-        int idz = index / (grid_map_.cols * grid_map_.rows);
-        int rem = index % (grid_map_.cols * grid_map_.rows);
-        int idy = rem / grid_map_.cols;
-        int idx = rem % grid_map_.cols;
+    using MapIt = std::map<int, long long>::iterator;
+    std::vector<std::pair<MapIt, bool>> iterators;
+    iterators.reserve(time_list_.size());
+    for (auto it = time_list_.begin(); it != time_list_.end(); ++it) {
+        iterators.emplace_back(it, false);
+    }
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, iterators.size()),
+        [&](const tbb::blocked_range<size_t>& r) {
+            for (size_t i = r.begin(); i != r.end(); ++i) {
+                auto& index = iterators[i].first->first;  // 获取当前索引
+                int rem = index % (grid_map_.cols * grid_map_.rows);
+                int idy = rem / grid_map_.cols;
+                int idx = rem % grid_map_.cols;
 #ifndef DEBUG
-        int key = idx + idy * grid_map_.cols;
-        if (point_map.find(key) != point_map.end()) continue;
-        point_map[key] = true;
-#endif
-        // TODO 高层分析 符合要求,入集合
-        int max_z_occ_index = -1;
-        int min_z_occ_index = 0;
-        for (int zi = layer_z - 1; zi >= 0; zi--) {
-            if (IsOccupied(idx, idy, zi)) {
-                max_z_occ_index = zi;
-                break;
-            }
-        }
-        for (int zi = 0; zi < layer_z; zi++) {
-            if (IsOccupied(idx, idy, zi)) {
-                min_z_occ_index = zi;
-                break;
-            }
-        }
-        double dzf = (max_z_occ_index - min_z_occ_index) * resolution_z;
-        if (dzf < higher_than_ground_threshold_) continue;  //地面过滤
-        if (dzf < 0.12 && (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
-            continue;  //过高过滤
-        // 计算最大空洞大小
-        int max_hole_size = 0;
-        int curr_hole_size = 0;
-        for (int zi = max_z_occ_index - 1; zi >= min_z_occ_index; zi--) {
-            if (!IsOccupied(idx, idy, zi)) {
-                curr_hole_size++;
-            } else {
-                if (curr_hole_size > max_hole_size) {
-                    max_hole_size = curr_hole_size;
-                }
-                curr_hole_size = 0;
-            }
-        }
-        if (max_hole_size * resolution_z > 0.15) continue;
+                int key = idx + idy * grid_map_.cols;
+                if (pub_map_ptr_[key].exchange(true)) continue;
 
-        pcl::PointXYZI pt;
-        pt.x = idx * resolution + resolution / 2.0 + cloud_at_map_origin[0];
-        pt.y = idy * resolution + resolution / 2.0 + cloud_at_map_origin[1];
-        pt.z = idz * resolution_z + resolution_z / 2.0 + cloud_at_map_origin[2];
-        pt.intensity = pt.z;  // Set intensity to 1.0 (or any other value)
-        pub_pc.points.push_back(pt);
-#ifdef FIX_MAP
-        UpdateStaticMap(idx, idy);
 #endif
+                // TODO 高层分析 符合要求,入集合
+                int max_z_occ_index = -1;
+                int min_z_occ_index = 0;
+                for (int zi = layer_z - 1; zi >= 0; zi--) {
+                    if (IsOccupied(idx, idy, zi)) {
+                        max_z_occ_index = zi;
+                        break;
+                    }
+                }
+                for (int zi = 0; zi < layer_z; zi++) {
+                    if (IsOccupied(idx, idy, zi)) {
+                        min_z_occ_index = zi;
+                        break;
+                    }
+                }
+                double dzf = (max_z_occ_index - min_z_occ_index) * resolution_z;
+                if (dzf < higher_than_ground_threshold_) continue;  //地面过滤
+                if (dzf < 0.12 &&
+                    (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
+                    continue;  //过高过滤
+                // 计算最大空洞大小
+                int max_hole_size = 0;
+                int curr_hole_size = 0;
+                for (int zi = max_z_occ_index - 1; zi >= min_z_occ_index;
+                     zi--) {
+                    if (!IsOccupied(idx, idy, zi)) {
+                        curr_hole_size++;
+                    } else {
+                        if (curr_hole_size > max_hole_size) {
+                            max_hole_size = curr_hole_size;
+                        }
+                        curr_hole_size = 0;
+                    }
+                }
+                if (max_hole_size * resolution_z > 0.15) continue;
+                iterators[i].second = true;  // 标记为符合要求
+            }
+        });
+
+    for (const auto& [it, is_valid] : iterators) {
+        if (is_valid) {
+            int index = it->first;
+            int idz = index / (grid_map_.cols * grid_map_.rows);
+            int rem = index % (grid_map_.cols * grid_map_.rows);
+            int idy = rem / grid_map_.cols;
+            int idx = rem % grid_map_.cols;
+            pcl::PointXYZI pt;
+            pt.x = idx * resolution + resolution / 2.0 + cloud_at_map_origin[0];
+            pt.y = idy * resolution + resolution / 2.0 + cloud_at_map_origin[1];
+            pt.z = idz * resolution_z + resolution_z / 2.0 +
+                   cloud_at_map_origin[2];
+            pt.intensity = pt.z;  // Set intensity to 1.0 (or any other value)
+            pub_pc.points.push_back(pt);
+#ifdef FIX_MAP
+            UpdateStaticMap(idx, idy);
+#endif
+        }
     }
 }
 OccMap::~OccMap() { delete[] occ_map; }
@@ -186,7 +212,8 @@ bool OccMap::IsStaticMapPoint(int index) {
 }
 void OccMap::racyHandle(const Vec3i& start_idx,
                         const std::vector<Vec3i>& obs_list) {
-    // TODO Bresenham算法实现3D网格的射线处理,发现符合障碍物标准,加入time_list_
+    // TODO
+    // Bresenham算法实现3D网格的射线处理,发现符合障碍物标准,加入time_list_
 }
 
 void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
