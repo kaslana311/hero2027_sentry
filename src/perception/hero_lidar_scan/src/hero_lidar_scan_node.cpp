@@ -88,8 +88,11 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
         std::bind(&HeroLidarScanNode::odomCallback, this,
                   std::placeholders::_1));
 
-    lidar1_sub_.subscribe(this, lidar1_topic);
-    lidar2_sub_.subscribe(this, lidar2_topic);
+    auto lidar_qos = rclcpp::QoS(10)
+        .reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT)
+        .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
+    lidar1_sub_.subscribe(this, lidar1_topic, lidar_qos.get_rmw_qos_profile());
+    lidar2_sub_.subscribe(this, lidar2_topic, lidar_qos.get_rmw_qos_profile());
     ///////////////////////////////
     crop_filter_.setMin(min_pt);
     crop_filter_.setMax(max_pt);
@@ -104,7 +107,22 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
     cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
         fused_cloud_topic, 10);
 
-    RCLCPP_INFO(this->get_logger(), "HeroLidarScan节点已启动,time_offset:%f", time_offset_);
+    worker_running_ = true;
+    worker_thread_ = std::thread(&HeroLidarScanNode::workerLoop, this);
+
+    int max_threads = omp_get_max_threads();
+    int limited_threads = std::max(1, max_threads - 3);
+    omp_set_num_threads(limited_threads);
+    RCLCPP_INFO(this->get_logger(), "HeroLidarScan节点已启动,time_offset:%f, OMP threads: %d->%d",
+                time_offset_, max_threads, limited_threads);
+}
+
+HeroLidarScanNode::~HeroLidarScanNode() {
+    worker_running_ = false;
+    frame_cv_.notify_all();
+    if (worker_thread_.joinable()) {
+        worker_thread_.join();
+    }
 }
 
 // 里程计回调：维护时间有序队列
@@ -250,83 +268,96 @@ void HeroLidarScanNode::processLidar(
     }
 }
 
-// 双雷达同步回调
+// 双雷达同步回调：仅做数据快照入队，不做任何计算
 void HeroLidarScanNode::lidarSyncCallback(
     const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr& lidar1_msg,
     const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr& lidar2_msg) {
-    // 1. 计算时间范围
-    double t1_start = lidar1_msg->timebase * 1e-9;
-    double t2_start = lidar2_msg->timebase * 1e-9;
-    double t_start = std::min(t1_start, t2_start);
-
-    double t1_end = t1_start;
-    double t2_end = t2_start;
-    if (!lidar1_msg->points.empty()) {
-        t1_end += lidar1_msg->points.back().offset_time * 1e-9;
-    }
-    if (!lidar2_msg->points.empty()) {
-        t2_end += lidar2_msg->points.back().offset_time * 1e-9;
-    }
-    double t_end = std::max(t1_end, t2_end);
-    rclcpp::Time stamp_end(static_cast<int64_t>(t_end * 1e9));
-
-    // 2. 将此时间段的里程计拷贝到本地无锁队列，立刻放锁
-    std::deque<nav_msgs::msg::Odometry> local_odom_buffer;
+    std::deque<nav_msgs::msg::Odometry> local_odom;
     {
         std::lock_guard<std::mutex> lock(odom_mutex_);
         if (odom_buffer_.empty()) {
             RCLCPP_WARN(this->get_logger(), "里程计队列为空");
             return;
         }
-
-        // 为了插值，我们需要至少拿出一个早于 start_time，和一个晚于 end_time
-        // 的缓冲数据
-        local_odom_buffer = odom_buffer_;
+        local_odom = odom_buffer_;
     }
-
-    // 3. 利用本地无锁队列查询基准时刻位姿
-    Eigen::Matrix4d pose_end;
-    if (!getPoseAtTimeLocal(local_odom_buffer, t_end, pose_end)) {
-        RCLCPP_WARN(this->get_logger(), "无法获取基准时刻位姿");
-        return;
+    {
+        std::lock_guard<std::mutex> lock(frame_queue_mutex_);
+        if (frame_queue_.size() >= 3) {
+            frame_queue_.pop();
+        }
+        frame_queue_.push({lidar1_msg, lidar2_msg, std::move(local_odom)});
     }
+    frame_cv_.notify_one();
+}
 
-    // 4. 处理两个雷达点云，传入本地缓存队列
-    pcl::PointCloud<pcl::PointXYZI> cloud1, cloud2;
-    processLidar(lidar1_msg, T_lidar1_to_base_, pose_end, local_odom_buffer,
-                 cloud1);
-    processLidar(lidar2_msg, T_lidar2_to_base_, pose_end, local_odom_buffer,
-                 cloud2);
+// 工作线程：执行所有 OMP 计算和点云发布
+void HeroLidarScanNode::workerLoop() {
+    while (worker_running_) {
+        LidarFrame frame;
+        {
+            std::unique_lock<std::mutex> lock(frame_queue_mutex_);
+            frame_cv_.wait(lock, [this] {
+                return !frame_queue_.empty() || !worker_running_;
+            });
+            if (!worker_running_ && frame_queue_.empty()) break;
+            frame = std::move(frame_queue_.front());
+            frame_queue_.pop();
+        }
 
-    // 融合点云
-    pcl::PointCloud<pcl::PointXYZI> fused_cloud = cloud1 + cloud2;
+        auto& lidar1_msg = frame.lidar1;
+        auto& lidar2_msg = frame.lidar2;
+        auto& local_odom_buffer = frame.odom_snapshot;
 
-    pcl::PointCloud<pcl::PointXYZI> filtered_cloud;
-    auto fused_ptr =
-        std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(fused_cloud);
-        std::cout<<"origin size "<<fused_ptr->size()<<std::endl;
-    crop_filter_.setInputCloud(fused_ptr);
-    crop_filter_.filter(filtered_cloud);
-       std::cout<<"fff size "<<filtered_cloud.size()<<std::endl;
-    pcl::PointCloud<pcl::PointXYZI> voxel_filtered_cloud;
-    if (filter_size_ > 0.0) {
-        pcl::VoxelGrid<pcl::PointXYZI> voxel_filter;
-        auto crop_ptr =
-            std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(filtered_cloud);
-        voxel_filter.setInputCloud(crop_ptr);
-        voxel_filter.setLeafSize(filter_size_, filter_size_, filter_size_);
-        voxel_filter.filter(voxel_filtered_cloud);
-    } else {
-        voxel_filtered_cloud = filtered_cloud;
+        // 1. 计算时间范围
+        double t1_end = lidar1_msg->timebase * 1e-9;
+        double t2_end = lidar2_msg->timebase * 1e-9;
+        if (!lidar1_msg->points.empty()) {
+            t1_end += lidar1_msg->points.back().offset_time * 1e-9;
+        }
+        if (!lidar2_msg->points.empty()) {
+            t2_end += lidar2_msg->points.back().offset_time * 1e-9;
+        }
+        double t_end = std::max(t1_end, t2_end);
+        rclcpp::Time stamp_end(static_cast<int64_t>(t_end * 1e9));
+
+        // 2. 查询基准时刻位姿
+        Eigen::Matrix4d pose_end;
+        if (!getPoseAtTimeLocal(local_odom_buffer, t_end, pose_end)) {
+            RCLCPP_WARN(this->get_logger(), "无法获取基准时刻位姿");
+            continue;
+        }
+
+        // 3. 处理两个雷达点云
+        pcl::PointCloud<pcl::PointXYZI> cloud1, cloud2;
+        processLidar(lidar1_msg, T_lidar1_to_base_, pose_end, local_odom_buffer, cloud1);
+        processLidar(lidar2_msg, T_lidar2_to_base_, pose_end, local_odom_buffer, cloud2);
+
+        // 融合点云
+        pcl::PointCloud<pcl::PointXYZI> fused_cloud = cloud1 + cloud2;
+
+        pcl::PointCloud<pcl::PointXYZI> filtered_cloud;
+        auto fused_ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(fused_cloud);
+        crop_filter_.setInputCloud(fused_ptr);
+        crop_filter_.filter(filtered_cloud);
+
+        pcl::PointCloud<pcl::PointXYZI> voxel_filtered_cloud;
+        if (filter_size_ > 0.0) {
+            pcl::VoxelGrid<pcl::PointXYZI> voxel_filter;
+            auto crop_ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(filtered_cloud);
+            voxel_filter.setInputCloud(crop_ptr);
+            voxel_filter.setLeafSize(filter_size_, filter_size_, filter_size_);
+            voxel_filter.filter(voxel_filtered_cloud);
+        } else {
+            voxel_filtered_cloud = filtered_cloud;
+        }
+
+        sensor_msgs::msg::PointCloud2 output_msg;
+        pcl::toROSMsg(voxel_filtered_cloud, output_msg);
+        output_msg.header.stamp = stamp_end;
+        output_msg.header.frame_id = "base_link";
+        cloud_pub_->publish(output_msg);
     }
-
-    // 转换并发布
-    sensor_msgs::msg::PointCloud2 output_msg;
-    pcl::toROSMsg(voxel_filtered_cloud, output_msg);
-    output_msg.header.stamp = stamp_end;
-    output_msg.header.frame_id = "base_link";
-    //在此处添加pcl crob过滤 过滤"base_link"附近的点云.
-    cloud_pub_->publish(output_msg);
 }
 
 }  // namespace hero_lidar_scan
