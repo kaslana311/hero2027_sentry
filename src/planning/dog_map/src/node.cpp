@@ -169,7 +169,7 @@ class DogMapNode : public rclcpp::Node {
         rc_.update_lock.unlock();
         occ_map_->Update(temp_pc, temp_pose);
         pcl::PointCloud<pcl::PointXYZI> occ_pc ;
-        occ_map_->PubRes(occ_pc);
+        occ_map_->PubRes(occ_pc); 
         if (!occ_pc.empty()) {
             auto msg = sensor_msgs::msg::PointCloud2();
             pcl::toROSMsg(occ_pc, msg);

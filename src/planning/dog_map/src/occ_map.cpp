@@ -327,7 +327,6 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
     }
     // 更新未观测到的累计帧数
     TimeGoON();
-
     update_frame++;
 }
 void OccMap::UpdateStaticMap(int idx, int idy) {
