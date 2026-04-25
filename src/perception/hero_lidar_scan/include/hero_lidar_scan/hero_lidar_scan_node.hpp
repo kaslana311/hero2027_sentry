@@ -20,11 +20,11 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 namespace hero_lidar_scan {
-const float crop_min_x = -0.3f;
-const float crop_min_y = -0.3f;
+const float crop_min_x = -0.6f;
+const float crop_min_y = -0.6f;
 const float crop_min_z = -0.3f;
-const float crop_max_x = 0.3f;
-const float crop_max_y = 0.3f;
+const float crop_max_x = 0.6f;
+const float crop_max_y = 0.6f;
 const float crop_max_z = 1.0f;
 class HeroLidarScanNode : public rclcpp::Node {
    public:

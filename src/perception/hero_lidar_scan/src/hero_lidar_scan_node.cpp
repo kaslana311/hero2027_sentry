@@ -81,8 +81,10 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
     filter_size_ = this->get_parameter("filter_size").as_double();
 
     // 创建订阅器和发布器
+    rclcpp::QoS qos(500);
+    qos.best_effort();
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        odom_topic, 500,
+        odom_topic, qos,
         std::bind(&HeroLidarScanNode::odomCallback, this,
                   std::placeholders::_1));
 
@@ -133,7 +135,7 @@ bool HeroLidarScanNode::getPoseAtTimeLocal(
 
     if (idx_after == 0) {
         // 目标时间早于队列最早时间，使用最早帧
-        auto& odom = local_odom_buffer.back();
+        auto& odom = local_odom_buffer.front();
         Eigen::Quaterniond q(
             odom.pose.pose.orientation.w, odom.pose.pose.orientation.x,
             odom.pose.pose.orientation.y, odom.pose.pose.orientation.z);
@@ -193,7 +195,7 @@ void HeroLidarScanNode::processLidar(
 
     // 动态桶策略 (分段预积分)：假设每 5 毫秒 (0.005 秒)
     // 视作一个固定位姿桶，大幅减少插值次数
-    const double BUCKET_TIME_RESOLUTION = 0.005;
+    const double BUCKET_TIME_RESOLUTION = 0.0025;
 
     // 计算每个桶的位姿并缓存
     double total_duration = 0.0;
@@ -302,9 +304,10 @@ void HeroLidarScanNode::lidarSyncCallback(
     pcl::PointCloud<pcl::PointXYZI> filtered_cloud;
     auto fused_ptr =
         std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(fused_cloud);
+        std::cout<<"origin size "<<fused_ptr->size()<<std::endl;
     crop_filter_.setInputCloud(fused_ptr);
     crop_filter_.filter(filtered_cloud);
-    
+       std::cout<<"fff size "<<filtered_cloud.size()<<std::endl;
     pcl::PointCloud<pcl::PointXYZI> voxel_filtered_cloud;
     if (filter_size_ > 0.0) {
         pcl::VoxelGrid<pcl::PointXYZI> voxel_filter;
