@@ -1,6 +1,7 @@
 #include "dog_map/occ_map.hpp"
 
 #include <oneapi/tbb/parallel_for.h>
+#include <pcl/filters/voxel_grid.h>
 
 #include <iostream>
 #include <opencv2/opencv.hpp>
@@ -58,7 +59,7 @@ void OccMap::InitMap(cv::Mat& grid_map) {
     layer_z = static_cast<int>(1.0 / resolution_z);  // 1m高度
     occ_map = new uint8_t[grid_map_.rows * grid_map_.cols * layer_z];
 #ifndef DEBUG
-    pub_map_ptr_ = new bool[grid_map_.rows * grid_map_.cols];
+    pub_map_ptr_ = new std::atomic<bool>[grid_map_.rows * grid_map_.cols];
 #endif
     fake_layer_z = static_cast<int>(0.35 / resolution_z);  //平移避免越界
     std::fill_n(occ_map, grid_map_.rows * grid_map_.cols * layer_z, 0);
@@ -87,13 +88,13 @@ void OccMap::TimeGoON() {  //长期未观测到的障碍物清除
         time_list_.erase(idx);
     }
 }
-
+using MapIt = std::map<int, long long>::iterator;
 void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
     //三维索引
 #ifndef DEBUG
     std::fill_n(pub_map_ptr_, grid_map_.rows * grid_map_.cols, false);
 #endif
-    using MapIt = std::map<int, long long>::iterator;
+
     std::vector<std::pair<MapIt, bool>> iterators;
     iterators.reserve(time_list_.size());
     for (auto it = time_list_.begin(); it != time_list_.end(); ++it) {
@@ -224,6 +225,14 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
     pass.setFilterFieldName("z");
     pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.3);
     pass.filter(*cloud_in);
+    // 2. 添加 3cm 降采样 (Voxel Grid Filter)
+    if (!cloud_in->empty()) {
+        pcl::VoxelGrid<pcl::PointXYZ> sor;
+        sor.setInputCloud(cloud_in);
+        // 设置体素大小为 0.03m (3cm)
+        sor.setLeafSize(0.03f, 0.03f, 0.03f);
+        sor.filter(*cloud_in);
+    }
     double min_x = pose.first[0] - half_map_size_;
     min_x = std::max(min_x, cloud_at_map_origin[0] + 0.2);
     double max_x = pose.first[0] + half_map_size_;
