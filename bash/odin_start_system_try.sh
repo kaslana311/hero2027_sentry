@@ -46,7 +46,8 @@ gnome-terminal --tab --title="bridge" -- bash -c \
 
 # 等待雷达初始化完成
 # wait_for_topic "/livox/imu" 60
-
+# gnome-terminal --tab --title="lio" -- bash -c "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch livox_ros_driver2 msg_mixed_launch.py; bash"
+# gnome-terminal --tab --title="fusion" -- bash -c "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch hero_lidar_scan hero_lidar_scan.launch.py; bash"
 gnome-terminal --tab --title="odin" -- bash -c \
 "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch odin_ros_driver odin1_ros2.launch.py; bash"
 
@@ -56,8 +57,8 @@ gnome-terminal --tab --title="odin" -- bash -c \
 # "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch tf_manager fusion_launch.py; bash"
 
 # 启动重定位节点
-# gnome-terminal --tab --title="relocalization" -- bash -c \
-# "ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\" ; exec bash"
+gnome-terminal --tab --title="relocalization" -- bash -c \
+"ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\" ; exec bash"
 
 sleep 5  # 适当调整时间或使用话题检测
 
