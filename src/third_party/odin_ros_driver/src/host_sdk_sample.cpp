@@ -62,6 +62,7 @@ static std::mutex device_mutex;                      // Device operation mutex l
 static std::atomic<bool> g_connection_timeout(false);
 static std::atomic<bool> g_usb_version_error(false);
 static std::atomic<bool> g_shutdown_requested(false);  // Signal handler flag
+static std::mutex g_ros_object_mutex;
 #ifdef ROS2
     std::shared_ptr<MultiSensorPublisher> g_ros_object = nullptr;
 #else
@@ -832,8 +833,15 @@ static void imu_thread_routine()
             lock.unlock();
             
             // Publish IMU data
-            if (g_ros_object && g_sendimu) {
-                g_ros_object->publishImu(&imu_data);
+            {
+                std::shared_ptr<MultiSensorPublisher> local_obj;
+                {
+                    std::lock_guard<std::mutex> lk(g_ros_object_mutex);
+                    local_obj = g_ros_object;
+                }
+                if (local_obj && g_sendimu) {
+                    local_obj->publishImu(&imu_data);
+                }
             }
             
             lock.lock();
@@ -919,6 +927,7 @@ static void lidar_data_callback(const lidar_data_t *data, void *user_data)
         case LIDAR_DT_RAW_IMU:
             if (g_sendimu) {
                 imudata = (imu_convert_data_t *)data->stream.imageList[0].pAddr;
+                if (!imudata) break;
                 // Enqueue IMU data for dedicated thread processing
                 {
                     std::lock_guard<std::mutex> lock(g_imu_queue_mutex);
@@ -947,13 +956,14 @@ static void lidar_data_callback(const lidar_data_t *data, void *user_data)
             update_count(&slam_cloud_rx_fps);
             break;
         case LIDAR_DT_SLAM_ODOMETRY:
-            if (g_sendodom) {
+            if (g_sendodom && data->stream.imageList[0].pAddr) {
                 g_ros_object->publishOdometry((capture_Image_List_t *)&data->stream, OdometryType::STANDARD, g_show_path, g_show_camerapose);
             }
             update_count(&slam_odom_rx_fps);
             break;
         case LIDAR_DT_DEV_STATUS:
             dev_info_data = (lidar_device_status_t *)data->stream.imageList[0].pAddr;
+            if (!dev_info_data) break;
 
             pids.push_back(self);
             collect_children(self, pids);
@@ -1103,7 +1113,7 @@ static void lidar_data_callback(const lidar_data_t *data, void *user_data)
             break;
             case LIDAR_DT_SLAM_ODOMETRY_HIGHFREQ:
             {
-                if (g_sendodom) {
+                if (g_sendodom && data->stream.imageList[0].pAddr) {
                     g_ros_object->publishOdometry((capture_Image_List_t *)&data->stream, OdometryType::HIGHFREQ, false, false);
                 }
                 update_count(&slam_odom_highfreq_rx_fps);
@@ -1111,7 +1121,7 @@ static void lidar_data_callback(const lidar_data_t *data, void *user_data)
             break;
             case LIDAR_DT_SLAM_ODOMETRY_TF:
             {
-                if (g_custom_map_mode == 2) {
+                if (g_custom_map_mode == 2 && data->stream.imageList[0].pAddr) {
                     g_ros_object->publishOdometry((capture_Image_List_t *)&data->stream, OdometryType::TRANSFORM, false, false);
                     if (!g_relocalization_success_msg_printed) {
                     #ifdef ROS2
@@ -1695,6 +1705,7 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
         }
         if (g_sendodom) {
             lidar_activate_stream_type(odinDevice, LIDAR_DT_SLAM_ODOMETRY);
+            lidar_activate_stream_type(odinDevice, LIDAR_DT_SLAM_ODOMETRY_HIGHFREQ);
         }
         if (g_senddtof) {
             lidar_activate_stream_type(odinDevice, LIDAR_DT_RAW_DTOF);
@@ -2005,13 +2016,15 @@ int main(int argc, char *argv[])
 
     if (!deviceConnected) {
         #ifdef ROS2
-        if (g_ros_object) {
+        {
+            std::lock_guard<std::mutex> lk(g_ros_object_mutex);
             g_ros_object.reset();   // destroys all publishers/subscribers
         }
         node.reset();              // destroy the node first
         rclcpp::shutdown();
         #else
-        if (g_ros_object) {
+        {
+            std::lock_guard<std::mutex> lk(g_ros_object_mutex);
             delete g_ros_object;
             g_ros_object = nullptr;
         }

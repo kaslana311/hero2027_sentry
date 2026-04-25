@@ -1249,6 +1249,7 @@ class MultiSensorPublisher {
         // %ld",odom_data->timestamp_ns);
 
         uint32_t data_len = stream->imageList[0].length;
+        if (!stream->imageList[0].pAddr) return;
         if (data_len == sizeof(ros_odom_convert_complete_t)) {
             ros_odom_convert_complete_t* odom_data =
                 (ros_odom_convert_complete_t*)stream->imageList[0].pAddr;
@@ -1462,11 +1463,10 @@ class MultiSensorPublisher {
             } break;
             case OdometryType::HIGHFREQ: {
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
-                    static std::atomic<int> tf_throttle_counter{0};
-                    if (tf_throttle_counter.fetch_add(
+                    if (tf_throttle_counter_.fetch_add(
                             1, std::memory_order_relaxed) %
-                            4 ==
-                        0) {  // 400Hz 降频至 100Hz
+                            8 ==
+                        0) {  // 400Hz 降频至 50Hz
                         geometry_msgs::msg::TransformStamped transformStamped;
                         transformStamped.header.stamp = msg.header.stamp;
                         transformStamped.header.frame_id = "odom";
@@ -1605,11 +1605,10 @@ class MultiSensorPublisher {
             } break;
             case OdometryType::HIGHFREQ: {
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
-                    static std::atomic<int> tf_throttle_counter{0};
-                    if (tf_throttle_counter.fetch_add(
+                    if (tf_throttle_counter_.fetch_add(
                             1, std::memory_order_relaxed) %
-                            4 ==
-                        0) {  // 400Hz 降频至 100Hz
+                            8 ==
+                        0) {  // 400Hz 降频至 50Hz
                         geometry_msgs::TransformStamped transformStamped;
                         transformStamped.header.stamp = msg.header.stamp;
                         transformStamped.header.frame_id = "odom";
@@ -1800,6 +1799,7 @@ class MultiSensorPublisher {
     std::atomic<uint32_t> cloud_index_{0};
     std::atomic<uint32_t> image_index_{0};
     std::atomic<uint32_t> wcwi_index_{0};
+    std::atomic<int> tf_throttle_counter_{0};
 
     std::filesystem::path root_dir_;
 
@@ -1879,7 +1879,7 @@ class MultiSensorPublisher {
 
         // BEST_EFFORT QoS for high frequency telemetry
         auto qos_telemetry =
-            rclcpp::QoS(10)
+            rclcpp::QoS(500)
                 .reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT)
                 .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
 

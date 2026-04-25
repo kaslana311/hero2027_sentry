@@ -10,6 +10,7 @@ Panels:
         - /cloudslam_reprojected1
         - /Odometry1
         - /Odometry1/Odometry_high1
+        - /Odometry1/Odometry_high1/Topic1
         - /slam1
         - /dense_depth_demo1
       Splitter Ratio: 0.5
@@ -235,7 +236,7 @@ Visualization Manager:
             Durability Policy: Volatile
             Filter size: 10
             History Policy: Keep Last
-            Reliability Policy: Reliable
+            Reliability Policy: Best Effort
             Value: /odin1/odometry_highfreq
           Value: true
         - Class: rviz_default_plugins/MarkerArray
