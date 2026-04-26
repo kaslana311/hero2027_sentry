@@ -89,8 +89,8 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
                   std::placeholders::_1));
 
     auto lidar_qos = rclcpp::QoS(10)
-        .reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT)
-        .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
+                         .reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT)
+                         .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
     lidar1_sub_.subscribe(this, lidar1_topic, lidar_qos.get_rmw_qos_profile());
     lidar2_sub_.subscribe(this, lidar2_topic, lidar_qos.get_rmw_qos_profile());
     ///////////////////////////////
@@ -113,7 +113,8 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
     int max_threads = omp_get_max_threads();
     int limited_threads = std::max(1, max_threads - 3);
     omp_set_num_threads(limited_threads);
-    RCLCPP_INFO(this->get_logger(), "HeroLidarScan节点已启动,time_offset:%f, OMP threads: %d->%d",
+    RCLCPP_INFO(this->get_logger(),
+                "HeroLidarScan节点已启动,time_offset:%f, OMP threads: %d->%d",
                 time_offset_, max_threads, limited_threads);
 }
 
@@ -330,21 +331,25 @@ void HeroLidarScanNode::workerLoop() {
 
         // 3. 处理两个雷达点云
         pcl::PointCloud<pcl::PointXYZI> cloud1, cloud2;
-        processLidar(lidar1_msg, T_lidar1_to_base_, pose_end, local_odom_buffer, cloud1);
-        processLidar(lidar2_msg, T_lidar2_to_base_, pose_end, local_odom_buffer, cloud2);
+        processLidar(lidar1_msg, T_lidar1_to_base_, pose_end, local_odom_buffer,
+                     cloud1);
+        processLidar(lidar2_msg, T_lidar2_to_base_, pose_end, local_odom_buffer,
+                     cloud2);
 
         // 融合点云
         pcl::PointCloud<pcl::PointXYZI> fused_cloud = cloud1 + cloud2;
 
         pcl::PointCloud<pcl::PointXYZI> filtered_cloud;
-        auto fused_ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(fused_cloud);
+        auto fused_ptr =
+            std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(fused_cloud);
         crop_filter_.setInputCloud(fused_ptr);
         crop_filter_.filter(filtered_cloud);
 
         pcl::PointCloud<pcl::PointXYZI> voxel_filtered_cloud;
         if (filter_size_ > 0.0) {
             pcl::VoxelGrid<pcl::PointXYZI> voxel_filter;
-            auto crop_ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(filtered_cloud);
+            auto crop_ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(
+                filtered_cloud);
             voxel_filter.setInputCloud(crop_ptr);
             voxel_filter.setLeafSize(filter_size_, filter_size_, filter_size_);
             voxel_filter.filter(voxel_filtered_cloud);
