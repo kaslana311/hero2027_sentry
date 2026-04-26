@@ -20,6 +20,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
+find_package(TBB REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(small_gicp REQUIRED)
 find_package(pcl_conversions REQUIRED)
@@ -43,7 +44,7 @@ add_executable(relocalization_node src/relocalization_node.cpp ${UI_SOURCES})
 ament_target_dependencies(relocalization_node rclcpp geometry_msgs nav_msgs tf2 tf2_ros Eigen3 sensor_msgs pcl_conversions OpenMP tf2_eigen)
 
 # 链接PCL
-target_link_libraries(relocalization_node ${PCL_LIBRARIES} OpenMP::OpenMP_CXX Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(relocalization_node ${PCL_LIBRARIES} TBB::tbb OpenMP::OpenMP_CXX Qt${QT_VERSION_MAJOR}::Widgets)
 
 # 安装目标
 install(TARGETS relocalization_node

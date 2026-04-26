@@ -31,6 +31,13 @@
 #include "tf2_eigen/tf2_eigen.hpp"
 #include "util.hpp"
 
+struct ScoreS {
+    int score;
+    double dx;
+    double dy;
+    bool use = 0;
+};
+
 class RelocalizationNode : public QObject, public rclcpp::Node {
     Q_OBJECT
    public:
@@ -115,6 +122,8 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
     Eigen::Isometry3d result_t_;
     Eigen::Matrix4d pose_estimation_;
     std::vector<double> init_pose_;
+    ScoreS* Sclabels;
+    long long cols, rows;
 
     // Helpers
     static inline double NormalizeAngle(double a) {

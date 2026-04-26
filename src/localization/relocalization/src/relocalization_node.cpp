@@ -1,7 +1,12 @@
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
 #include "relocalization_node.hpp"
 
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/io/pcd_io.h>
+
+
 
 #include <fstream>
 #include <limits>
@@ -386,24 +391,30 @@ Eigen::Matrix4d RelocalizationNode::CorrelativeMatch() {
                  dy += trans_step_) {
                 double tx = init_x + dx;
                 double ty = init_y + dy;
-                int score = 0;
 
                 // 计算重合度得分
-                for (const auto& rpt : rot_pts) {
-                    double final_x = rpt.x() + tx;
-                    double final_y = rpt.y() + ty;
+                int score = tbb::parallel_reduce(
+                    tbb::blocked_range<size_t>(0, rot_pts.size()), 0,
+                    [&](const tbb::blocked_range<size_t>& r, int local) {
+                        for (size_t i = r.begin(); i < r.end(); ++i) {
+                            const auto& rpt = rot_pts[i];
+                            const double final_x = rpt.x() + tx;
+                            const double final_y = rpt.y() + ty;
 
-                    int cx = std::floor((final_x - map_x_min_) / resolution_);
-                    int cy = std::floor((final_y - map_y_min_) / resolution_);
+                            const int cx = static_cast<int>(std::floor(
+                                (final_x - map_x_min_) / resolution_));
+                            const int cy = static_cast<int>(std::floor(
+                                (final_y - map_y_min_) / resolution_));
 
-                    // 如果坐标合法，且正中地图轮廓黑线
-                    if (cx >= 0 && cx < map_width_ && cy >= 0 &&
-                        cy < map_height_) {
-                        if (match_grid_data_[cy * map_width_ + cx] > 0) {
-                            score++;
+                            if (cx >= 0 && cx < map_width_ && cy >= 0 &&
+                                cy < map_height_ &&
+                                match_grid_data_[cy * map_width_ + cx] > 0) {
+                                ++local;
+                            }
                         }
-                    }
-                }
+                        return local;
+                    },
+                    std::plus<int>());
 
                 if (score > best_score) {
                     best_score = score;

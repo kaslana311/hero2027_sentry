@@ -81,7 +81,7 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
     bool InitGlobalMap(std::string map_path);
     Eigen::Isometry3d SmallIcpRegistration(
         const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan, Eigen::Matrix4d pre,
-        double& fitness);
+        double& fitness, bool& success);
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_scan_;
 
     //-------------------------------data---------------------------------//
@@ -146,26 +146,7 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
     void TDThandle();
     //---------------------inline func----------------------------//
     // Helpers for constrained registration and gating
-    static inline double NormalizeAngle(double a) {
-        while (a > M_PI) a -= 2 * M_PI;
-        while (a < -M_PI) a += 2 * M_PI;
-        return a;
-    }
-    static inline double YawFromMat(const Eigen::Matrix4d& T) {
-        const auto& R = T.block<3, 3>(0, 0);
-        return std::atan2(R(1, 0), R(0, 0));
-    }
-    static inline double PitchFromMat(const Eigen::Matrix4d& T) {
-        const auto& R = T.block<3, 3>(0, 0);
-        // Eigen ZYX order: yaw(Z), pitch(Y), roll(X)
-        Eigen::Vector3d eul = R.eulerAngles(2, 1, 0);
-        return eul[1];
-    }
-    static inline double RollFromMat(const Eigen::Matrix4d& T) {
-        const auto& R = T.block<3, 3>(0, 0);
-        Eigen::Vector3d eul = R.eulerAngles(2, 1, 0);
-        return eul[2];
-    }
+
     static inline Eigen::Matrix4d RotZ(double yaw) {
         Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
         double c = std::cos(yaw), s = std::sin(yaw);
@@ -174,32 +155,5 @@ class RelocalizationNode : public QObject, public rclcpp::Node {
         T(1, 0) = s;
         T(1, 1) = c;
         return T;
-    }
-    static inline void ZeroRollPitchKeepYaw(Eigen::Matrix4d& T) {
-        double yaw = YawFromMat(T);
-        T.block<3, 3>(0, 0) = RotZ(yaw).block<3, 3>(0, 0);
-    }
-    static inline double TransDelta(const Eigen::Matrix4d& A,
-                                    const Eigen::Matrix4d& B) {
-        Eigen::Vector3d da = A.block<3, 1>(0, 3);
-        Eigen::Vector3d db = B.block<3, 1>(0, 3);
-        return (da - db).norm();
-    }
-    static inline double YawDelta(const Eigen::Matrix4d& A,
-                                  const Eigen::Matrix4d& B) {
-        return std::abs(NormalizeAngle(YawFromMat(A) - YawFromMat(B)));
-    }
-    static inline double PitchDelta(const Eigen::Matrix4d& A,
-                                    const Eigen::Matrix4d& B) {
-        double deg =
-            std::abs(NormalizeAngle(PitchFromMat(A) - PitchFromMat(B)));
-        if (deg > 175.0 * M_PI / 180.0) deg = std::abs(M_PI - deg);
-        return deg;
-    }
-    static inline double RollDelta(const Eigen::Matrix4d& A,
-                                   const Eigen::Matrix4d& B) {
-        double deg = std::abs(NormalizeAngle(RollFromMat(A) - RollFromMat(B)));
-        if (deg > 175.0 * M_PI / 180.0) deg = std::abs(M_PI - deg);
-        return deg;
     }
 };

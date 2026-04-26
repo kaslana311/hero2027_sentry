@@ -1,4 +1,4 @@
-#include "relocalization_node.hpp"
+#include "relocalization_node_3d.hpp"
 
 #include <pcl/filters/passthrough.h>
 using namespace small_gicp;
@@ -231,13 +231,16 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
         yaw_seeds.push_back(-a);
     }
     static bool first = true;
-    double best_fitness = 0.05;
+    double best_fitness = 1.0;
+    bool success = false;
     Eigen::Matrix4d best_T = pose_estimation_;
     for (double dyaw : yaw_seeds) {
         Eigen::Matrix4d seed = RotZ(dyaw) * pose_estimation_;
         double f = 1e9;
-        Eigen::Isometry3d res = SmallIcpRegistration(TDTresult, seed, f);
-        if (f < best_fitness) {
+
+        Eigen::Isometry3d res =
+            SmallIcpRegistration(TDTresult, seed, f, success);
+        if (success && f < best_fitness) {
             best_fitness = f;
             best_T = res.matrix();
             if (first) break;
@@ -251,24 +254,12 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     reloc_res relocResult;
 
     relocResult.fitness = best_fitness;
-    relocResult.dtrans = TransDelta(best_T, result_t_.matrix());
-    relocResult.dpitch = PitchDelta(best_T, result_t_.matrix());
-    relocResult.droll = RollDelta(best_T, result_t_.matrix());
-    relocResult.dyaw = YawDelta(best_T, result_t_.matrix());
-    const bool fitness_ok = best_fitness < fitness_threshold_;
-    const bool trans_ok = relocResult.dtrans <= gate_trans_m_;
-    const bool yaw_ok = relocResult.dyaw <= yaw_gate;
-    const double roll_gate = gate_roll_deg_ * M_PI / 180.0;
-    const double pitch_gate = gate_pitch_deg_ * M_PI / 180.0;
-    const bool roll_ok = relocResult.droll <= roll_gate;
-    const bool pitch_ok = relocResult.dpitch <= pitch_gate;
-    bool judge_ok = fitness_ok && trans_ok && yaw_ok && pitch_ok && roll_ok;
+
+    bool judge_ok = success;
 
     if (judge_ok) {
         Eigen::Matrix4d T_pub = best_T;
-        if (enforce_rp_zero_) {
-            ZeroRollPitchKeepYaw(best_T);
-        }
+
         relocResult.isOk = true;
         result_t_.matrix() = T_pub;
         if (!qt_control.load()) {
@@ -300,7 +291,7 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
 // converged return res,false return pre
 Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& pc_scan, Eigen::Matrix4d pre,
-    double& fitness) {
+    double& fitness, bool& success) {
     // 扫描点云处理
     this->source_ = small_gicp::voxelgrid_sampling_omp<
         pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
@@ -322,6 +313,7 @@ Eigen::Isometry3d RelocalizationNode::SmallIcpRegistration(
                                    init_T_target_source);
     size_t num_inliers = result.num_inliers;  // Number of inlier source points
     fitness = result.error / num_inliers;     // Fitness score
+    success = result.converged;
     if (result.converged) {
         Eigen::Isometry3d T = result.T_target_source;
         std::cout << "Gicp registration converged" << std::endl;
