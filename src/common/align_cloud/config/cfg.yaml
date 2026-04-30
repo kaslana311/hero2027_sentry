@@ -1,0 +1,11 @@
+base_cloud: /home/z/Desktop/126.pcd
+target_cloud: /home/z/Desktop/193.pcd
+init: [ 1.0, 0.0, 0.0, 0.0,0.0, 1.0, 0.0, 0.0,0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] #这里的参数没用(但别删除),我在代码读取参数中写死了,修改直接修改源代码就行
+
+smgicp:
+  global_leaf_size: 0.02
+  local_leaf_size: 0.02
+  max_iterations: 1600
+  num_threads: 4
+  max_dist_sq: 0.3
+  neighbor_num: 20
