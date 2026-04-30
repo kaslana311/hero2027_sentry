@@ -11,13 +11,13 @@ using namespace align_cloud_online;
 
 AlignNode::AlignNode() : rclcpp::Node("align_cloud_online")
 {
-  this->declare_parameter("init_pose", std::vector<double>(16, 0.0));
+   this->declare_parameter("init_pose", std::vector<double>(6, 0.0));
 #ifndef USE_NDT
-  this->declare_parameter("smgicp_global_leaf_size", 0.5);
-  this->declare_parameter("smgicp_local_leaf_size", 0.5);
-  this->declare_parameter("smgicp_max_iterations", 50);
+  this->declare_parameter("smgicp_global_leaf_size", 0.05);
+  this->declare_parameter("smgicp_local_leaf_size", 0.05);
+  this->declare_parameter("smgicp_max_iterations", 500);
   this->declare_parameter("smgicp_num_threads", 4);
-  this->declare_parameter("smgicp_max_dist_sq", 1.0);
+  this->declare_parameter("smgicp_max_dist_sq", 4.0);
   this->declare_parameter("neighbor_num", 20);
 #else
   this->declare_parameter("ndt_epsilon_", 0.01);
@@ -31,12 +31,27 @@ AlignNode::AlignNode() : rclcpp::Node("align_cloud_online")
   this->config_.init = Eigen::Matrix4d::Identity();
   std::vector<double> init_vec;
   this->get_parameter("init_pose", init_vec);
-  if (init_vec.size() == 16) {
-    for (int i = 0; i < 16; i++) {
-      this->config_.init(i / 4, i % 4) = init_vec[i];
-    }
+  if (init_vec.size() == 6) {
+    const double x = init_vec[0];
+    const double y = init_vec[1];
+    const double z = init_vec[2];
+    const double roll  = init_vec[3];
+    const double pitch = init_vec[4];
+    const double yaw   = init_vec[5];
+
+    Eigen::AngleAxisd rx(roll,  Eigen::Vector3d::UnitX());
+    Eigen::AngleAxisd ry(pitch, Eigen::Vector3d::UnitY());
+    Eigen::AngleAxisd rz(yaw,   Eigen::Vector3d::UnitZ());
+
+   
+    Eigen::Matrix3d R = (rz * ry * rx).toRotationMatrix();  // ZYX顺序
+    this->config_.init.setIdentity();
+    this->config_.init.block<3,3>(0,0) = R;
+    this->config_.init(0,3) = x;
+    this->config_.init(1,3) = y;
+    this->config_.init(2,3) = z;
   } else {
-    RCLCPP_WARN(this->get_logger(), "init_pose must have 16 values, using identity");
+    RCLCPP_WARN(this->get_logger(), "init_pose must have 6 values (xyzrpy), using identity");
   }
   std::cout << "=== Config ===\n";
   std::cout << "init:\n" << this->config_.init << "\n ";
