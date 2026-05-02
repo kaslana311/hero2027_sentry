@@ -76,6 +76,8 @@ class LidarExtrinsicCalibrator:
         # 标定结果
         self.circle_center: Optional[Tuple[float, float]] = None
         self.radius: Optional[float] = None
+        self.dx: Optional[float] = None
+        self.dy: Optional[float] = None
         self.pitch_mean: Optional[float] = None
         self.pitch_std: Optional[float] = None
         self.roll_mean: Optional[float] = None
@@ -237,13 +239,38 @@ class LidarExtrinsicCalibrator:
         print(f"  - 拟合半径: {R:.6f} [米] = {R * 1000:.3f} [毫米]")
         print(f"  - 拟合 RMSE: {rmse:.6f} [米] = {rmse * 1000:.3f} [毫米]")
         
-        # ==================== 2. 倾角计算 ====================
-        print("\n[步骤 2] 倾角计算 (Pitch)")
+        # ==================== 1.5 & 2. 倾角分析与局部 XY 偏移量 ====================
+        print("\n[步骤 1.5 & 2] 分析欧拉角并计算纯水平 X, Y 偏移量 (dx, dy)")
+        
+        # 1. 提前转换为欧拉角，提取核心的 yaw 
         roll, pitch, yaw = self.compute_euler_angles(data['orientations'])
+        
+        # 2. 构造所有的圆向向量
+        dx_world = data['x'] - x_c
+        dy_world = data['y'] - y_c
+        
+        # 3. 纯二维逆向旋转 (去 Yaw) 
+        # [dx_local] = [ cos(yaw)   sin(yaw)] * [dx_world]
+        # [dy_local]   [-sin(yaw)   cos(yaw)]   [dy_world]
+        dx_local = dx_world * np.cos(yaw) + dy_world * np.sin(yaw)
+        dy_local = -dx_world * np.sin(yaw) + dy_world * np.cos(yaw)
+        
+        # 4. 求均值
+        self.dx = float(np.mean(dx_local))
+        self.dy = float(np.mean(dy_local))
+        dx_std = float(np.std(dx_local))
+        dy_std = float(np.std(dy_local))
         
         self.pitch_mean = np.mean(pitch)
         self.pitch_std = np.std(pitch)
         self.roll_mean = np.mean(roll)
+        
+        print(f"  - 雷达局部 X 偏移 (dx): {self.dx:.6f} m")
+        print(f"  - 雷达局部 Y 偏移 (dy): {self.dy:.6f} m")
+        print(f"  - 稳定性检验: std_x={dx_std*1000:.2f}mm, std_y={dy_std*1000:.2f}mm")
+        
+        calculated_R = np.hypot(self.dx, self.dy)
+        print(f"  - 校验吻合度: 二维模长 {calculated_R:.6f}m vs 拟合半径 {R:.6f}m")
         
         print(f"  - 平均 Pitch: {self.pitch_mean:.6f} [弧度] = {np.degrees(self.pitch_mean):.4f} [度]")
         print(f"  - Pitch 标准差: {self.pitch_std:.6f} [弧度] = {np.degrees(self.pitch_std):.4f} [度]")
@@ -253,9 +280,11 @@ class LidarExtrinsicCalibrator:
         print("\n" + "=" * 60)
         print("标定结果总结")
         print("=" * 60)
-        print(f"\n  【旋转半径 (Radius)】")
-        print(f"     R = {self.radius:.6f} m = {self.radius * 1000:.3f} mm")
-        print(f"     (用于填入 t_lidar_joint 的 x 分量)")
+        print(f"\n  【雷达偏心安装平移 (XY Offset)】")
+        print(f"     dx = {self.dx:.6f} m = {self.dx * 1000:.3f} mm")
+        print(f"     dy = {self.dy:.6f} m = {self.dy * 1000:.3f} mm")
+        print(f"     校验模长 = {np.hypot(self.dx, self.dy) * 1000:.3f} mm vs 拟合半径 = {self.radius * 1000:.3f} mm")
+        print(f"     (用于填入 t_lidar_joint 的 x, y 分量)")
         
         print(f"\n  【安装倾角 (Pitch Bias)】")
         print(f"     Pitch = {self.pitch_mean:.6f} rad = {np.degrees(self.pitch_mean):.4f} deg")
@@ -374,8 +403,8 @@ class LidarExtrinsicCalibrator:
 // base_link → joint_link: 绕 Y 轴旋转 (Pitch)
 double angle_y = {self.pitch_mean:.6f};  // {np.degrees(self.pitch_mean):.4f} 度
 
-// joint_link → lidar_link: X 方向平移 (半径)
-Eigen::Vector3d t_lidar_joint({self.radius:.6f}, 0.0, 0.0);  // {self.radius * 1000:.3f} mm
+// joint_link → lidar_link: XY 联合平移外参
+Eigen::Vector3d t_lidar_joint({self.dx:.6f}, {self.dy:.6f}, 0.0);  // dx: {self.dx * 1000:.3f} mm, dy: {self.dy * 1000:.3f} mm
 """)
 
 
