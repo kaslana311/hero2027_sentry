@@ -1,5 +1,6 @@
 #include "lidar_merge/merge.hpp"
 
+#include <cstdint>
 #include <string>
 
 namespace lidar_merge
@@ -49,19 +50,25 @@ void LidarMergeNode::Sync_lidarCallback(
   fused_msg->points.reserve(msg1->points.size() + msg2->points.size());
 
   // 遍历 msg1 中的点，进行坐标变换后追加到 fused_msg
+  uint32_t count_filter = 0;
   for (const auto & p1 : msg1->points) {
     livox_ros_driver2::msg::CustomPoint pt = p1;
 
+    int64_t time =
+      static_cast<int64_t>(msg1->timebase + p1.offset_time) - static_cast<int64_t>(msg2->timebase);
+    if (time < 0) continue;
+    count_filter++;
+    // 过滤掉时间早于 msg2 的点
     Eigen::Vector4d p_vec(p1.x, p1.y, p1.z, 1.0);
     Eigen::Vector4d p_trans = T_lidar1_to_lidar2_ * p_vec;
 
     pt.x = p_trans.x();
     pt.y = p_trans.y();
     pt.z = p_trans.z();
-
+    pt.offset_time = static_cast<uint32_t>(time);
     fused_msg->points.push_back(pt);
   }
-
+  fused_msg->point_num += count_filter;
   // 更新总点数
   fused_msg->point_num = fused_msg->points.size();
 
