@@ -6,8 +6,6 @@
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/io/pcd_io.h>
 
-
-
 #include <fstream>
 #include <limits>
 
@@ -109,7 +107,7 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     }
 
     sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "/cloud_registered", 1,
+        "/odin1/cloud_slam", 1,
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
                   std::placeholders::_1));
 
@@ -360,44 +358,61 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     emit alignResultSignal(relocResult);
 }
 
+namespace {
+struct BestPoseResult {
+    int score = -1;
+    double x = 0.0;
+    double y = 0.0;
+    double yaw = 0.0;
+};
+}  // namespace
+
 Eigen::Matrix4d RelocalizationNode::CorrelativeMatch() {
     double init_x = pose_estimation_(0, 3);
     double init_y = pose_estimation_(1, 3);
     double init_yaw = YawFromMat(pose_estimation_);
 
-    int best_score = -1;
-    double best_x = init_x, best_y = init_y, best_yaw = init_yaw;
-
     double yaw_rad_limit = search_yaw_bounds_deg_ * M_PI / 180.0;
     double yaw_step_rad = yaw_step_deg_ * M_PI / 180.0;
 
-    // 滑动窗口搜索
-    for (double dyaw = -yaw_rad_limit; dyaw <= yaw_rad_limit + 1e-6;
-         dyaw += yaw_step_rad) {
-        double c_yaw = std::cos(init_yaw + dyaw);
-        double s_yaw = std::sin(init_yaw + dyaw);
+    // 预先计算外层需要循环的偏航角度总步数
+    int yaw_steps =
+        std::max(1, static_cast<int>(2.0 * yaw_rad_limit / yaw_step_rad) + 1);
 
-        // 每转一个大角度，生成一批被旋转的点，省去后续循环重复计算
-        std::vector<Eigen::Vector2d> rot_pts;
-        rot_pts.reserve(scan_2d_points_.size());
-        for (const auto& pt : scan_2d_points_) {
-            rot_pts.emplace_back(c_yaw * pt.x() - s_yaw * pt.y(),
-                                 s_yaw * pt.x() + c_yaw * pt.y());
-        }
+    // 将 TBB 并行化推至最外层循环，执行“粗粒度并行 (Coarse-Grained
+    // Parallelism)”
+    BestPoseResult global_best = tbb::parallel_reduce(
+        tbb::blocked_range<int>(0, yaw_steps),
+        BestPoseResult{},  // 初始局部最优解
+        [&](const tbb::blocked_range<int>& r, BestPoseResult local_best) {
+            // 每个线程领到了一段专属的角度搜索范围（比如
+            // 0~10步给线程A，11~20步给线程B）
+            for (int step = r.begin(); step < r.end(); ++step) {
+                double dyaw = -yaw_rad_limit + step * yaw_step_rad;
+                double c_yaw = std::cos(init_yaw + dyaw);
+                double s_yaw = std::sin(init_yaw + dyaw);
 
-        for (double dx = -search_x_bounds_; dx <= search_x_bounds_ + 1e-6;
-             dx += trans_step_) {
-            for (double dy = -search_y_bounds_; dy <= search_y_bounds_ + 1e-6;
-                 dy += trans_step_) {
-                double tx = init_x + dx;
-                double ty = init_y + dy;
+                // 在线程内部私有地进行云点旋转，绝不跨线程竞争内存
+                std::vector<Eigen::Vector2d> rot_pts;
+                rot_pts.reserve(scan_2d_points_.size());
+                for (const auto& pt : scan_2d_points_) {
+                    rot_pts.emplace_back(c_yaw * pt.x() - s_yaw * pt.y(),
+                                         s_yaw * pt.x() + c_yaw * pt.y());
+                }
 
-                // 计算重合度得分
-                int score = tbb::parallel_reduce(
-                    tbb::blocked_range<size_t>(0, rot_pts.size()), 0,
-                    [&](const tbb::blocked_range<size_t>& r, int local) {
-                        for (size_t i = r.begin(); i < r.end(); ++i) {
-                            const auto& rpt = rot_pts[i];
+                // 完全串行的全覆盖平移网格搜索
+                for (double dx = -search_x_bounds_;
+                     dx <= search_x_bounds_ + 1e-6; dx += trans_step_) {
+                    for (double dy = -search_y_bounds_;
+                         dy <= search_y_bounds_ + 1e-6; dy += trans_step_) {
+                        double tx = init_x + dx;
+                        double ty = init_y + dy;
+
+                        // 内部变成了纯粹串行的高效 for 循环
+                        // 因为同一片点云在略微变动的网格周围滑动，L1/L2
+                        // 缓存命中率极高
+                        int score = 0;
+                        for (const auto& rpt : rot_pts) {
                             const double final_x = rpt.x() + tx;
                             const double final_y = rpt.y() + ty;
 
@@ -409,32 +424,37 @@ Eigen::Matrix4d RelocalizationNode::CorrelativeMatch() {
                             if (cx >= 0 && cx < map_width_ && cy >= 0 &&
                                 cy < map_height_ &&
                                 match_grid_data_[cy * map_width_ + cx] > 0) {
-                                ++local;
+                                ++score;
                             }
                         }
-                        return local;
-                    },
-                    std::plus<int>());
 
-                if (score > best_score) {
-                    best_score = score;
-                    best_x = tx;
-                    best_y = ty;
-                    best_yaw = init_yaw + dyaw;
+                        // 每一个线程内部安静地更新着属于自己的局部最高分
+                        if (score > local_best.score) {
+                            local_best.score = score;
+                            local_best.x = tx;
+                            local_best.y = ty;
+                            local_best.yaw = init_yaw + dyaw;
+                        }
+                    }
                 }
             }
-        }
-    }
+            return local_best;
+        },
+        // 合并规约
+        // (Reduce)：主线程将各个核心最后找出来的“局部最优解”挨个比对，选出全局最高分
+        [](const BestPoseResult& a, const BestPoseResult& b) {
+            return (a.score > b.score) ? a : b;
+        });
 
-    RCLCPP_INFO(this->get_logger(), "Best Hit Score: %d / %zu", best_score,
-                scan_2d_points_.size());
+    RCLCPP_INFO(this->get_logger(), "Best Hit Score: %d / %zu",
+                global_best.score, scan_2d_points_.size());
 
     Eigen::Matrix4d best_T = pose_estimation_;
     // 覆盖新的 x, y, yaw，Roll与Pitch维持初始估算（保证三维不倾斜）
-    best_T(0, 3) = best_x;
-    best_T(1, 3) = best_y;
+    best_T(0, 3) = global_best.x;
+    best_T(1, 3) = global_best.y;
     Eigen::Matrix3d r_mat;
-    r_mat = Eigen::AngleAxisd(best_yaw, Eigen::Vector3d::UnitZ()) *
+    r_mat = Eigen::AngleAxisd(global_best.yaw, Eigen::Vector3d::UnitZ()) *
             Eigen::AngleAxisd(PitchFromMat(pose_estimation_),
                               Eigen::Vector3d::UnitY()) *
             Eigen::AngleAxisd(RollFromMat(pose_estimation_),

@@ -1705,7 +1705,7 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
         }
         if (g_sendodom) {
             lidar_activate_stream_type(odinDevice, LIDAR_DT_SLAM_ODOMETRY);
-            lidar_activate_stream_type(odinDevice, LIDAR_DT_SLAM_ODOMETRY_HIGHFREQ);
+            // lidar_activate_stream_type(odinDevice, LIDAR_DT_SLAM_ODOMETRY_HIGHFREQ);
         }
         if (g_senddtof) {
             lidar_activate_stream_type(odinDevice, LIDAR_DT_RAW_DTOF);

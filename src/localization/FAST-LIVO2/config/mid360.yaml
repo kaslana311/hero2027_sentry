@@ -2,8 +2,8 @@
   ros__parameters:
     common:
       img_topic: "/image"
-      lid_topic: "/livox/lidar"
-      imu_topic: "/livox/imu"
+      lid_topic: "/livox/fused_cloud"
+      imu_topic: "/livox/imu_192_168_1_126"
       img_en: 0
       lidar_en: 1
       ros_driver_bug_fix: false

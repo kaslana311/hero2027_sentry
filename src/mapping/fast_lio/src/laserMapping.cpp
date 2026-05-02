@@ -44,7 +44,7 @@
 #include <so3_math.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <unistd.h>
-
+#include <rcpputils/filesystem_helper.hpp>
 #include <Eigen/Core>
 #include <chrono>
 #include <csignal>
@@ -70,6 +70,7 @@
 #define MAXN (720000)
 #define PUBFRAME_PERIOD (20)
 
+namespace fs = rcpputils::fs;
 /*** Time Log Variables ***/
 double kdtree_incremental_time = 0.0, kdtree_search_time = 0.0,
        kdtree_delete_time = 0.0;
@@ -1267,6 +1268,20 @@ int main(int argc, char **argv) {
         // string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
         string all_points_dir(
             "src/common/point_cloud_files/source_pcd/fast_lio_latest_map.pcd");
+
+//    std::string base_dir =
+//         "src/common/point_cloud_files/source_pcd/fast_lio_latest_map";
+//     std::string ext = ".pcd";
+
+//     fs::path file_path(base_dir + ext);
+
+//     int index = 0;
+//     while (fs::exists(file_path)) {
+//         index++;
+//         file_path = fs::path(base_dir + "_" + std::to_string(index) + ext);
+//     }
+
+//     std::string final_file = file_path.string();
         pcl::PCDWriter pcd_writer;
         // cout << "current scan saved to /PCD/" << file_name<<endl;
         cout << "current scan saved to" << all_points_dir << endl;

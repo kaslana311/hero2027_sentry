@@ -37,12 +37,12 @@
       resolution: 0.01
       use_precomputed_contour_map: true
       contour_map_pgm_path: "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/fast_lio_latest_map_contour.pgm"
-      contour_map_origin_x: -1.90625
-      contour_map_origin_y: -3.93145
+      contour_map_origin_x: -0.861736
+      contour_map_origin_y: -7.53321
       match_tolerance_cells: 1
       search_x_bounds: 0.20
       search_y_bounds: 0.20
       search_yaw_bounds_deg: 20.0
       trans_step: 0.01
       yaw_step_deg: 0.2
-      max_scan_count: 10
+      max_scan_count: 5

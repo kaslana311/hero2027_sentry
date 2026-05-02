@@ -122,7 +122,7 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     register_->optimizer.max_iterations = smgicp_max_iterations_;
 
     sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "/cloud_registered", 1,
+        "/odin1/cloud_slam", 1,
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
                   std::placeholders::_1));
     std::cout << "running relocazation" << std::endl;

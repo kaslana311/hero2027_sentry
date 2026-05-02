@@ -9,7 +9,7 @@
 NS="" 
 
 # 2. 定义相对话题名（不要以 / 开头）
-RELATIVE_TOPICS=" tf tf_static FollowPath/predicted_path path FollowPath/reference_path"
+RELATIVE_TOPICS=" aft_mapped_to_init"
 
 # 3. 存储路径配置
 BAG_PATH_BASE="$HOME/ros_bags"
@@ -36,4 +36,4 @@ source /opt/ros/humble/setup.bash
 # --- 执行录制 ---
 # 使用 -o 指定输出目录
 # 使用 -s mcap 推荐格式（确保你安装了 ros-humble-rosbag2-storage-mcap）
-ros2 bag record $FULL_TOPICS -o "$BAG_PATH_BASE/$BAG_NAME" -s mcap
+ros2 bag record $FULL_TOPICS -o "$BAG_PATH_BASE/$BAG_NAME" -s  mcap

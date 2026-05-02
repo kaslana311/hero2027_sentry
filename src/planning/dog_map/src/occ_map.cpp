@@ -91,6 +91,7 @@ void OccMap::TimeGoON() {  //长期未观测到的障碍物清除
 using MapIt = std::map<int, long long>::iterator;
 void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
     //三维索引
+          auto start_time = std::chrono::steady_clock::now();
 #ifndef DEBUG
     std::fill_n(pub_map_ptr_, grid_map_.rows * grid_map_.cols, false);
 #endif
@@ -99,7 +100,8 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
     iterators.reserve(time_list_.size());
     for (auto it = time_list_.begin(); it != time_list_.end(); ++it) {
         iterators.emplace_back(it, false);
-    }
+    }   
+ 
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, iterators.size()),
         [&](const tbb::blocked_range<size_t>& r) {
@@ -166,11 +168,20 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
                    cloud_at_map_origin[2];
             pt.intensity = pt.z;  // Set intensity to 1.0 (or any other value)
             pub_pc.points.push_back(pt);
+
 #ifdef FIX_MAP
             UpdateStaticMap(idx, idy);
 #endif
         }
+
     }
+    auto end_time = std::chrono::steady_clock::now();
+        double time_consuming =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
+                                                                  start_time)
+                .count();
+         std::cout << " -- [DOG INFO]  ddd in " << time_consuming <<
+         "ms." << std::endl;
 }
 OccMap::~OccMap() { delete[] occ_map; }
 //俯瞰地图是否占据,任一高度层占据即为占据
@@ -223,16 +234,16 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
     pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud_in);
     pass.setFilterFieldName("z");
-    pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.3);
+    pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.1);
     pass.filter(*cloud_in);
     // 2. 添加 3cm 降采样 (Voxel Grid Filter)
-    // if (!cloud_in->empty()) {
-    //     pcl::VoxelGrid<pcl::PointXYZ> sor;
-    //     sor.setInputCloud(cloud_in);
-    //     // 设置体素大小为 0.03m (3cm)
-    //     sor.setLeafSize(3.0f, 3.0f, 3.0f);
-    //     sor.filter(*cloud_in);
-    // }
+    if (!cloud_in->empty()) {
+        pcl::VoxelGrid<pcl::PointXYZ> sor;
+        sor.setInputCloud(cloud_in);
+        // 设置体素大小为 0.03m (3cm)
+        sor.setLeafSize(0.05f, 0.05f, 0.05f);
+        sor.filter(*cloud_in);
+    }
     // std::cout<<"size "<<cloud_in->size()<<std::endl;
     double min_x = pose.first[0] - half_map_size_;
     min_x = std::max(min_x, cloud_at_map_origin[0] + 0.2);
@@ -257,6 +268,7 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
     //更新局部地图
 
     PassFilter(cloud, pose);
+       
     // TODO: 进行地图更新
     //射线起点格子
     int px =
@@ -271,6 +283,7 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
     // 2. 转换为物理空间坐标 (以中心或原点对齐)
     Vec3f start_f = start_idx.cast<double>().array() * res.array();
 #ifndef TBB_DO
+
     for (auto& point : cloud->points) {
         int xi =
             static_cast<int>((point.x - cloud_at_map_origin[0]) / resolution);
@@ -281,8 +294,10 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
         Vec3i obs_idx = Vec3i{xi, yi, zi};
         racyHandle(start_idx, obs_idx, start_f, res);
     }
+
 #else
     // TODO: 并行化free空间更新
+
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, cloud->points.size()),
         [&](const tbb::blocked_range<size_t>& r) {
@@ -299,6 +314,7 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
             }
         });
     //障碍物添加
+
 #endif
 
     for (auto& point : cloud->points) {
@@ -326,9 +342,12 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
             time_list_[index] = update_frame;
         }
     }
+       
     // 更新未观测到的累计帧数
     TimeGoON();
+     
     update_frame++;
+
 }
 void OccMap::UpdateStaticMap(int idx, int idy) {
     int img_idy = grid_map_.rows - 1 - idy;

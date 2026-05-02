@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <string>
-
+#include <chrono>
 namespace lidar_merge
 {
 LidarMergeNode::LidarMergeNode(const std::string & name) : Node(name)
@@ -37,7 +37,7 @@ LidarMergeNode::LidarMergeNode(const std::string & name) : Node(name)
   lidar1_sub_.subscribe(this, lidar1_topic);
   lidar2_sub_.subscribe(this, lidar2_topic);
   sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(
-    SyncPolicy(10), lidar1_sub_, lidar2_sub_);
+    SyncPolicy(5), lidar1_sub_, lidar2_sub_);
   sync_->registerCallback(std::bind(
     &LidarMergeNode::Sync_lidarCallback, this, std::placeholders::_1, std::placeholders::_2));
 }
@@ -46,6 +46,7 @@ void LidarMergeNode::Sync_lidarCallback(
   const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg2)
 {
   // 以msg2为基础构建融合点云
+  auto start_time=std::chrono::steady_clock::now();
   auto fused_msg = std::make_unique<livox_ros_driver2::msg::CustomMsg>(*msg2);
   fused_msg->points.reserve(msg1->points.size() + msg2->points.size());
 
@@ -69,11 +70,27 @@ void LidarMergeNode::Sync_lidarCallback(
     fused_msg->points.push_back(pt);
   }
   fused_msg->point_num += count_filter;
+
+  std::sort(
+      fused_msg->points.begin(), 
+      fused_msg->points.end(),
+      [](const livox_ros_driver2::msg::CustomPoint &a, const livox_ros_driver2::msg::CustomPoint &b) {
+          return a.offset_time < b.offset_time;
+      }
+  );
+  std::cout<<"data "<<count_filter<<std::endl;
   // 更新总点数
   fused_msg->point_num = fused_msg->points.size();
 
   // 发布融合后的点云
   PublishPointCloud(std::move(fused_msg));
+    auto end_time = std::chrono::steady_clock::now();
+        double time_consuming =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
+                                                                  start_time)
+                .count();
+         std::cout << " -- [ INFO] Map updated in " << time_consuming <<
+         "ms." << std::endl;
 }
 void LidarMergeNode::PublishPointCloud(livox_ros_driver2::msg::CustomMsg::UniquePtr msg1)
 {

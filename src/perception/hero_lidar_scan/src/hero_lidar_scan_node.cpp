@@ -111,7 +111,7 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
     worker_thread_ = std::thread(&HeroLidarScanNode::workerLoop, this);
 
     int max_threads = omp_get_max_threads();
-    int limited_threads = std::max(1, max_threads - 3);
+    int limited_threads = std::max(1, max_threads - 6);
     omp_set_num_threads(limited_threads);
     RCLCPP_INFO(this->get_logger(),
                 "HeroLidarScan节点已启动,time_offset:%f, OMP threads: %d->%d",

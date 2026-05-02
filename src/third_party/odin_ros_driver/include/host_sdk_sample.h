@@ -1465,7 +1465,7 @@ class MultiSensorPublisher {
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
                     if (tf_throttle_counter_.fetch_add(
                             1, std::memory_order_relaxed) %
-                            8 ==
+                            10 ==
                         0) {  // 400Hz 降频至 50Hz
                         geometry_msgs::msg::TransformStamped transformStamped;
                         transformStamped.header.stamp = msg.header.stamp;

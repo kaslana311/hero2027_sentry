@@ -61,6 +61,7 @@ typedef struct {
 
 class LidarImuDataQueue {
    public:
+   void Push(ImuData* imu_data, void *p_lidar) ;
     void Push(ImuData* imu_data);
     bool Pop(ImuData& imu_data);
     bool Empty();

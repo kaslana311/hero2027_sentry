@@ -23,9 +23,61 @@
 //
 
 #include "lidar_imu_data_queue.h"
-
+#include "comm/comm.h"
 namespace livox_ros {
+void LidarImuDataQueue::Push(ImuData* imu_data, void *p_lidar) {
+    ImuData data;
+    auto p=static_cast<LidarDevice *>(p_lidar);
+    auto cfg = p->livox_config.extrinsic_param;
 
+    data.lidar_type = imu_data->lidar_type;
+
+    double roll = cfg.roll;
+    double pitch = cfg.pitch;
+    double yaw = cfg.yaw;  // 单位：度
+
+    // 对 IMU 数据进行坐标变换（仅旋转，平移对IMU无意义）
+    const double deg2rad = M_PI / 180.0;
+    const double cr = std::cos(roll * deg2rad);
+    const double sr = std::sin(roll * deg2rad);
+    const double cp = std::cos(pitch * deg2rad);
+    const double sp = std::sin(pitch * deg2rad);
+    const double cy = std::cos(yaw * deg2rad);
+    const double sy = std::sin(yaw * deg2rad);
+
+    // R = Rz(yaw) * Ry(pitch) * Rx(roll)
+    const double r00 = cy * cp;
+    const double r01 = cy * sp * sr - sy * cr;
+    const double r02 = cy * sp * cr + sy * sr;
+    const double r10 = sy * cp;
+    const double r11 = sy * sp * sr + cy * cr;
+    const double r12 = sy * sp * cr - cy * sr;
+    const double r20 = -sp;
+    const double r21 = cp * sr;
+    const double r22 = cp * cr;
+
+    const double gx = imu_data->gyro_x;
+    const double gy = imu_data->gyro_y;
+    const double gz = imu_data->gyro_z;
+
+    const double ax = imu_data->acc_x;
+    const double ay = imu_data->acc_y;
+    const double az = imu_data->acc_z;
+
+    data.handle = imu_data->handle;
+    data.time_stamp = imu_data->time_stamp;
+
+    data.gyro_x = r00 * gx + r01 * gy + r02 * gz;
+    data.gyro_y = r10 * gx + r11 * gy + r12 * gz;
+    data.gyro_z = r20 * gx + r21 * gy + r22 * gz;
+
+    data.acc_x = r00 * ax + r01 * ay + r02 * az;
+    data.acc_y = r10 * ax + r11 * ay + r12 * az;
+    data.acc_z = r20 * ax + r21 * ay + r22 * az;
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    imu_data_queue_.push_back(std::move(data));
+}
 void LidarImuDataQueue::Push(ImuData* imu_data) {
     ImuData data;
     data.lidar_type = imu_data->lidar_type;

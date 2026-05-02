@@ -138,16 +138,19 @@ class DogMapNode : public rclcpp::Node {
         rc_.unfinished_frame_cnt = 0;
         rc_.update_lock.unlock();
         occ_map_->Update(temp_pc, temp_pose);
+      
         pcl::PointCloud<pcl::PointXYZI> occ_pc;
         occ_map_->PubRes(occ_pc);
+        
         if (!occ_pc.empty()) {
             auto msg = sensor_msgs::msg::PointCloud2();
             pcl::toROSMsg(occ_pc, msg);
 
             msg.header.frame_id = "map";
             msg.header.stamp = this->get_clock()->now();
-            cost_pub_.cost_pc_pub->publish(msg);
+            cost_pub_.cost_pc_pub->publish(std::move(msg));
         }
+       
 #ifdef FIX_MAP
       static   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in_fix=
             std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
@@ -169,13 +172,13 @@ class DogMapNode : public rclcpp::Node {
         }
 #endif
         /************* */
-        auto end_time = std::chrono::steady_clock::now();
-        double time_consuming =
-            std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
-                                                                  start_time)
-                .count();
-         std::cout << " -- [DOG INFO] Map updated in " << time_consuming <<
-         "ms." << std::endl;
+        // auto end_time = std::chrono::steady_clock::now();
+        // double time_consuming =
+        //     std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
+        //                                                           start_time)
+        //         .count();
+        //  std::cout << " -- [DOG INFO] Map updated in " << time_consuming <<
+        //  "ms." << std::endl;
     }
 
     DogMapNode() : Node("dog_map_node") {
