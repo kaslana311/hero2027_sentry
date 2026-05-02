@@ -9,14 +9,15 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-
+#include <pcl/filters/crop_box.h>
+#include <pcl/filters/crop_box.h>
 #include "dog_map/occ_map.hpp"
 #include "pcl_ros/transforms.hpp"
-const float crop_min_x = -0.3f;
-const float crop_min_y = -0.3f;
-const float crop_min_z = -10.3f;
-const float crop_max_x = 0.3f;
-const float crop_max_y = 0.3f;
+const float crop_min_x = -0.8f;
+const float crop_min_y = -0.8f;
+const float crop_min_z = -10.5f;
+const float crop_max_x = 0.8f;
+const float crop_max_y = 0.8f;
 const float crop_max_z = 10.0f;
 using namespace analy_utils;
 class DogMapNode : public rclcpp::Node {
@@ -218,8 +219,8 @@ class DogMapNode : public rclcpp::Node {
             std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
                                                                   start_time)
                 .count();
-        //  std::cout << " -- [DOG INFO] Map updated in " << time_consuming <<
-        //  "ms." << std::endl;
+         std::cout << " -- [DOG INFO] Map updated in " << time_consuming <<
+         "ms." << std::endl;
     }
 
     DogMapNode() : Node("dog_map_node") {
@@ -291,7 +292,7 @@ class DogMapNode : public rclcpp::Node {
             rc_.update_cbk_group = this->create_callback_group(
                 rclcpp::CallbackGroupType::MutuallyExclusive);
             rc_.update_timer = this->create_wall_timer(
-                std::chrono::milliseconds(1),  // 0.001秒，即1毫秒
+                std::chrono::milliseconds(4),  // 0.001秒，即1毫秒
                 std::bind(&DogMapNode::updateCallback, this),
                 rc_.update_cbk_group);
         }

@@ -230,9 +230,10 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
         pcl::VoxelGrid<pcl::PointXYZ> sor;
         sor.setInputCloud(cloud_in);
         // 设置体素大小为 0.03m (3cm)
-        sor.setLeafSize(0.03f, 0.03f, 0.03f);
+        sor.setLeafSize(3.0f, 3.0f, 3.0f);
         sor.filter(*cloud_in);
     }
+    std::cout<<"size "<<cloud_in->size()<<std::endl;
     double min_x = pose.first[0] - half_map_size_;
     min_x = std::max(min_x, cloud_at_map_origin[0] + 0.2);
     double max_x = pose.first[0] + half_map_size_;
