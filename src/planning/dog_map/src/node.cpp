@@ -5,6 +5,7 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <iostream>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -23,9 +24,8 @@ using namespace analy_utils;
 class DogMapNode : public rclcpp::Node {
    public:
     struct ROSCallback {
-        rclcpp::CallbackGroup::SharedPtr odom_me_cbk_group, cloud_me_cbk_group,
+        rclcpp::CallbackGroup::SharedPtr  cloud_me_cbk_group,
             update_cbk_group;
-        rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub;
         rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr
             cloud_sub;
         int unfinished_frame_cnt{0};
@@ -50,21 +50,7 @@ class DogMapNode : public rclcpp::Node {
         Quatf q;
     } robot_state_;
 
-    void odomCallback(const nav_msgs::msg::Odometry::SharedPtr odom_msg) {
-        if (!tf_set) return;
-
-        auto pose = std::make_pair(Vec3f(odom_msg->pose.pose.position.x,
-                                         odom_msg->pose.pose.position.y,
-                                         odom_msg->pose.pose.position.z),
-                                   Quatf(odom_msg->pose.pose.orientation.w,
-                                         odom_msg->pose.pose.orientation.x,
-                                         odom_msg->pose.pose.orientation.y,
-                                         odom_msg->pose.pose.orientation.z));
-        robot_state_.p = pose.first;
-        robot_state_.q = pose.second;
-        robot_state_.rcv_time = this->get_clock()->now().seconds();
-        robot_state_.rcv = true;
-    }
+  
 
     void cloudCallback(
         const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg) {
@@ -91,8 +77,9 @@ class DogMapNode : public rclcpp::Node {
             tf_mat(0, 3) = static_cast<float>(tr.x);
             tf_mat(1, 3) = static_cast<float>(tr.y);
             tf_mat(2, 3) = static_cast<float>(tr.z);
+            tf_stamped = this->tf_buffer_->lookupTransform(
+                "map", "base_link", tf2::TimePointZero);
 
-            if (!tf_set) tf_set = true;
         } catch (...) {
             std::cout << " -- [DOG] Cloud callback pcl::fromROSMsg error, "
                          "skip this frame."
@@ -101,54 +88,17 @@ class DogMapNode : public rclcpp::Node {
         }
         // tf
 
-        pcl::PointCloud<pcl::PointXYZ> temp_pc;
-        pcl::transformPointCloud(*cloud_in_, temp_pc, tf_mat);
+        // pcl::PointCloud<pcl::PointXYZ> temp_pc;
+        pcl::transformPointCloud(*cloud_in_, *cloud_in_, tf_mat);
 
-        if (!robot_state_.rcv) {
-            std::cout << " -- [DOG] No odom received, skip cloud callback."
-                      << std::endl;
-            return;
-        }
-        double cbk_t = this->get_clock()->now().seconds();
-        if (cbk_t - robot_state_.rcv_time > odom_timeout) {
-            std::cout << " -- [DOG] Odom timeout, skip cloud callback."
-                      << std::endl;
-            return;
-        }
         rc_.update_lock.lock();
-        rc_.pc = temp_pc;
+        rc_.pc = *cloud_in_;
         {
-            geometry_msgs::msg::Pose ps_in;
-            ps_in.position.x = robot_state_.p.x();
-            ps_in.position.y = robot_state_.p.y();
-            ps_in.position.z = robot_state_.p.z();
-            ps_in.orientation.w = robot_state_.q.w();
-            ps_in.orientation.x = robot_state_.q.x();
-            ps_in.orientation.y = robot_state_.q.y();
-            ps_in.orientation.z = robot_state_.q.z();
-            // std::cout << " -- [ROS] Cloud callback robot pose before tf inv:
-            // " << ps_in.position.x << ", "
-            //           << ps_in.position.y << ", " << ps_in.position.z <<
-            //           std::endl;
-            geometry_msgs::msg::Pose ps_out;
-
-            try {
-                tf2::doTransform(ps_in, ps_out, tf_stamped);
-            } catch (const std::exception& e) {
-                RCLCPP_WARN(this->get_logger(), "tf2 doTransform failed: %s",
-                            e.what());
-            }
-            // std::cout << " -- [ROS] Cloud callback robot pose after tf inv: "
-            // << ps_out.position.x << ", "
-            //           << ps_out.position.y << ", " << ps_out.position.z <<
-            //           std::endl;
-            robot_state_.p.x() = ps_out.position.x;
-            robot_state_.p.y() = ps_out.position.y;
-            robot_state_.p.z() = ps_out.position.z;
-            robot_state_.q = Quatf(ps_out.orientation.w, ps_out.orientation.x,
-                                   ps_out.orientation.y, ps_out.orientation.z);
+             rc_.pc_pose.first[0] = tf_stamped.transform.translation.x;
+            rc_.pc_pose.first[1] = tf_stamped.transform.translation.y;
+            rc_.pc_pose.first[2] = tf_stamped.transform.translation.z;
+           
         }
-        rc_.pc_pose = std::make_pair(robot_state_.p, robot_state_.q);
         rc_.unfinished_frame_cnt++;
         map_empty_ = false;
         rc_.update_lock.unlock();
@@ -177,11 +127,13 @@ class DogMapNode : public rclcpp::Node {
                    "work in real-time"
                 << std::endl;
         }
-        static pcl::PointCloud<pcl::PointXYZ>::Ptr temp_pc;
+            static pcl::PointCloud<pcl::PointXYZ>::Ptr temp_pc =
+        std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
         static Pose temp_pose;
-
+        //从rc_中取出当前帧点云和位姿，进行地图更新
         rc_.update_lock.lock();
-        temp_pc = rc_.pc.makeShared();
+        temp_pc->clear();
+        temp_pc->swap(rc_.pc);
         temp_pose = rc_.pc_pose;
         rc_.unfinished_frame_cnt = 0;
         rc_.update_lock.unlock();
@@ -197,7 +149,10 @@ class DogMapNode : public rclcpp::Node {
             cost_pub_.cost_pc_pub->publish(msg);
         }
 #ifdef FIX_MAP
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in_fix = occ_pc.makeShared();
+      static   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in_fix=
+            std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+        cloud_in_fix->clear();
+        cloud_in_fix->swap(occ_pc);
         pcl::PointCloud<pcl::PointXYZ>::Ptr fix_pc =
             std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
         occ_map_->GetStaticFixMap()->AdjustAndFixByRacying2d(
@@ -271,17 +226,12 @@ class DogMapNode : public rclcpp::Node {
         tf_listener_ =
             std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
         {
-            rc_.odom_me_cbk_group = this->create_callback_group(
-                rclcpp::CallbackGroupType::MutuallyExclusive);
+                
             rc_.cloud_me_cbk_group = this->create_callback_group(
                 rclcpp::CallbackGroupType::MutuallyExclusive);
             rclcpp::SubscriptionOptions so;
-            so.callback_group = rc_.odom_me_cbk_group;
-            rc_.odom_sub = this->create_subscription<nav_msgs::msg::Odometry>(
-                odom_topic, qos,
-                std::bind(&DogMapNode::odomCallback, this,
-                          std::placeholders::_1),
-                so);
+            
+           
             so.callback_group = rc_.cloud_me_cbk_group;
             rc_.cloud_sub =
                 this->create_subscription<sensor_msgs::msg::PointCloud2>(
@@ -304,8 +254,7 @@ class DogMapNode : public rclcpp::Node {
    private:
     OccMap* occ_map_{nullptr};
     bool map_empty_{true};
-    double odom_timeout{0.1};
-    bool tf_set = false;
+
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
     std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
     std::string odom_topic = "lidar_odometry", cloud_topic = "registered_scan";
