@@ -313,7 +313,7 @@ def generate_launch_description():
     ld.add_action(declare_container_name_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
-    # ld.add_action(dog_map_node)
+    ld.add_action(dog_map_node)
     # Add the actions to launch all of the navigation nodes
     # ld.add_action(start_terrain_analysis_cmd)
     # ld.add_action(start_terrain_analysis_ext_cmd)
