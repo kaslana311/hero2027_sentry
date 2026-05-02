@@ -1,0 +1,34 @@
+#pragma once
+
+#include <message_filters/subscriber.h>
+#include <message_filters/sync_policies/approximate_time.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
+
+#include <livox_ros_driver2/msg/custom_msg.hpp>
+#include <rclcpp/rclcpp.hpp>
+namespace lidar_merge
+{
+
+class LidarMergeNode : public rclcpp::Node
+{
+public:
+  LidarMergeNode(const std::string & name);
+  ~LidarMergeNode() = default;
+
+  void Sync_lidarCallback(
+    const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg1,
+    const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg2);
+  void PublishPointCloud(livox_ros_driver2::msg::CustomMsg::UniquePtr msg1);
+
+private:
+  rclcpp::Publisher<livox_ros_driver2::msg::CustomMsg>::SharedPtr cloud_pub_;
+  message_filters::Subscriber<livox_ros_driver2::msg::CustomMsg> lidar1_sub_;
+  message_filters::Subscriber<livox_ros_driver2::msg::CustomMsg> lidar2_sub_;
+  using SyncPolicy = message_filters::sync_policies::ApproximateTime<
+    livox_ros_driver2::msg::CustomMsg, livox_ros_driver2::msg::CustomMsg>;
+  std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
+  Eigen::Matrix4d T_lidar1_to_lidar2_;
+};
+}  // namespace lidar_merge
