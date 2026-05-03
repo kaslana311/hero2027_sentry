@@ -90,6 +90,20 @@ def generate_launch_description():
         arguments=['0.188', '0', '0', '0', '0', '0', 'base_link', 'odin1_base_link']
     )
 
+    # Odom to TF node for high frequency base_link transform
+    odom_to_tf_node = Node(
+        package='odin_ros_driver',
+        executable='odom_to_tf_node',
+        name='odom_to_tf_node',
+        output='screen',
+        parameters=[{
+            'odom_topic': '/odin1/odometry_highfreq',
+            'downsample_rate': 4,
+            'frame_id': 'odom',
+            'child_frame_id': 'base_link'
+        }]
+    )
+
     # Create RViz2 node - loads specified configuration file
     rviz_node = Node(
         package='rviz2',
@@ -108,6 +122,7 @@ def generate_launch_description():
     ld.add_action(cloud_reprojection_node)
     ld.add_action(image_overlay_node)
     ld.add_action(static_tf_node)   # Add Static TF node
+    ld.add_action(odom_to_tf_node)  # Add Odom to TF node
     ld.add_action(rviz_node)  # Add RViz node
     
     return ld

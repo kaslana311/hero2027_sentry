@@ -359,6 +359,15 @@ elseif(ROS_VERSION STREQUAL "ROS2")
         message_filters
     )
 
+    add_executable(odom_to_tf_node src/odom_to_tf_node.cpp)
+    target_compile_definitions(odom_to_tf_node PRIVATE ROS2)
+    ament_target_dependencies(odom_to_tf_node
+        rclcpp
+        nav_msgs
+        geometry_msgs
+        tf2_ros
+    )
+
     # Installation rules - ensure all install targets are defined before ament_package()
     # Install executable
     install(TARGETS 
@@ -366,6 +375,7 @@ elseif(ROS_VERSION STREQUAL "ROS2")
         pcd2depth_ros2_node
         cloud_reprojection_ros2_node
         image_overlay_node
+        odom_to_tf_node
         EXPORT export_${PROJECT_NAME}
         ARCHIVE DESTINATION lib
         LIBRARY DESTINATION lib

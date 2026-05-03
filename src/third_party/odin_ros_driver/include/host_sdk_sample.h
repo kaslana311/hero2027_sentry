@@ -1249,7 +1249,6 @@ class MultiSensorPublisher {
         // %ld",odom_data->timestamp_ns);
 
         uint32_t data_len = stream->imageList[0].length;
-        if (!stream->imageList[0].pAddr) return;
         if (data_len == sizeof(ros_odom_convert_complete_t)) {
             ros_odom_convert_complete_t* odom_data =
                 (ros_odom_convert_complete_t*)stream->imageList[0].pAddr;
@@ -1378,7 +1377,6 @@ class MultiSensorPublisher {
 #ifdef ROS2
         switch (odom_type) {
             case OdometryType::STANDARD: {
-                /*
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
                     geometry_msgs::msg::TransformStamped transformStamped;
                     transformStamped.header.stamp = msg.header.stamp;
@@ -1400,7 +1398,6 @@ class MultiSensorPublisher {
                         msg.pose.pose.orientation.w;
                     tf_broadcaster->sendTransform(transformStamped);
                 }
-                */
                 odom_publisher_->publish(msg);
 
                 // Publish odom trajectory as visualization markers (green lines
@@ -1461,35 +1458,9 @@ class MultiSensorPublisher {
                                                  msg.header);
                 }
             } break;
-            case OdometryType::HIGHFREQ: {
-                if (getRosNodeControl()->sendOdomBaseLinkTF()) {
-                    if (tf_throttle_counter_.fetch_add(
-                            1, std::memory_order_relaxed) %
-                            10 ==
-                        0) {  // 400Hz 降频至 50Hz
-                        geometry_msgs::msg::TransformStamped transformStamped;
-                        transformStamped.header.stamp = msg.header.stamp;
-                        transformStamped.header.frame_id = "odom";
-                        transformStamped.child_frame_id = "base_link";
-                        transformStamped.transform.translation.x =
-                            msg.pose.pose.position.x;
-                        transformStamped.transform.translation.y =
-                            msg.pose.pose.position.y;
-                        transformStamped.transform.translation.z =
-                            msg.pose.pose.position.z;
-                        transformStamped.transform.rotation.x =
-                            msg.pose.pose.orientation.x;
-                        transformStamped.transform.rotation.y =
-                            msg.pose.pose.orientation.y;
-                        transformStamped.transform.rotation.z =
-                            msg.pose.pose.orientation.z;
-                        transformStamped.transform.rotation.w =
-                            msg.pose.pose.orientation.w;
-                        tf_broadcaster->sendTransform(transformStamped);
-                    }
-                }
+            case OdometryType::HIGHFREQ:
                 odom_highfreq_publisher_->publish(std::move(msg));
-            } break;
+                break;
             case OdometryType::TRANSFORM: {
                 geometry_msgs::msg::TransformStamped transformStamped;
                 transformStamped.header.stamp = msg.header.stamp;
@@ -1519,7 +1490,6 @@ class MultiSensorPublisher {
 #else
         switch (odom_type) {
             case OdometryType::STANDARD: {
-                /*
                 if (getRosNodeControl()->sendOdomBaseLinkTF()) {
                     geometry_msgs::TransformStamped transformStamped;
                     transformStamped.header.stamp = msg.header.stamp;
@@ -1541,8 +1511,7 @@ class MultiSensorPublisher {
                         msg.pose.pose.orientation.w;
                     tf_broadcaster->sendTransform(transformStamped);
                 }
-                */
-                // odom_publisher_.publish(msg);
+                odom_publisher_.publish(msg);
 
                 if (show_path) {
                     // Publish odom trajectory as visualization markers (green
@@ -1603,35 +1572,9 @@ class MultiSensorPublisher {
                                                  msg.header);
                 }
             } break;
-            case OdometryType::HIGHFREQ: {
-                if (getRosNodeControl()->sendOdomBaseLinkTF()) {
-                    if (tf_throttle_counter_.fetch_add(
-                            1, std::memory_order_relaxed) %
-                            8 ==
-                        0) {  // 400Hz 降频至 50Hz
-                        geometry_msgs::TransformStamped transformStamped;
-                        transformStamped.header.stamp = msg.header.stamp;
-                        transformStamped.header.frame_id = "odom";
-                        transformStamped.child_frame_id = "base_link";
-                        transformStamped.transform.translation.x =
-                            msg.pose.pose.position.x;
-                        transformStamped.transform.translation.y =
-                            msg.pose.pose.position.y;
-                        transformStamped.transform.translation.z =
-                            msg.pose.pose.position.z;
-                        transformStamped.transform.rotation.x =
-                            msg.pose.pose.orientation.x;
-                        transformStamped.transform.rotation.y =
-                            msg.pose.pose.orientation.y;
-                        transformStamped.transform.rotation.z =
-                            msg.pose.pose.orientation.z;
-                        transformStamped.transform.rotation.w =
-                            msg.pose.pose.orientation.w;
-                        tf_broadcaster->sendTransform(transformStamped);
-                    }
-                }
+            case OdometryType::HIGHFREQ:
                 odom_highfreq_publisher_.publish(msg);
-            } break;
+                break;
             case OdometryType::TRANSFORM: {
                 geometry_msgs::TransformStamped transformStamped;
                 transformStamped.header.stamp = msg.header.stamp;
@@ -1799,7 +1742,6 @@ class MultiSensorPublisher {
     std::atomic<uint32_t> cloud_index_{0};
     std::atomic<uint32_t> image_index_{0};
     std::atomic<uint32_t> wcwi_index_{0};
-    std::atomic<int> tf_throttle_counter_{0};
 
     std::filesystem::path root_dir_;
 
@@ -1877,12 +1819,6 @@ class MultiSensorPublisher {
                              .reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE)
                              .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
 
-        // BEST_EFFORT QoS for high frequency telemetry
-        auto qos_telemetry =
-            rclcpp::QoS(500)
-                .reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT)
-                .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
-
         // Large sensor data with larger queue to avoid blocking
         auto qos_sensor = rclcpp::QoS(10)
                               .reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE)
@@ -1898,7 +1834,7 @@ class MultiSensorPublisher {
         odom_publisher_ =
             node_->create_publisher<ros::Odometry>("odin1/odometry", qos_small);
         odom_highfreq_publisher_ = node_->create_publisher<ros::Odometry>(
-            "odin1/odometry_highfreq", qos_telemetry);
+            "odin1/odometry_highfreq", qos_small);
         path_publisher_ =
             node_->create_publisher<visualization_msgs::msg::MarkerArray>(
                 "odin1/path", qos_sensor);
