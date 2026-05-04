@@ -33,6 +33,7 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     this->declare_parameter("scan_z_max", 0.3);
 
     this->declare_parameter("resolution", 0.01);  // 1cm 精度
+    this->declare_parameter("cloud_topic","/odin1/cloud_slam");
     this->declare_parameter("use_precomputed_contour_map", true);
     this->declare_parameter(
         "contour_map_pgm_path",
@@ -51,7 +52,7 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     this->declare_parameter("max_scan_count", 10);  // 累积多少帧雷达数据
 
     this->get_parameter("init_pose", init_pose_);
-
+    auto topic_string=this->get_parameter("cloud_topic").as_string();
     pcd_path_ = this->get_parameter("pcd_path").as_string();
     map_z_min_ = this->get_parameter("map_z_min").as_double();
     map_z_max_ = this->get_parameter("map_z_max").as_double();
@@ -107,7 +108,7 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     }
 
     sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "/odin1/cloud_slam", 1,
+        topic_string, 1,
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
                   std::placeholders::_1));
 

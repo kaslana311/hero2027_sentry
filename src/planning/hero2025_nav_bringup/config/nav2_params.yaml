@@ -2,7 +2,6 @@
 
 dog_map_node:
     ros__parameters:
-      use_sim_time: True
       odom_topic: "/odometry/filtered"
       cloud_topic: "cloud_registered"
       half_map_size: 10.0 #以车为中心的局部地图,也就是点云分析范围
@@ -10,6 +9,11 @@ dog_map_node:
       heighter_than_ground_threshold: 0.091 #地面分割
       higher_than_car_threshold: 0.7 # 最高点云高度,高于此数值的过滤
       frame_save: 10 # 地图记忆帧数
+      LOG_OCC_HIT: 41
+      LOG_OCC_FREE: -6
+      THR_OCC: 30
+      MAX_LOG: 50
+      MIN_LOG: 5
       map_yaml_path: "/home/dji/hero2026_-sentry/src/planning/map_server/map/map.yaml"
 bt_navigator:
   ros__parameters:

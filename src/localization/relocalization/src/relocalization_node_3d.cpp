@@ -44,7 +44,7 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     this->declare_parameter("f_max_x", 24.3);
     this->declare_parameter("f_max_y", 5.3);
     this->declare_parameter("f_max_z", 3.5);
-
+       this->declare_parameter("cloud_topic","/odin1/cloud_slam");
     this->declare_parameter("pcd_pub", pcdPub);
     this->get_parameter("pcd_pub", pcdPub);
 
@@ -54,7 +54,7 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     fparams.max_x = this->get_parameter("f_max_x").as_double();
     fparams.max_y = this->get_parameter("f_max_y").as_double();
     fparams.max_z = this->get_parameter("f_max_z").as_double();
-
+    auto topic_string=this->get_parameter("cloud_topic").as_string();
     //初始位姿设定
     this->get_parameter("init_pose", init_pose_);
     //先验地图路径
@@ -122,7 +122,7 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
     register_->optimizer.max_iterations = smgicp_max_iterations_;
 
     sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "/odin1/cloud_slam", 1,
+     topic_string, 1,
         std::bind(&RelocalizationNode::SaveCurScanCallback, this,
                   std::placeholders::_1));
     std::cout << "running relocazation" << std::endl;

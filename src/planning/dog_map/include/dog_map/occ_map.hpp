@@ -26,11 +26,7 @@ T yaml_get_value(const YAML::Node& node, const std::string& key) {
         throw YAML::Exception(e.mark, ss.str());
     }
 }
-const int8_t LOG_OCC_HIT = 40;   // 占据增量
-const int8_t LOG_OCC_FREE = -3;  // 空闲减量
-const uint8_t THR_OCC = 30;      // 判定为障碍物的阈值
-const uint8_t MAX_LOG = 100;
-const uint8_t MIN_LOG = 5;
+
 #define FORGET_FACTOR -30
 class OccMap {
    public:
@@ -46,6 +42,13 @@ class OccMap {
     bool IsOccupied(int index);
     bool IsOccupied(int ix, int iy, int iz);
     void Clear();
+    inline void SetLOGParams( int8_t LOG_OCC_HIT, int8_t LOG_OCC_FREE , uint8_t THR_OCC, uint8_t MAX_LOG ,uint8_t MIN_LOG ){
+        this->LOG_OCC_HIT=LOG_OCC_HIT;
+        this->LOG_OCC_FREE=LOG_OCC_FREE;
+        this->THR_OCC=THR_OCC;
+        this->MAX_LOG=MAX_LOG;
+        this->MIN_LOG=MIN_LOG;
+    }
     void racyHandle(const Vec3i& start_idx, const std::vector<Vec3i>& obs_list);
     void UpdateStaticMap(int idx, int idy);
     static_fix_map::StaticFixMap* GetStaticFixMap() {
@@ -148,4 +151,11 @@ class OccMap {
     std::atomic<bool>* pub_map_ptr_;
     std::vector<int> static_indexs;       //静态地图占据点索引
     std::map<int, long long> time_list_;  //索引+未观测到的累计帧数
+
+
+    int8_t LOG_OCC_HIT = 40;   // 占据增量
+    int8_t LOG_OCC_FREE = -3;  // 空闲减量
+    uint8_t THR_OCC = 30;      // 判定为障碍物的阈值
+    uint8_t MAX_LOG = 100;
+    uint8_t MIN_LOG = 5;
 };

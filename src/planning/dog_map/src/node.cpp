@@ -55,10 +55,10 @@ class DogMapNode : public rclcpp::Node {
     void cloudCallback(
         const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg) {
         sensor_msgs::msg::PointCloud2 out;
-
+            std::cout<<"cloud cbk .."<<std::endl;
         pcl::fromROSMsg(*cloud_msg, *cloud_in_);
-        crop_box_filter_.setInputCloud(cloud_in_);
-        crop_box_filter_.filter(*cloud_in_);
+        // crop_box_filter_.setInputCloud(cloud_in_);
+        // crop_box_filter_.filter(*cloud_in_);
         Eigen::Matrix4f tf_mat = Eigen::Matrix4f::Identity();
         try {
             tf_stamped = this->tf_buffer_->lookupTransform(
@@ -102,6 +102,7 @@ class DogMapNode : public rclcpp::Node {
         rc_.unfinished_frame_cnt++;
         map_empty_ = false;
         rc_.update_lock.unlock();
+   std::cout<<"cloud finish .."<<std::endl;
     }
 
     void updateCallback() {
@@ -172,13 +173,13 @@ class DogMapNode : public rclcpp::Node {
         }
 #endif
         /************* */
-        // auto end_time = std::chrono::steady_clock::now();
-        // double time_consuming =
-        //     std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
-        //                                                           start_time)
-        //         .count();
-        //  std::cout << " -- [DOG INFO] Map updated in " << time_consuming <<
-        //  "ms." << std::endl;
+        auto end_time = std::chrono::steady_clock::now();
+        double time_consuming =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
+                                                                  start_time)
+                .count();
+         std::cout << " -- [DOG INFO] Map updated in " << time_consuming <<
+         "ms." << std::endl;
     }
 
     DogMapNode() : Node("dog_map_node") {
@@ -187,9 +188,28 @@ class DogMapNode : public rclcpp::Node {
         this->declare_parameter<std::string>("map_yaml_path", "");
         this->declare_parameter<double>("heighter_than_ground_threshold", 0.05);
         this->declare_parameter<double>("higher_than_car_threshold", 0.5);
-        this->declare_parameter<int>("frame_save", 10);
+        this->declare_parameter<int8_t>("LOG_OCC_HIT", 10);
+        this->declare_parameter<int8_t>("LOG_OCC_FREE", 10);
+        this->declare_parameter<uint8_t>("THR_OCC", 10);
+        this->declare_parameter<uint8_t>("MAX_LOG", 10);
+        this->declare_parameter<uint8_t>("MIN_LOG", 10);
+        int8_t LOG_OCC_HIT = 40;   // 占据增量
+        int8_t LOG_OCC_FREE = -3;  // 空闲减量
+        uint8_t THR_OCC = 30;      // 判定为障碍物的阈值
+        uint8_t MAX_LOG = 100;
+        uint8_t MIN_LOG = 5;
         this->declare_parameter<double>("half_map_size", 10.0);
         this->declare_parameter<double>("resolution_z", 0.03);
+        this->get_parameter("LOG_OCC_HIT", LOG_OCC_HIT);
+        this->get_parameter("LOG_OCC_FREE", LOG_OCC_FREE);
+        this->get_parameter("THR_OCC", THR_OCC);
+        this->get_parameter("MAX_LOG", MAX_LOG);
+        this->get_parameter("MIN_LOG", MIN_LOG);
+        std::cout <<" LOG_OCC_HIT "<<(int )LOG_OCC_HIT<<std::endl;
+        std::cout <<" LOG_OCC_FREE "<<(int )LOG_OCC_FREE<<std::endl;
+        std::cout <<" THR_OCC "<<(int )THR_OCC<<std::endl;
+        std::cout <<" MAX_LOG "<<(int )MAX_LOG<<std::endl;
+        std::cout <<" MIN_LOG "<<(int )MIN_LOG<<std::endl;
         this->get_parameter("frame_save", frame_save);
         this->get_parameter("odom_topic", odom_topic);
         this->get_parameter("resolution_z", resolution_z);
@@ -214,6 +234,7 @@ class DogMapNode : public rclcpp::Node {
         occ_map_ = new OccMap(heighter_than_ground_threshold,
                               higher_than_car_threshold, half_map_size,
                               resolution_z, frame_save, map_yaml_path);
+        occ_map_->SetLOGParams(LOG_OCC_HIT,LOG_OCC_FREE,THR_OCC,MAX_LOG,MIN_LOG);
         cost_pub_.cost_pc_pub =
             this->create_publisher<sensor_msgs::msg::PointCloud2>(
                 "rog_map/inf_occ", qos);
@@ -245,7 +266,7 @@ class DogMapNode : public rclcpp::Node {
             rc_.update_cbk_group = this->create_callback_group(
                 rclcpp::CallbackGroupType::MutuallyExclusive);
             rc_.update_timer = this->create_wall_timer(
-                std::chrono::milliseconds(4),  // 0.001秒，即1毫秒
+                std::chrono::milliseconds(1),  // 0.001秒，即1毫秒
                 std::bind(&DogMapNode::updateCallback, this),
                 rc_.update_cbk_group);
         }

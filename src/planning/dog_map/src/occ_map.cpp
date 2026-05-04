@@ -91,7 +91,6 @@ void OccMap::TimeGoON() {  //长期未观测到的障碍物清除
 using MapIt = std::map<int, long long>::iterator;
 void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
     //三维索引
-          auto start_time = std::chrono::steady_clock::now();
 #ifndef DEBUG
     std::fill_n(pub_map_ptr_, grid_map_.rows * grid_map_.cols, false);
 #endif
@@ -175,13 +174,7 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
         }
 
     }
-    auto end_time = std::chrono::steady_clock::now();
-        double time_consuming =
-            std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
-                                                                  start_time)
-                .count();
-         std::cout << " -- [DOG INFO]  ddd in " << time_consuming <<
-         "ms." << std::endl;
+    
 }
 OccMap::~OccMap() { delete[] occ_map; }
 //俯瞰地图是否占据,任一高度层占据即为占据
@@ -234,7 +227,7 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
     pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud_in);
     pass.setFilterFieldName("z");
-    pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.1);
+    pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.3);
     pass.filter(*cloud_in);
     // 2. 添加 3cm 降采样 (Voxel Grid Filter)
     if (!cloud_in->empty()) {
