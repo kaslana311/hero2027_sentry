@@ -1,5 +1,8 @@
 #include "lidar_merge/merge.hpp"
 
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
+
 #include <chrono>
 #include <cstdint>
 #include <string>
@@ -32,7 +35,18 @@ LidarMergeNode::LidarMergeNode(const std::string & name) : Node(name)
   T_lidar1_to_lidar2_(0, 3) = l1_to_l2_x;
   T_lidar1_to_lidar2_(1, 3) = l1_to_l2_y;
   T_lidar1_to_lidar2_(2, 3) = l1_to_l2_z;
-
+    r00 = T_lidar1_to_lidar2_(0, 0); 
+    r01 = T_lidar1_to_lidar2_(0, 1);
+    r02 = T_lidar1_to_lidar2_(0, 2); 
+    tx = T_lidar1_to_lidar2_(0, 3);
+    r10 = T_lidar1_to_lidar2_(1, 0); 
+    r11 = T_lidar1_to_lidar2_(1, 1);
+    r12 = T_lidar1_to_lidar2_(1, 2); 
+    ty = T_lidar1_to_lidar2_(1, 3);
+    r20 = T_lidar1_to_lidar2_(2, 0); 
+    r21 = T_lidar1_to_lidar2_(2, 1);
+    r22 = T_lidar1_to_lidar2_(2, 2); 
+    tz = T_lidar1_to_lidar2_(2, 3);
   cloud_pub_ = this->create_publisher<livox_ros_driver2::msg::CustomMsg>("/livox/fused_cloud", 10);
   lidar1_sub_.subscribe(this, lidar1_topic);
   lidar2_sub_.subscribe(this, lidar2_topic);
@@ -41,93 +55,99 @@ LidarMergeNode::LidarMergeNode(const std::string & name) : Node(name)
   sync_->registerCallback(std::bind(
     &LidarMergeNode::Sync_lidarCallback, this, std::placeholders::_1, std::placeholders::_2));
 }
+// ...existing code...
 void LidarMergeNode::Sync_lidarCallback(
   const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg1,
   const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg2)
 {
   auto start_time = std::chrono::steady_clock::now();
 
-  // 1. 只拷贝头部和基础信息，不再直接拷贝数组后再排序
   auto fused_msg = std::make_unique<livox_ros_driver2::msg::CustomMsg>();
-  fused_msg->header = msg2->header;
-  fused_msg->timebase = msg2->timebase;
+  
+  // 1. 使用两个消息中最新(最大的) timebase 和 header
+  const bool is_msg1_latest = (msg1->timebase > msg2->timebase);
+  fused_msg->header = is_msg1_latest ? msg1->header : msg2->header;
+  fused_msg->timebase = is_msg1_latest ? msg1->timebase : msg2->timebase;
   fused_msg->lidar_id = msg2->lidar_id;
 
-  fused_msg->points.reserve(msg1->points.size() + msg2->points.size());
+  const size_t len1 = msg1->points.size();
+  const size_t len2 = msg2->points.size();
+  fused_msg->points.resize(len1 + len2);
 
-  // 2. 提前计算时间差和外参矩阵（手动展开矩阵乘法，避开内部循环的Eigen构造开销）
-  const int64_t time_diff =
-    static_cast<int64_t>(msg1->timebase) - static_cast<int64_t>(msg2->timebase);
+  // 2. 分别计算相对于最新 timebase 的偏差 (结果必定 <= 0)
+  const int64_t target_timebase = static_cast<int64_t>(fused_msg->timebase);
+  const int64_t diff1 = static_cast<int64_t>(msg1->timebase) - target_timebase;
+  const int64_t diff2 = static_cast<int64_t>(msg2->timebase) - target_timebase;
 
-  const double r00 = T_lidar1_to_lidar2_(0, 0), r01 = T_lidar1_to_lidar2_(0, 1),
-               r02 = T_lidar1_to_lidar2_(0, 2), tx = T_lidar1_to_lidar2_(0, 3);
-  const double r10 = T_lidar1_to_lidar2_(1, 0), r11 = T_lidar1_to_lidar2_(1, 1),
-               r12 = T_lidar1_to_lidar2_(1, 2), ty = T_lidar1_to_lidar2_(1, 3);
-  const double r20 = T_lidar1_to_lidar2_(2, 0), r21 = T_lidar1_to_lidar2_(2, 1),
-               r22 = T_lidar1_to_lidar2_(2, 2), tz = T_lidar1_to_lidar2_(2, 3);
+  // 用一个结构体暂存带 int64_t 的点，防止 uint32_t 溢出检测失效
+  struct PointExt {
+    livox_ros_driver2::msg::CustomPoint pt;
+    int64_t real_offset;
+  };
+  std::vector<PointExt> trans_p1(len1);
 
-  // 3. 高效双指针归并排序 (Two-pointer merge)
-  size_t i = 0;  // msg1 index
-  size_t j = 0;  // msg2 index
-  uint32_t count_filter = 0;
-
-  // 快速跳过 msg1 中时间非法的小于 0 的点（因为本身是递增的）
-  while (i < msg1->points.size() && (time_diff + msg1->points[i].offset_time) < 0) {
-    i++;
-  }
-
-  // 核心归并循环：因为 msg1 和 msg2 原本就是按时间递增的，所以谁时间小就先压入谁
-  while (i < msg1->points.size() && j < msg2->points.size()) {
-    uint32_t t1 = static_cast<uint32_t>(time_diff + msg1->points[i].offset_time);
-    uint32_t t2 = msg2->points[j].offset_time;
-
-    if (t1 <= t2) {
+  // 3. TBB 并行计算 msg1 的坐标变换
+  tbb::parallel_for(tbb::blocked_range<size_t>(0, len1), [&](const tbb::blocked_range<size_t> & r) {
+    for (size_t i = r.begin(); i != r.end(); ++i) {
       livox_ros_driver2::msg::CustomPoint pt = msg1->points[i];
       const double px = pt.x, py = pt.y, pz = pt.z;
       pt.x = static_cast<float>(r00 * px + r01 * py + r02 * pz + tx);
       pt.y = static_cast<float>(r10 * px + r11 * py + r12 * pz + ty);
       pt.z = static_cast<float>(r20 * px + r21 * py + r22 * pz + tz);
-      pt.offset_time = t1;
+      
+      trans_p1[i].real_offset = diff1 + static_cast<int64_t>(pt.offset_time);
+      trans_p1[i].pt = pt;
+    }
+  });
 
-      fused_msg->points.push_back(pt);
-      i++;
-      count_filter++;
+  // 4. 双指针归并
+  livox_ros_driver2::msg::CustomPoint * out_ptr = fused_msg->points.data();
+  const livox_ros_driver2::msg::CustomPoint * p2_ptr = msg2->points.data();
+
+  size_t i = 0, j = 0, out_idx = 0;
+
+  // 跳过 msg1 中早于 target_timebase 的非法负时间点
+  while (i < len1 && trans_p1[i].real_offset < 0) { i++; }
+  // 跳过 msg2 中早于 target_timebase 的非法负时间点
+  while (j < len2 && (diff2 + static_cast<int64_t>(p2_ptr[j].offset_time)) < 0) { j++; }
+
+  while (i < len1 && j < len2) {
+    int64_t t1 = trans_p1[i].real_offset;
+    int64_t t2 = diff2 + static_cast<int64_t>(p2_ptr[j].offset_time);
+
+    if (t1 <= t2) {
+      out_ptr[out_idx] = trans_p1[i].pt;
+      out_ptr[out_idx].offset_time = static_cast<uint32_t>(t1);
+      out_idx++; i++;
     } else {
-      fused_msg->points.push_back(msg2->points[j]);
-      j++;
+      out_ptr[out_idx] = p2_ptr[j];
+      out_ptr[out_idx].offset_time = static_cast<uint32_t>(t2);
+      out_idx++; j++;
     }
   }
 
-  // 将剩余的点全部压入
-  while (i < msg1->points.size()) {
-    livox_ros_driver2::msg::CustomPoint pt = msg1->points[i];
-    const double px = pt.x, py = pt.y, pz = pt.z;
-    pt.x = static_cast<float>(r00 * px + r01 * py + r02 * pz + tx);
-    pt.y = static_cast<float>(r10 * px + r11 * py + r12 * pz + ty);
-    pt.z = static_cast<float>(r20 * px + r21 * py + r22 * pz + tz);
-    pt.offset_time = static_cast<uint32_t>(time_diff + pt.offset_time);
-
-    fused_msg->points.push_back(pt);
-    i++;
-    count_filter++;
+  while (i < len1) {
+    out_ptr[out_idx] = trans_p1[i].pt;
+    out_ptr[out_idx].offset_time = static_cast<uint32_t>(trans_p1[i].real_offset);
+    out_idx++; i++;
+  }
+  while (j < len2) {
+    out_ptr[out_idx] = p2_ptr[j];
+    out_ptr[out_idx].offset_time = static_cast<uint32_t>(diff2 + p2_ptr[j].offset_time);
+    out_idx++; j++;
   }
 
-  while (j < msg2->points.size()) {
-    fused_msg->points.push_back(msg2->points[j]);
-    j++;
-  }
+  fused_msg->points.resize(out_idx);
+  fused_msg->point_num = out_idx;
 
-  std::cout << "data " << count_filter << std::endl;
-  fused_msg->point_num = fused_msg->points.size();
-
-  // 发布融合后的点云
   PublishPointCloud(std::move(fused_msg));
 
   auto end_time = std::chrono::steady_clock::now();
   double time_consuming =
-    std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count() / 1000.0;
   std::cout << " -- [ INFO] Map updated in " << time_consuming << " ms." << std::endl;
 }
+// ...existing code...
 void LidarMergeNode::PublishPointCloud(livox_ros_driver2::msg::CustomMsg::UniquePtr msg1)
 {
   // 发布融合后的点云

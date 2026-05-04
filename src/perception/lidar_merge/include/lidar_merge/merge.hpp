@@ -30,5 +30,9 @@ private:
     livox_ros_driver2::msg::CustomMsg, livox_ros_driver2::msg::CustomMsg>;
   std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
   Eigen::Matrix4d T_lidar1_to_lidar2_;
+   double r00, r01, r02, tx;
+  double r10, r11, r12, ty;
+  double r20, r21, r22, tz;
+
 };
 }  // namespace lidar_merge
