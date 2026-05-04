@@ -1,7 +1,7 @@
 #!/bin/bash
-# gnome-terminal --tab --title="delete" -- bash -c \
-# "bash /home/dji/hero2026_-sentry/bash/kill_all_ros2_nodes.sh; bash "
-# sleep 2
+gnome-terminal --tab --title="delete" -- bash -c \
+"bash /home/dji/hero2026_-sentry/bash/kill_all_ros2_nodes.sh; bash "
+sleep 2
 # 设置必要的环境变量
 export DISPLAY=:0
 export XAUTHORITY=/home/dji/.Xauthority
@@ -77,9 +77,9 @@ gnome-terminal --tab --title="rviz" -- bash -c \
 
 # sleep 10
 # 启动决策节点（特殊日志处理）
-DECISION_LOG="$LOG_DIR/decision.log"
-gnome-terminal --tab --title="decision" -- bash -c \
-"script -q -f \"$DECISION_LOG\" -c 'ros2 launch bt decision_launch.py'; exec bash"
+# DECISION_LOG="$LOG_DIR/decision.log"
+# gnome-terminal --tab --title="decision" -- bash -c \
+# "script -q -f \"$DECISION_LOG\" -c 'ros2 launch bt decision_launch.py'; exec bash"
 
 echo "所有节点已启动，系统初始化完成！"
 echo "完整日志目录: $LOG_DIR"
