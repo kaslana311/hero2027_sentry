@@ -5,7 +5,7 @@ sleep 2
 # 设置必要的环境变量
 export DISPLAY=:0
 export XAUTHORITY=/home/dji/.Xauthority
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+# export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 source /opt/ros/humble/setup.bash
 source /home/dji/hero2026_-sentry/install/setup.bash
 # 创建日志目录
@@ -56,11 +56,11 @@ gnome-terminal --tab --title="odin" -- bash -c \
 # gnome-terminal --tab --title="ekf_fusion" -- bash -c \
 # "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch tf_manager fusion_launch.py; bash"
 
+sleep 5  # 适当调整时间或使用话题检测
+
 # 启动重定位节点
 gnome-terminal --tab --title="relocalization" -- bash -c \
 "ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\" ; exec bash"
-
-sleep 5  # 适当调整时间或使用话题检测
 
 # 启动导航规划节点
 gnome-terminal --tab --title="plan" -- bash -c \
