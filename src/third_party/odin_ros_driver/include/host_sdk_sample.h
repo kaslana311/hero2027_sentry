@@ -1273,13 +1273,17 @@ class MultiSensorPublisher {
             msg.pose.pose.orientation.z = qz;
             msg.pose.pose.orientation.w = qw;
 
-            // 杆臂补偿：机器人中心 = 传感器中心 - R * [0.188, 0, 0]^T
+            // 杆臂补偿：机器人中心 = 传感器中心 - R * [0.184685, -0.009704,
+            // 0]^T
             msg.pose.pose.position.x =
-                px - 0.188 * (1.0 - 2.0 * qy * qy - 2.0 * qz * qz);
+                px - 0.184685 * (1.0 - 2.0 * qy * qy - 2.0 * qz * qz) -
+                (-0.009704) * (2.0 * qx * qy - 2.0 * qw * qz);
             msg.pose.pose.position.y =
-                py - 0.188 * (2.0 * qx * qy + 2.0 * qw * qz);
+                py - 0.184685 * (2.0 * qx * qy + 2.0 * qw * qz) -
+                (-0.009704) * (1.0 - 2.0 * qx * qx - 2.0 * qz * qz);
             msg.pose.pose.position.z =
-                pz - 0.188 * (2.0 * qx * qz - 2.0 * qw * qy);
+                pz - 0.184685 * (2.0 * qx * qz - 2.0 * qw * qy) -
+                (-0.009704) * (2.0 * qy * qz + 2.0 * qw * qx);
 
             // Enqueue binary logging for pose
             if ((odom_type == OdometryType::STANDARD) && data_logger_) {
@@ -1326,11 +1330,11 @@ class MultiSensorPublisher {
             msg.twist.twist.angular.y = wy;
             msg.twist.twist.angular.z = wz;
 
-            // 杆臂补偿：机器人中心速度 = 传感器速度 - w x r (其中 r = [0.188,
-            // 0, 0]^T)
-            msg.twist.twist.linear.x = vx;
-            msg.twist.twist.linear.y = vy - 0.188 * wz;
-            msg.twist.twist.linear.z = vz + 0.188 * wy;
+            // 杆臂补偿：机器人中心速度 = 传感器速度 - w x r (其中 r =
+            // [0.184685, -0.009704, 0]^T)
+            msg.twist.twist.linear.x = vx - 0.009704 * wz;
+            msg.twist.twist.linear.y = vy - 0.184685 * wz;
+            msg.twist.twist.linear.z = vz + 0.009704 * wx + 0.184685 * wy;
 
             // Copy original covariance data
             for (int i = 0; i < 36; ++i) {
@@ -1365,13 +1369,17 @@ class MultiSensorPublisher {
             msg.pose.pose.orientation.z = qz;
             msg.pose.pose.orientation.w = qw;
 
-            // 杆臂补偿：机器人中心 = 传感器中心 - R * [0.188, 0, 0]^T
+            // 杆臂补偿：机器人中心 = 传感器中心 - R * [0.184685, -0.009704,
+            // 0]^T
             msg.pose.pose.position.x =
-                px - 0.188 * (1.0 - 2.0 * qy * qy - 2.0 * qz * qz);
+                px - 0.184685 * (1.0 - 2.0 * qy * qy - 2.0 * qz * qz) -
+                (-0.009704) * (2.0 * qx * qy - 2.0 * qw * qz);
             msg.pose.pose.position.y =
-                py - 0.188 * (2.0 * qx * qy + 2.0 * qw * qz);
+                py - 0.184685 * (2.0 * qx * qy + 2.0 * qw * qz) -
+                (-0.009704) * (1.0 - 2.0 * qx * qx - 2.0 * qz * qz);
             msg.pose.pose.position.z =
-                pz - 0.188 * (2.0 * qx * qz - 2.0 * qw * qy);
+                pz - 0.184685 * (2.0 * qx * qz - 2.0 * qw * qy) -
+                (-0.009704) * (2.0 * qy * qz + 2.0 * qw * qx);
         }
 
 #ifdef ROS2
@@ -1815,9 +1823,13 @@ class MultiSensorPublisher {
     void initialize_publishers() {
 #ifdef ROS2
         // Small data with queue depth 1
-        auto qos_small = rclcpp::QoS(1)
+        auto qos_small = rclcpp::QoS(100)
                              .reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE)
                              .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
+
+        auto qos_odometry = rclcpp::QoS(4000)
+                        .reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE)
+                        .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);                     
 
         // Large sensor data with larger queue to avoid blocking
         auto qos_sensor = rclcpp::QoS(10)
@@ -1834,7 +1846,7 @@ class MultiSensorPublisher {
         odom_publisher_ =
             node_->create_publisher<ros::Odometry>("odin1/odometry", qos_small);
         odom_highfreq_publisher_ = node_->create_publisher<ros::Odometry>(
-            "odin1/odometry_highfreq", qos_small);
+            "odin1/odometry_highfreq", qos_odometry);
         path_publisher_ =
             node_->create_publisher<visualization_msgs::msg::MarkerArray>(
                 "odin1/path", qos_sensor);
