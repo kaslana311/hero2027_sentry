@@ -1,7 +1,9 @@
 #!/bin/bash
 gnome-terminal --tab --title="delete" -- bash -c \
 "bash /home/dji/hero2026_-sentry/bash/kill_all_ros2_nodes.sh; bash "
-sleep 2
+
+sleep 5
+
 # 设置必要的环境变量
 export DISPLAY=:0
 export XAUTHORITY=/home/dji/.Xauthority
@@ -28,6 +30,9 @@ wait_for_topic() {
     done
 }
 
+gnome-terminal --tab --title="odin" -- bash -c \
+"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch odin_ros_driver odin1_ros2.launch.py; bash"
+
 # zenoh 网线通信桥接
 gnome-terminal --tab --title="zenoh_bridge" -- bash -c \
 "ros2 run zenoh_bridge_dds zenoh_bridge_dds -d 1 -e tcp/192.168.123.20:7447 -a '.*/tracker/autoaim\$|.*/carrot_pose\$' 2>&1 | tee \"$LOG_DIR/zenoh_bridge.log\"; exec bash"
@@ -39,22 +44,6 @@ gnome-terminal --tab --title="chassis" -- bash -c \
 # 启动云台节点
 gnome-terminal --tab --title="bridge" -- bash -c \
 "ros2 run nav_cv_bridge autoaim_tracker_node 2>&1 | tee \"$LOG_DIR/bridge.log\"; exec bash"
-
-# 启动雷达节点
-# gnome-terminal --tab --title="start_lidar" -- bash -c \
-# "ros2 launch livox_ros_driver2 msg_MID360_launch.py 2>&1 | tee \"$LOG_DIR/lidar.log\" ; exec bash"
-
-# 等待雷达初始化完成
-# wait_for_topic "/livox/imu" 60
-# gnome-terminal --tab --title="lio" -- bash -c "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch livox_ros_driver2 msg_mixed_launch.py; bash"
-# gnome-terminal --tab --title="fusion" -- bash -c "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch hero_lidar_scan hero_lidar_scan.launch.py; bash"
-gnome-terminal --tab --title="odin" -- bash -c \
-"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch odin_ros_driver odin1_ros2.launch.py; bash"
-
-# wait_for_topic "/aft_mapped_to_init" 60
-
-# gnome-terminal --tab --title="ekf_fusion" -- bash -c \
-# "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch tf_manager fusion_launch.py; bash"
 
 sleep 5  # 适当调整时间或使用话题检测
 
