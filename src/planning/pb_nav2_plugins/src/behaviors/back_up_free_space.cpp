@@ -73,7 +73,12 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
     return nav2_behaviors::Status::FAILED;
   }
 
-  const auto & costmap_msg = future.get()->map;
+  auto response = future.get();
+  if (!response) {
+    RCLCPP_ERROR(logger_, "Received null response from costmap service.");
+    return nav2_behaviors::Status::FAILED;
+  }
+  const auto & costmap_msg = response->map;
 
   // ---- 2. Build the local ESDF from the costmap message ----
   if (!esdf_.updateFromCostmapMsg(costmap_msg)) {
