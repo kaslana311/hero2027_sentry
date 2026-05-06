@@ -856,9 +856,9 @@ void LIVMapper::livox_pcl_cbk(
         double timediff_imu_wrt_lidar =
             last_timestamp_imu - rclcpp::Time(msg->header.stamp).seconds();
         printf(
-            "\033[95mSelf sync IMU and LiDAR, HARD time lag is %.10lf "
+            "\033[95mSelf sync IMU and LiDAR, HARD time lag is %.10lf, %.10lf, %.10lf "
             "\n\033[0m",
-            timediff_imu_wrt_lidar - 0.100);
+            timediff_imu_wrt_lidar - 0.100, last_timestamp_imu, rclcpp::Time(msg->header.stamp).seconds());
         // imu_time_offset = timediff_imu_wrt_lidar;
     }
 
