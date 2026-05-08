@@ -7,6 +7,7 @@
 #include <std_msgs/msg/bool.hpp>
 #include <thread>
 
+#include "attack_rune_nodes.hpp"
 #include "behavior_node.hpp"
 #include "cruiser_node.hpp"
 #include "feasibility_calculate_node.hpp"
@@ -115,6 +116,8 @@ int main(int argc, char** argv) {
     factory.registerNodeType<PointInQuadrilateralCondition>(
         "PointInQuadrilateral");
     factory.registerNodeType<GuardWithAttackNode>("GuardWithAttack");
+    factory.registerNodeType<PublishNavOutputNode>("PublishNavOutput");
+    factory.registerNodeType<RuneStateMachineNode>("RuneStateMachine");
 
     RCLCPP_INFO(rclcpp::get_logger("refree_sub"), "行为树节点登记成功");
     auto tree = factory.createTreeFromFile(xml_path, blackboard);
