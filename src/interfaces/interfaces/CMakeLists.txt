@@ -26,36 +26,14 @@ find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 #添加消息文件和依赖
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/Pose.msg"
-  "msg/Armor.msg"
-  "msg/Point.msg"
-  "msg/FanArmor.msg"
-  "msg/FanArmors.msg"
-  "msg/VPoint.msg"
-  "msg/VVPoint.msg"
-  "msg/Rune.msg"
-  "msg/Readpack.msg"
-  "msg/Sendpack.msg"
-  "msg/Runemodel.msg"
   "msg/Target.msg"
-  "msg/AutoaimRecorder.msg"
-  "msg/Timeconvert.msg"
   "msg/Tovision.msg"
-  "msg/Tobase.msg"
-  "msg/Enemy.msg"
   "msg/Lidar.msg"
-  "msg/Bullet.msg"
-  "msg/Cmdbuffer.msg"
   "msg/MincoTrajectory.msg"
   "msg/TrackerOutput.msg"
-  "srv/Fromsolve.srv"
-  "srv/Solve.srv"
-  "srv/Armor.srv"
-  "srv/RuneFire.srv"
-
   
   DEPENDENCIES sensor_msgs
- )
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
