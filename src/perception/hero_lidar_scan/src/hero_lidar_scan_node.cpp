@@ -1,12 +1,11 @@
 #include "hero_lidar_scan/hero_lidar_scan_node.hpp"
 #ifdef OMP_LIDAR
 #include <omp.h>
-#else 
+#else
 #include <tbb/parallel_for.h>
 #endif
 #include <pcl/filters/crop_box.h>
 #include <pcl/point_cloud.h>
-
 
 #include <algorithm>
 #include <pcl/impl/point_types.hpp>
@@ -20,7 +19,7 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
     this->declare_parameter<std::string>("lidar2_topic", "/livox/lidar2");
     this->declare_parameter<std::string>("odom_topic", "/odom");
     this->declare_parameter<std::string>("fused_cloud_topic", "/fused_cloud");
-    
+
     // 雷达1外参
     this->declare_parameter<double>("lidar1_x", 0.0);
     this->declare_parameter<double>("lidar1_y", 0.0);
@@ -36,7 +35,7 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
     this->declare_parameter<double>("lidar2_roll", 0.0);
     this->declare_parameter<double>("lidar2_pitch", 0.0);
     this->declare_parameter<double>("lidar2_yaw", 0.0);
-    
+
     this->declare_parameter<double>("time_offset", 0.0);
     this->declare_parameter<double>("filter_size", 0.05);
 
@@ -101,29 +100,29 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
     lidar1_sub_.subscribe(this, lidar1_topic, lidar_qos.get_rmw_qos_profile());
     lidar2_sub_.subscribe(this, lidar2_topic, lidar_qos.get_rmw_qos_profile());
 #else
-        lidar_sub_ = this->create_subscription<livox_ros_driver2::msg::CustomMsg>(
-            lidar1_topic, lidar_qos,
-            std::bind(&HeroLidarScanNode::lidarCallback, this,
-                      std::placeholders::_1));
-#endif 
+    lidar_sub_ = this->create_subscription<livox_ros_driver2::msg::CustomMsg>(
+        lidar1_topic, lidar_qos,
+        std::bind(&HeroLidarScanNode::lidarCallback, this,
+                  std::placeholders::_1));
+#endif
     ///////////////////////////////
     crop_filter_.setMin(min_pt);
     crop_filter_.setMax(max_pt);
     // setNegative(true) 表示去除 box 内的点，保留外部点
     crop_filter_.setNegative(true);
     // 在构造函数中初始化
-tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
-tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
 #ifdef TWO_LIDARS
     sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(
         SyncPolicy(10), lidar1_sub_, lidar2_sub_);
     sync_->registerCallback(std::bind(&HeroLidarScanNode::lidarSyncCallback,
                                       this, std::placeholders::_1,
                                       std::placeholders::_2));
-#endif 
+#endif
     cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
         fused_cloud_topic, 10);
-       
+
     worker_running_ = true;
     worker_thread_ = std::thread(&HeroLidarScanNode::workerLoop, this);
 #ifdef OMP_LIDAR
@@ -133,7 +132,7 @@ tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     RCLCPP_INFO(this->get_logger(),
                 "HeroLidarScan节点已启动,time_offset:%f, OMP threads: %d->%d",
                 time_offset_, max_threads, limited_threads);
-#endif 
+#endif
 }
 
 HeroLidarScanNode::~HeroLidarScanNode() {
@@ -225,21 +224,38 @@ void HeroLidarScanNode::processLidar(
     const Eigen::Matrix4d& T_ext, const Eigen::Matrix4d& pose_end,
     const std::deque<nav_msgs::msg::Odometry>& local_odom_buffer,
     pcl::PointCloud<pcl::PointXYZI>& cloud_out) {
-    double timebase = msg->timebase * 1e-9;  // 纳秒转秒
-    Eigen::Matrix4d pose_end_inv = pose_end.inverse();
+    if (local_odom_buffer.empty()) {
+        cloud_out.clear();
+        return;
+    }
 
-    size_t point_num = msg->point_num;
-    cloud_out.points.resize(point_num);
+    double timebase = msg->timebase * 1e-9;  // 纳秒转秒
+    double max_odom_time =
+        rclcpp::Time(local_odom_buffer.back().header.stamp).seconds();
+
+    size_t valid_point_num = 0;
+    for (size_t i = 0; i < msg->point_num; ++i) {
+        double pt_time =
+            timebase + msg->points[i].offset_time * 1e-9 + time_offset_;
+        if (pt_time > max_odom_time) {
+            break;
+        }
+        valid_point_num++;
+    }
+
+    if (valid_point_num == 0) {
+        cloud_out.clear();
+        return;
+    }
+
+    cloud_out.points.resize(valid_point_num);
 
     // 动态桶策略 (分段预积分)：假设每 5 毫秒 (0.005 秒)
     // 视作一个固定位姿桶，大幅减少插值次数
     const double BUCKET_TIME_RESOLUTION = 0.0025;
 
     // 计算每个桶的位姿并缓存
-    double total_duration = 0.0;
-    if (point_num > 0) {
-        total_duration = msg->points[point_num - 1].offset_time * 1e-9;
-    }
+    double total_duration = msg->points[valid_point_num - 1].offset_time * 1e-9;
 
     size_t num_buckets =
         static_cast<size_t>(total_duration / BUCKET_TIME_RESOLUTION) + 1;
@@ -253,15 +269,15 @@ void HeroLidarScanNode::processLidar(
             timebase + b * BUCKET_TIME_RESOLUTION + time_offset_;
         Eigen::Matrix4d pose_i;
         if (getPoseAtTimeLocal(local_odom_buffer, bucket_time, pose_i)) {
-            // 预计算出当前桶的转换矩阵: pose_end^-1 * pose_i * T_ext
-            bucket_transforms[b] = pose_end_inv * pose_i * T_ext;
+            // 预计算出当前桶的转换矩阵: pose_i * T_ext
+            bucket_transforms[b] = pose_i * T_ext;
             bucket_valid[b] = true;
         }
     }
 
 // 遍历点云并应用桶矩阵变换
 #pragma omp parallel for
-    for (size_t i = 0; i < point_num; ++i) {
+    for (size_t i = 0; i < valid_point_num; ++i) {
         const auto& pt = msg->points[i];
         double pt_offset_time = pt.offset_time * 1e-9;
 
@@ -270,7 +286,7 @@ void HeroLidarScanNode::processLidar(
             static_cast<size_t>(pt_offset_time / BUCKET_TIME_RESOLUTION);
         if (bucket_idx >= num_buckets) bucket_idx = num_buckets - 1;
 
-        // 如果该桶未能拿到位姿（时间越界等），原样保留点，仅作雷达外参变换兜底
+        // 如果该桶未能拿到位姿（由于上面截断，所以绝大部分应当命中有效位姿）
         Eigen::Matrix4d transform;
         if (bucket_valid[bucket_idx]) {
             transform = bucket_transforms[bucket_idx];
@@ -288,74 +304,95 @@ void HeroLidarScanNode::processLidar(
     }
 }
 #else
-//TBB 
+// TBB
 void HeroLidarScanNode::processLidar(
     const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr& msg,
     const Eigen::Matrix4d& T_ext, const Eigen::Matrix4d& pose_end,
     const std::deque<nav_msgs::msg::Odometry>& local_odom_buffer,
     pcl::PointCloud<pcl::PointXYZI>& cloud_out) {
-    double timebase = msg->timebase * 1e-9;  // 纳秒转秒
-    Eigen::Matrix4d pose_end_inv = pose_end.inverse();
+    if (local_odom_buffer.empty()) {
+        cloud_out.clear();
+        return;
+    }
 
-    size_t point_num = msg->point_num;
-    cloud_out.points.resize(point_num);
+    double timebase = msg->timebase * 1e-9;  // 纳秒转秒
+    double max_odom_time =
+        rclcpp::Time(local_odom_buffer.back().header.stamp).seconds();
+
+    size_t valid_point_num = 0;
+    for (size_t i = 0; i < msg->point_num; ++i) {
+        double pt_time =
+            timebase + msg->points[i].offset_time * 1e-9 + time_offset_;
+        if (pt_time > max_odom_time) {
+            break;
+        }
+        valid_point_num++;
+    }
+
+    if (valid_point_num == 0) {
+        cloud_out.clear();
+        return;
+    }
+
+    cloud_out.points.resize(valid_point_num);
 
     // 动态桶策略 (分段预积分)：假设每 5 毫秒 (0.005 秒)
     // 视作一个固定位姿桶，大幅减少插值次数
     const double BUCKET_TIME_RESOLUTION = 0.0025;
 
     // 计算每个桶的位姿并缓存
-    double total_duration = 0.0;
-    if (point_num > 0) {
-        total_duration = msg->points[point_num - 1].offset_time * 1e-9;
-    }
+    double total_duration = msg->points[valid_point_num - 1].offset_time * 1e-9;
 
     size_t num_buckets =
         static_cast<size_t>(total_duration / BUCKET_TIME_RESOLUTION) + 1;
     std::vector<Eigen::Matrix4d> bucket_transforms(num_buckets);
     std::vector<bool> bucket_valid(num_buckets, false);
 
-// 这里的桶大小大概也就 10-20 个，顺带并行处理
-tbb::parallel_for(tbb::blocked_range<size_t>(0, num_buckets),
-    [&](const tbb::blocked_range<size_t>& range) {
-        for (size_t b = range.begin(); b != range.end(); ++b) {
-            double bucket_time =
-                timebase + b * BUCKET_TIME_RESOLUTION + time_offset_;
-            Eigen::Matrix4d pose_i;
-            if (getPoseAtTimeLocal(local_odom_buffer, bucket_time, pose_i)) {
-                bucket_transforms[b] = pose_end_inv * pose_i * T_ext;
-                bucket_valid[b] = true;
+    // 这里的桶大小大概也就 10-20 个，顺带并行处理
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, num_buckets),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t b = range.begin(); b != range.end(); ++b) {
+                double bucket_time =
+                    timebase + b * BUCKET_TIME_RESOLUTION + time_offset_;
+                Eigen::Matrix4d pose_i;
+                if (getPoseAtTimeLocal(local_odom_buffer, bucket_time,
+                                       pose_i)) {
+                    bucket_transforms[b] = pose_i * T_ext;
+                    bucket_valid[b] = true;
+                }
             }
-        }
-    });
+        });
 
-// 遍历点云并应用桶矩阵变换
-tbb::parallel_for(tbb::blocked_range<size_t>(0, point_num),
-    [&](const tbb::blocked_range<size_t>& range) {
-        for (size_t i = range.begin(); i != range.end(); ++i) {
-            const auto& pt = msg->points[i];
-            double pt_offset_time = pt.offset_time * 1e-9;
+    // 遍历点云并应用桶矩阵变换
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, valid_point_num),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i != range.end(); ++i) {
+                const auto& pt = msg->points[i];
+                double pt_offset_time = pt.offset_time * 1e-9;
 
-            size_t bucket_idx =
-                static_cast<size_t>(pt_offset_time / BUCKET_TIME_RESOLUTION);
-            if (bucket_idx >= num_buckets) bucket_idx = num_buckets - 1;
+                size_t bucket_idx = static_cast<size_t>(pt_offset_time /
+                                                        BUCKET_TIME_RESOLUTION);
+                if (bucket_idx >= num_buckets) bucket_idx = num_buckets - 1;
 
-            Eigen::Matrix4d transform;
-            if (bucket_valid[bucket_idx]) {
-                transform = bucket_transforms[bucket_idx];
-            } else {
-                transform = T_ext;
+                Eigen::Matrix4d transform;
+                // if (bucket_valid[bucket_idx]) {
+                    transform = bucket_transforms[bucket_idx];
+                // } else {
+                //     transform = T_ext;
+                //     std::cout << "WARNING" <<std::endl;
+                // }
+
+                Eigen::Vector4d p_raw(pt.x, pt.y, pt.z, 1.0);
+                Eigen::Vector4d p_undist = transform * p_raw;
+
+                cloud_out.points[i].x = p_undist(0);
+                cloud_out.points[i].y = p_undist(1);
+                cloud_out.points[i].z = p_undist(2);
+                cloud_out.points[i].intensity = pt.reflectivity;
             }
-
-            Eigen::Vector4d p_raw(pt.x, pt.y, pt.z, 1.0);
-            Eigen::Vector4d p_undist = transform * p_raw;
-
-            cloud_out.points[i].x = p_undist(0);
-            cloud_out.points[i].y = p_undist(1);
-            cloud_out.points[i].z = p_undist(2);
-            cloud_out.points[i].intensity = pt.reflectivity;
-        }
-    });
+        });
 }
 
 #endif
@@ -404,7 +441,7 @@ void HeroLidarScanNode::lidarCallback(
     }
     frame_cv_.notify_one();
 }
-#endif 
+#endif
 // 工作线程：执行所有 OMP 计算和点云发布
 void HeroLidarScanNode::workerLoop() {
     while (worker_running_) {
@@ -453,7 +490,7 @@ void HeroLidarScanNode::workerLoop() {
         // 融合点云
         pcl::PointCloud<pcl::PointXYZI> fused_cloud = cloud1 + cloud2;
 #else
- LidarFrame frame;
+        LidarFrame frame;
         {
             std::unique_lock<std::mutex> lock(frame_queue_mutex_);
             frame_cv_.wait(lock, [this] {
@@ -463,8 +500,8 @@ void HeroLidarScanNode::workerLoop() {
             frame = std::move(frame_queue_.front());
             frame_queue_.pop();
         }
-        auto &lidar_msg = frame.lidar;
-        auto &local_odom_buffer = frame.odom_snapshot;
+        auto& lidar_msg = frame.lidar;
+        auto& local_odom_buffer = frame.odom_snapshot;
         // 1. 计算时间范围
         double t_end = lidar_msg->timebase * 1e-9;
         if (!lidar_msg->points.empty()) {
@@ -481,7 +518,6 @@ void HeroLidarScanNode::workerLoop() {
         pcl::PointCloud<pcl::PointXYZI> fused_cloud;
         processLidar(lidar_msg, T_lidar2_to_base_, pose_end, local_odom_buffer,
                      fused_cloud);
-        
 
 #endif
         pcl::PointCloud<pcl::PointXYZI> filtered_cloud;
@@ -507,9 +543,7 @@ void HeroLidarScanNode::workerLoop() {
         output_msg.header.stamp = lidar_msg->header.stamp;  // 保持原雷达时间戳
         output_msg.header.frame_id = "odom";  // 保持原雷达坐标系
         cloud_pub_->publish(output_msg);
-      
     }
-    
 }
 
 }  // namespace hero_lidar_scan
