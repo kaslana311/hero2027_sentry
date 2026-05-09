@@ -98,6 +98,9 @@ HeroLidarScanNode::HeroLidarScanNode(const rclcpp::NodeOptions& options)
     crop_filter_.setMax(max_pt);
     // setNegative(true) 表示去除 box 内的点，保留外部点
     crop_filter_.setNegative(true);
+    // 在构造函数中初始化
+tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(
         SyncPolicy(10), lidar1_sub_, lidar2_sub_);
     sync_->registerCallback(std::bind(&HeroLidarScanNode::lidarSyncCallback,
@@ -154,7 +157,7 @@ bool HeroLidarScanNode::getPoseAtTimeLocal(
 
     if (idx_after == 0) {
         // 目标时间早于队列最早时间，使用最早帧
-        auto& odom = local_odom_buffer.front();
+        auto& odom = local_odom_buffer.back();
         Eigen::Quaterniond q(
             odom.pose.pose.orientation.w, odom.pose.pose.orientation.x,
             odom.pose.pose.orientation.y, odom.pose.pose.orientation.z);
@@ -356,13 +359,38 @@ void HeroLidarScanNode::workerLoop() {
         } else {
             voxel_filtered_cloud = filtered_cloud;
         }
+ Eigen::Matrix4f tf_mat = Eigen::Matrix4f::Identity();
+        try {
+           auto  tf_stamped = this->tf_buffer_->lookupTransform(
+                "odom", "base_link", tf2::TimePointZero);
+            const auto& tr = tf_stamped.transform.translation;
+            const auto& rr = tf_stamped.transform.rotation;
 
-        sensor_msgs::msg::PointCloud2 output_msg;
-        pcl::toROSMsg(voxel_filtered_cloud, output_msg);
-        output_msg.header.stamp = stamp_end;
-        output_msg.header.frame_id = "base_link";
-        cloud_pub_->publish(output_msg);
+            Eigen::Quaternionf q(
+                static_cast<float>(rr.w), static_cast<float>(rr.x),
+                static_cast<float>(rr.y), static_cast<float>(rr.z));
+            q.normalize();
+
+            tf_mat.setIdentity();
+            tf_mat.block<3, 3>(0, 0) = q.toRotationMatrix();
+            tf_mat(0, 3) = static_cast<float>(tr.x);
+            tf_mat(1, 3) = static_cast<float>(tr.y);
+            tf_mat(2, 3) = static_cast<float>(tr.z);
+
+            pcl::transformPointCloud(voxel_filtered_cloud, voxel_filtered_cloud,
+                                      tf_mat);
+            sensor_msgs::msg::PointCloud2 output_msg;
+            pcl::toROSMsg(voxel_filtered_cloud, output_msg);
+            output_msg.header.stamp = stamp_end;
+            output_msg.header.frame_id = "odom";
+            cloud_pub_->publish(std::move(output_msg));
+}
+ catch (const tf2::TransformException& ex) {
+        // 使用单次限制频率的日志，避免塞满终端
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "TF Error: %s", ex.what());
     }
+    }
+    
 }
 
 }  // namespace hero_lidar_scan

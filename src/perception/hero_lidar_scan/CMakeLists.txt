@@ -21,7 +21,7 @@ find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenMP REQUIRED)
-
+find_package(tf2_ros REQUIRED)
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}
@@ -38,6 +38,7 @@ ament_target_dependencies(${PROJECT_NAME}_component
   rclcpp_components
   sensor_msgs
   nav_msgs
+  tf2_ros
   message_filters
   livox_ros_driver2
   pcl_conversions
