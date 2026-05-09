@@ -6,11 +6,17 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#ifdef DEBUG
+#include <visualization_msgs/msg/marker.hpp>
+#endif
 namespace lidar_merge
 {
 LidarMergeNode::LidarMergeNode(const std::string & name) : Node(name)
 {
   this->declare_parameter("lidar1_topic", "/livox/lidar1");
+#ifdef DEBUG
+  ori_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("/livox/ori_marker", 1);
+#endif
   this->declare_parameter("lidar2_topic", "/livox/lidar2");
   this->declare_parameter("lidar1_to_lidar2_x", 0.0);
   this->declare_parameter("lidar1_to_lidar2_y", 0.0);
@@ -165,6 +171,53 @@ void LidarMergeNode::Sync_lidarCallback(
 
   fused_msg->points.resize(out_idx);
   fused_msg->point_num = out_idx;
+
+#ifdef DEBUG
+  visualization_msgs::msg::Marker ori_marker;
+  ori_marker.header.frame_id = "base_link";
+  ori_marker.header.stamp = fused_msg->header.stamp;
+  ori_marker.ns = "lidar_merge_ori";
+  ori_marker.id = 0;
+  ori_marker.type = visualization_msgs::msg::Marker::SPHERE;
+  ori_marker.action = visualization_msgs::msg::Marker::ADD;
+  const Eigen::Matrix4d T_lidar2_to_base = []() {
+    const double lidar2_x = 0.0;
+    const double lidar2_y = -0.217;
+    const double lidar2_z = 0.121;
+    const double lidar2_roll = 0.0;
+    const double lidar2_pitch = 0.61086;
+    const double lidar2_yaw = -1.57079;
+    Eigen::AngleAxisd roll_angle(lidar2_roll, Eigen::Vector3d::UnitX());
+    Eigen::AngleAxisd pitch_angle(lidar2_pitch, Eigen::Vector3d::UnitY());
+    Eigen::AngleAxisd yaw_angle(lidar2_yaw, Eigen::Vector3d::UnitZ());
+    Eigen::Quaterniond q = yaw_angle * pitch_angle * roll_angle;
+    Eigen::Matrix4d transform = Eigen::Matrix4d::Identity();
+    transform.block<3, 3>(0, 0) = q.toRotationMatrix();
+    transform(0, 3) = lidar2_x;
+    transform(1, 3) = lidar2_y;
+    transform(2, 3) = lidar2_z;
+    return transform;
+  }();
+  const Eigen::Vector4d ori_lidar2(ori_x, ori_y, ori_z, 1.0);
+  const Eigen::Vector4d ori_base = T_lidar2_to_base * ori_lidar2;
+  ori_marker.pose.position.x = ori_base.x();
+  ori_marker.pose.position.y = ori_base.y();
+  ori_marker.pose.position.z = ori_base.z();
+  const Eigen::Quaterniond q_base(T_lidar2_to_base.block<3, 3>(0, 0));
+  ori_marker.pose.orientation.x = q_base.x();
+  ori_marker.pose.orientation.y = q_base.y();
+  ori_marker.pose.orientation.z = q_base.z();
+  ori_marker.pose.orientation.w = q_base.w();
+  ori_marker.scale.x = 0.15;
+  ori_marker.scale.y = 0.15;
+  ori_marker.scale.z = 0.15;
+  ori_marker.color.r = 1.0f;
+  ori_marker.color.g = 0.2f;
+  ori_marker.color.b = 0.2f;
+  ori_marker.color.a = 1.0f;
+  ori_marker.lifetime = rclcpp::Duration::from_seconds(0.2).to_msg();
+  ori_marker_pub_->publish(ori_marker);
+#endif
 
   PublishPointCloud(std::move(fused_msg));
 

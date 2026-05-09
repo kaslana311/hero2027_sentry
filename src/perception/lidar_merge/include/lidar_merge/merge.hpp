@@ -8,6 +8,9 @@
 
 #include <livox_ros_driver2/msg/custom_msg.hpp>
 #include <rclcpp/rclcpp.hpp>
+#ifdef DEBUG
+#include <visualization_msgs/msg/marker.hpp>
+#endif
 namespace lidar_merge
 {
 
@@ -21,9 +24,12 @@ public:
     const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg1,
     const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg2);
   void PublishPointCloud(livox_ros_driver2::msg::CustomMsg::UniquePtr msg1);
-
+  bool isBlind(const livox_ros_driver2::msg::CustomPoint & pt);
 private:
   rclcpp::Publisher<livox_ros_driver2::msg::CustomMsg>::SharedPtr cloud_pub_;
+#ifdef DEBUG
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr ori_marker_pub_;
+#endif
   message_filters::Subscriber<livox_ros_driver2::msg::CustomMsg> lidar1_sub_;
   message_filters::Subscriber<livox_ros_driver2::msg::CustomMsg> lidar2_sub_;
   using SyncPolicy = message_filters::sync_policies::ApproximateTime<
@@ -33,6 +39,9 @@ private:
    double r00, r01, r02, tx;
   double r10, r11, r12, ty;
   double r20, r21, r22, tz;
-
+  double ori_x = 0.0;
+  double ori_y = 0.0;
+  double ori_z = 0.0;
+  double blind =0.25;
 };
 }  // namespace lidar_merge

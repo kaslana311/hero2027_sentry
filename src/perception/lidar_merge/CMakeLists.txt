@@ -15,6 +15,7 @@ find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(TBB REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 include_directories(
   include
@@ -29,6 +30,7 @@ ament_target_dependencies(${PROJECT_NAME}_node
   livox_ros_driver2
   pcl_conversions
   PCL
+  visualization_msgs
 )
 target_link_libraries(${PROJECT_NAME}_node
   TBB::tbb
