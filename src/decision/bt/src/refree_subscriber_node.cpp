@@ -75,6 +75,12 @@ int main(int argc, char** argv) {
 
     blackboard->set("can_attack_sentry", true);
 
+    blackboard->set<int>("small_rune_flag_1", 0);
+    blackboard->set<int>("small_rune_flag_2", 0);
+    blackboard->set<int>("big_rune_flag_1", 0);
+    blackboard->set<int>("big_rune_flag_2", 0);
+    blackboard->set<int>("big_rune_flag_3", 0);
+
     // 独立线程创建并启动黑板更新器
     auto blackboard_updater =
         std::make_shared<BlackboardUpdater>(blackboard, node, is_red_team);
