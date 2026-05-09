@@ -21,6 +21,7 @@ find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenMP REQUIRED)
+find_package(TBB REQUIRED)
 find_package(tf2_ros REQUIRED)
 include_directories(
   include
@@ -47,6 +48,7 @@ ament_target_dependencies(${PROJECT_NAME}_component
 target_link_libraries(${PROJECT_NAME}_component
   ${PCL_LIBRARIES}
   OpenMP::OpenMP_CXX
+  TBB::tbb
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}_component
