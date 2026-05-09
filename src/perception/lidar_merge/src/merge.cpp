@@ -18,8 +18,17 @@ LidarMergeNode::LidarMergeNode(const std::string & name) : Node(name)
   this->declare_parameter("lidar1_to_lidar2_roll", 0.0);
   this->declare_parameter("lidar1_to_lidar2_pitch", 0.0);
   this->declare_parameter("lidar1_to_lidar2_yaw", 0.0);
+  this->declare_parameter("blind_distance", 0.25);
+  this->declare_parameter("ori_x", -0.2);
+  this->declare_parameter("ori_y", 0.0);
+  this->declare_parameter("ori_z", -0.1);
+   ori_x = this->get_parameter("ori_x").as_double();
+   ori_y = this->get_parameter("ori_y").as_double();
+   ori_z = this->get_parameter("ori_z").as_double();
+  this->get_parameter("blind_distance", blind);
   auto lidar1_topic = this->get_parameter("lidar1_topic").as_string();
   auto lidar2_topic = this->get_parameter("lidar2_topic").as_string();
+
   double l1_to_l2_x = this->get_parameter("lidar1_to_lidar2_x").as_double();
   double l1_to_l2_y = this->get_parameter("lidar1_to_lidar2_y").as_double();
   double l1_to_l2_z = this->get_parameter("lidar1_to_lidar2_z").as_double();
@@ -56,13 +65,21 @@ LidarMergeNode::LidarMergeNode(const std::string & name) : Node(name)
     &LidarMergeNode::Sync_lidarCallback, this, std::placeholders::_1, std::placeholders::_2));
 }
 // ...existing code...
+
+bool LidarMergeNode::isBlind(const livox_ros_driver2::msg::CustomPoint & pt) {
+  if(pt.tag!=0) return true; // tag不为0的点直接丢弃，认为是盲区点
+  if(pt.reflectivity<5) return true; // 强度为0的点直接丢弃，认为是盲区点
+  double distance = std::sqrt((pt.x - ori_x) * (pt.x - ori_x) + (pt.y - ori_y) * (pt.y - ori_y) + (pt.z - ori_z) * (pt.z - ori_z));
+ return distance < blind;
+} 
+   
 void LidarMergeNode::Sync_lidarCallback(
   const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg1,
   const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg2)
 {
   auto start_time = std::chrono::steady_clock::now();
 
-  auto fused_msg = std::make_unique<livox_ros_driver2::msg::CustomMsg>();
+  auto fused_msg = std::make_unique<livox_ros_driver2::msg::CustomMsg>(); 
   
   // 1. 使用两个消息中最新(最大的) timebase 和 header
   const bool is_msg1_latest = (msg1->timebase > msg2->timebase);
@@ -112,6 +129,15 @@ void LidarMergeNode::Sync_lidarCallback(
   while (j < len2 && (diff2 + static_cast<int64_t>(p2_ptr[j].offset_time)) < 0) { j++; }
 
   while (i < len1 && j < len2) {
+    if (isBlind(trans_p1[i].pt) ) {
+      i++;
+      continue;
+    }
+    if (isBlind(p2_ptr[j]) ) {
+      j++;
+      continue;
+    }
+      // 如果任一点在盲区内，则直接丢弃，跳过比较 时间戳的步骤，继续比较下一点
     int64_t t1 = trans_p1[i].real_offset;
     int64_t t2 = diff2 + static_cast<int64_t>(p2_ptr[j].offset_time);
 
