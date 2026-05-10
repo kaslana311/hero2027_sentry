@@ -48,6 +48,7 @@ OccMap::OccMap(double heighter_than_ground_threshold,
     std::cout << "[DOG_MAP] path " << pgm_path << std::endl;
     std::cout << " -- [DOG_MAP] half_map_size: " << half_map_size_
               << ", resolution_z: " << resolution_z << std::endl;
+    std::cout<<" -- [DOG_MAP] OccMap resolution "<<resolution<<  std::endl;
     std::cout << " -- [DOG_MAP] higher_than_ground_threshold: "
               << higher_than_ground_threshold_
               << ", higher_than_car_threshold: " << higher_than_car_threshold_
@@ -230,13 +231,14 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
     pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.3);
     pass.filter(*cloud_in);
     // 2. 添加 3cm 降采样 (Voxel Grid Filter)
-    if (!cloud_in->empty()) {
-        pcl::VoxelGrid<pcl::PointXYZ> sor;
-        sor.setInputCloud(cloud_in);
-        // 设置体素大小为 0.03m (3cm)
-        sor.setLeafSize(0.05f, 0.05f, 0.05f);
-        sor.filter(*cloud_in);
-    }
+    // if (!cloud_in->empty()) {
+    //     pcl::VoxelGrid<pcl::PointXYZ> sor;
+    //     sor.setInputCloud(cloud_in);
+    //     // 设置体素大小为 0.03m (3cm)
+    //     sor.setLeafSize(0.05f, 0.05f, 0.05f);
+    //     sor.filter(*cloud_in);
+    // }
+   
     // std::cout<<"size "<<cloud_in->size()<<std::endl;
     double min_x = pose.first[0] - half_map_size_;
     min_x = std::max(min_x, cloud_at_map_origin[0] + 0.2);
@@ -256,6 +258,16 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
     pass.setFilterFieldName("y");
     pass.setFilterLimits(min_y, max_y);
     pass.filter(*cloud_in);
+      crop_box_filter_.setMin(Eigen::Vector4f(crop_min_x+pose.first[0], crop_min_y+pose.first[1],
+                                                crop_min_z,
+                                                1.0f));  // 设置最小点坐标
+        crop_box_filter_.setMax(Eigen::Vector4f(crop_max_x+pose.first[0], crop_max_y+pose.first[1],
+                                                crop_max_z,
+                                                1.0f));  // 设置最大点坐标
+        crop_box_filter_.setNegative(
+            true);  // 设置为true表示保留框外的点，去除框内的点
+      crop_box_filter_.setInputCloud(cloud_in);
+        crop_box_filter_.filter(*cloud_in);
 }
 void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
     //更新局部地图

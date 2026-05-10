@@ -10,16 +10,10 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include <pcl/filters/crop_box.h>
-#include <pcl/filters/crop_box.h>
+
 #include "dog_map/occ_map.hpp"
 #include "pcl_ros/transforms.hpp"
-const float crop_min_x = -0.8f;
-const float crop_min_y = -0.8f;
-const float crop_min_z = -10.5f;
-const float crop_max_x = 0.8f;
-const float crop_max_y = 0.8f;
-const float crop_max_z = 10.0f;
+
 using namespace analy_utils;
 class DogMapNode : public rclcpp::Node {
    public:
@@ -55,10 +49,9 @@ class DogMapNode : public rclcpp::Node {
     void cloudCallback(
         const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg) {
         sensor_msgs::msg::PointCloud2 out;
-            std::cout<<"cloud cbk .."<<std::endl;
+            // std::cout<<"cloud cbk .."<<std::endl;
         pcl::fromROSMsg(*cloud_msg, *cloud_in_);
-        // crop_box_filter_.setInputCloud(cloud_in_);
-        // crop_box_filter_.filter(*cloud_in_);
+      
         Eigen::Matrix4f tf_mat = Eigen::Matrix4f::Identity();
         try {
             tf_stamped = this->tf_buffer_->lookupTransform(
@@ -102,7 +95,7 @@ class DogMapNode : public rclcpp::Node {
         rc_.unfinished_frame_cnt++;
         map_empty_ = false;
         rc_.update_lock.unlock();
-   std::cout<<"cloud finish .."<<std::endl;
+//    std::cout<<"cloud finish .."<<std::endl;
     }
 
     void updateCallback() {
@@ -220,18 +213,11 @@ class DogMapNode : public rclcpp::Node {
         this->get_parameter("higher_than_car_threshold",
                             higher_than_car_threshold);
         this->get_parameter("half_map_size", half_map_size);
-        crop_box_filter_.setMin(Eigen::Vector4f(crop_min_x, crop_min_y,
-                                                crop_min_z,
-                                                1.0f));  // 设置最小点坐标
-        crop_box_filter_.setMax(Eigen::Vector4f(crop_max_x, crop_max_y,
-                                                crop_max_z,
-                                                1.0f));  // 设置最大点坐标
-        crop_box_filter_.setNegative(
-            true);  // 设置为true表示保留框外的点，去除框内的点
+       
         cloud_in_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
         const rclcpp::QoS qos(
             rclcpp::QoS(1).best_effort().keep_last(1).durability_volatile());
-        const rclcpp::QoS qos_sub(
+          const rclcpp::QoS qos_sub(
             rclcpp::QoS(1).keep_last(1).durability_volatile());
         occ_map_ = new OccMap(heighter_than_ground_threshold,
                               higher_than_car_threshold, half_map_size,
@@ -286,7 +272,7 @@ class DogMapNode : public rclcpp::Node {
     std::string odom_topic = "lidar_odometry", cloud_topic = "registered_scan";
 
     geometry_msgs::msg::TransformStamped tf_stamped;
-    pcl::CropBox<pcl::PointXYZ> crop_box_filter_;
+
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in_;
 
    private:

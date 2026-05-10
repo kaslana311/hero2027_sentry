@@ -12,10 +12,16 @@
 #include <opencv2/core/mat.hpp>
 #include <pcl/impl/point_types.hpp>
 #include <vector>
-
+#include <pcl/filters/crop_box.h>
 #include "dog_map/eigen_alias.hpp"
 #include "dog_map/static_fix_map.hpp"
 using namespace analy_utils;
+const float crop_min_x = -0.5f;
+const float crop_min_y = -0.5f;
+const float crop_min_z = -10.5f;
+const float crop_max_x = 0.8f;
+const float crop_max_y = 0.5f;
+const float crop_max_z = 10.0f;
 template <typename T>
 T yaml_get_value(const YAML::Node& node, const std::string& key) {
     try {
@@ -135,7 +141,7 @@ class OccMap {
     double resolution_z;
     int frame_save_;
     std::string pgm_yaml_path;
-
+    pcl::CropBox<pcl::PointXYZ> crop_box_filter_;
    private:
     cv::Mat grid_map_;
     uint8_t* occ_map;
