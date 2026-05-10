@@ -8,3 +8,7 @@ lidar_merge_node:
     lidar1_to_lidar2_roll: 0.0565088
     lidar1_to_lidar2_pitch: 1.22211
     lidar1_to_lidar2_yaw: -3.097
+    ori_x: -0.1713
+    ori_y: 0.0
+    ori_z: -0.1
+    blind: 0.15

@@ -215,7 +215,7 @@ void LidarMergeNode::Sync_lidarCallback(
   ori_marker.color.g = 0.2f;
   ori_marker.color.b = 0.2f;
   ori_marker.color.a = 1.0f;
-  ori_marker.lifetime = rclcpp::Duration::from_seconds(0.2).to_msg();
+  // ori_marker.lifetime = rclcpp::Duration::from_seconds(0.2).to_msg();
   ori_marker_pub_->publish(ori_marker);
 #endif
 
