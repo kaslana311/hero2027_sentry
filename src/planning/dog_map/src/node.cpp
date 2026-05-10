@@ -231,6 +231,8 @@ class DogMapNode : public rclcpp::Node {
         cloud_in_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
         const rclcpp::QoS qos(
             rclcpp::QoS(1).best_effort().keep_last(1).durability_volatile());
+        const rclcpp::QoS qos_sub(
+            rclcpp::QoS(1).keep_last(1).durability_volatile());
         occ_map_ = new OccMap(heighter_than_ground_threshold,
                               higher_than_car_threshold, half_map_size,
                               resolution_z, frame_save, map_yaml_path);
@@ -259,7 +261,7 @@ class DogMapNode : public rclcpp::Node {
             so.callback_group = rc_.cloud_me_cbk_group;
             rc_.cloud_sub =
                 this->create_subscription<sensor_msgs::msg::PointCloud2>(
-                    cloud_topic, qos,
+                    cloud_topic, qos_sub,
                     std::bind(&DogMapNode::cloudCallback, this,
                               std::placeholders::_1),
                     so);
