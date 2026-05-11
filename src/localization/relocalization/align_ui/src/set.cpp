@@ -2,8 +2,8 @@
 
 #include "ui_set.h"
 #define M_PI 3.14159265358979323846
-set::set(align_res* setdata, QWidget* parent)
-    : QDialog(parent), ui(new Ui::set), data(setdata) {
+set::set( QWidget* parent)
+    : QDialog(parent), ui(new Ui::set) {
     ui->setupUi(this);
     ui->x_lineEdit->setText(QString::number(-4.6));
     ui->y_lineEdit->setText(QString::number(3.7));
@@ -14,7 +14,9 @@ set::set(align_res* setdata, QWidget* parent)
 }
 
 set::~set() { delete ui; }
-
+void set::UpdateUI(align_res *res) { 
+    data=res;
+}
 void set::on_ok_Button_clicked() {
     data->flag = 0;
     QString x_str = ui->x_lineEdit->text();

@@ -43,5 +43,6 @@ private:
   QThread * align_thread_;
   int argc_;
   char ** argv_;
+  set * set_;
 };
 #endif  // ALIGNWEIGHT_H

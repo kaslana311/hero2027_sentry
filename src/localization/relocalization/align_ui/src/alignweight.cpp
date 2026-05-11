@@ -6,6 +6,7 @@ Q_DECLARE_METATYPE(reloc_res)
 Alignweight::Alignweight(int argc, char** argv, QWidget* parent)
     : QWidget(parent), ui(new Ui::Alignweight), argc_(argc), argv_(argv) {
     ui->setupUi(this);
+    set_ = new set( this);
     rclcpp::init(argc_, argv_);
     qRegisterMetaType<align_res>("align_res");
     qRegisterMetaType<reloc_res>("reloc_res");
@@ -53,9 +54,10 @@ void Alignweight::on_retry_Button_clicked() {
 void Alignweight::on_set_Button_clicked() {
     this->ui->label_2->clear();
     align_res res;
-    set s(&res, this);
-    s.setModal(true);
-    s.exec();
+    
+    set_->UpdateUI(&res);
+    set_->setModal(true);
+    set_->exec();
     if (res.flag == 0) return;
     emit AlignWeightSet(res);
     this->ui->label_2->setText("等待参数设置反馈,5s未受到请重新发布!");
