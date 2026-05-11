@@ -4,7 +4,11 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
-
+#ifdef ODIN_WIDTH_LIDAR
+#include <message_filters/subscriber.h>
+#include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/time_synchronizer.h>
+#endif
 #include <iostream>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -20,8 +24,15 @@ class DogMapNode : public rclcpp::Node {
     struct ROSCallback {
         rclcpp::CallbackGroup::SharedPtr  cloud_me_cbk_group,
             update_cbk_group;
+#ifndef ODIN_WIDTH_LIDAR 
         rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr
             cloud_sub;
+#else 
+        std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::PointCloud2>> cloud_sub_sync;
+        std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::PointCloud2>> odin_sub_sync;
+        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::PointCloud2, sensor_msgs::msg::PointCloud2> SyncPolicy;
+        std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> sync;
+#endif
         int unfinished_frame_cnt{0};
         Pose pc_pose;
         pcl::PointCloud<pcl::PointXYZ> pc;
@@ -45,10 +56,9 @@ class DogMapNode : public rclcpp::Node {
     } robot_state_;
 
   
-
+#ifndef ODIN_WIDTH_LIDAR    
     void cloudCallback(
         const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg) {
-        sensor_msgs::msg::PointCloud2 out;
             // std::cout<<"cloud cbk .."<<std::endl;
         pcl::fromROSMsg(*cloud_msg, *cloud_in_);
       
@@ -97,7 +107,56 @@ class DogMapNode : public rclcpp::Node {
         rc_.update_lock.unlock();
 //    std::cout<<"cloud finish .."<<std::endl;
     }
+#else 
+    void cloudCallback(
+        const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg,
+        const sensor_msgs::msg::PointCloud2::ConstSharedPtr& odin_msg) {
+        pcl::PointCloud<pcl::PointXYZ> out;
+        pcl::fromROSMsg(*cloud_msg, *cloud_in_);
+        pcl::fromROSMsg(*odin_msg, out);
+        *cloud_in_ = *cloud_in_ + out;
+        Eigen::Matrix4f tf_mat = Eigen::Matrix4f::Identity();
+        try {
+            tf_stamped = this->tf_buffer_->lookupTransform(
+                "map", cloud_msg->header.frame_id, tf2::TimePointZero);
+            tf_stamped.transform.translation.z += 0.3;  //添加平移,防止越界
+            const auto& tr = tf_stamped.transform.translation;
+            const auto& rr = tf_stamped.transform.rotation;
 
+            Eigen::Quaternionf q(
+                static_cast<float>(rr.w), static_cast<float>(rr.x),
+                static_cast<float>(rr.y), static_cast<float>(rr.z));
+            q.normalize();
+
+            tf_mat.setIdentity();
+            tf_mat.block<3, 3>(0, 0) = q.toRotationMatrix();
+            tf_mat(0, 3) = static_cast<float>(tr.x);
+            tf_mat(1, 3) = static_cast<float>(tr.y);
+            tf_mat(2, 3) = static_cast<float>(tr.z);
+            tf_stamped = this->tf_buffer_->lookupTransform(
+                "map", "base_link", tf2::TimePointZero);
+
+        } catch (...) {
+            std::cout << " -- [DOG] Cloud callback pcl::fromROSMsg error, "
+                         "skip this frame."
+                      << std::endl;
+            return;
+        }
+
+        pcl::transformPointCloud(*cloud_in_, *cloud_in_, tf_mat);
+
+        rc_.update_lock.lock();
+        rc_.pc = *cloud_in_;
+        {
+            rc_.pc_pose.first[0] = tf_stamped.transform.translation.x;
+            rc_.pc_pose.first[1] = tf_stamped.transform.translation.y;
+            rc_.pc_pose.first[2] = tf_stamped.transform.translation.z;
+        }
+        rc_.unfinished_frame_cnt++;
+        map_empty_ = false;
+        rc_.update_lock.unlock();
+    }
+#endif
     void updateCallback() {
         auto start_time = std::chrono::steady_clock::now();
         if (map_empty_) {
@@ -176,7 +235,7 @@ class DogMapNode : public rclcpp::Node {
     }
 
     DogMapNode() : Node("dog_map_node") {
-        this->declare_parameter<std::string>("odom_topic", odom_topic);
+        this->declare_parameter<std::string>("odin_topic", odin_topic);
         this->declare_parameter<std::string>("cloud_topic", cloud_topic);
         this->declare_parameter<std::string>("map_yaml_path", "");
         this->declare_parameter<double>("heighter_than_ground_threshold", 0.05);
@@ -204,7 +263,7 @@ class DogMapNode : public rclcpp::Node {
         std::cout <<" MAX_LOG "<<(int )MAX_LOG<<std::endl;
         std::cout <<" MIN_LOG "<<(int )MIN_LOG<<std::endl;
         this->get_parameter("frame_save", frame_save);
-        this->get_parameter("odom_topic", odom_topic);
+        this->get_parameter("odin_topic", odin_topic);
         this->get_parameter("resolution_z", resolution_z);
         this->get_parameter("cloud_topic", cloud_topic);
         this->get_parameter("map_yaml_path", map_yaml_path);
@@ -245,12 +304,22 @@ class DogMapNode : public rclcpp::Node {
             
            
             so.callback_group = rc_.cloud_me_cbk_group;
+            #ifndef ODIN_WIDTH_LIDAR 
             rc_.cloud_sub =
                 this->create_subscription<sensor_msgs::msg::PointCloud2>(
                     cloud_topic, qos_sub,
                     std::bind(&DogMapNode::cloudCallback, this,
                               std::placeholders::_1),
                     so);
+            #else
+            rc_.cloud_sub_sync = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::PointCloud2>>(
+                this, cloud_topic, qos_sub.get_rmw_qos_profile());
+            rc_.odin_sub_sync = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::PointCloud2>>(
+                this, odin_topic, qos_sub.get_rmw_qos_profile());
+            rc_.sync = std::make_shared<message_filters::Synchronizer<ROSCallback::SyncPolicy>>(
+                ROSCallback::SyncPolicy(10), *rc_.cloud_sub_sync, *rc_.odin_sub_sync);
+            rc_.sync->registerCallback(std::bind(&DogMapNode::cloudCallback, this, std::placeholders::_1, std::placeholders::_2));
+            #endif
             rc_.update_cbk_group = this->create_callback_group(
                 rclcpp::CallbackGroupType::MutuallyExclusive);
             rc_.update_timer = this->create_wall_timer(
@@ -269,7 +338,7 @@ class DogMapNode : public rclcpp::Node {
 
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
     std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
-    std::string odom_topic = "lidar_odometry", cloud_topic = "registered_scan";
+    std::string odin_topic = "odin1/slam", cloud_topic = "registered_scan";
 
     geometry_msgs::msg::TransformStamped tf_stamped;
 
