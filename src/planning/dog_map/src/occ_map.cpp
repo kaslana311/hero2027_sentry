@@ -7,7 +7,7 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <unordered_map>
-
+#include <pcl/filters/radius_outlier_removal.h>
 #include "dog_map/eigen_alias.hpp"
 
 OccMap::OccMap(double heighter_than_ground_threshold,
@@ -230,16 +230,7 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
     pass.setFilterFieldName("z");
     pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.3);
     pass.filter(*cloud_in);
-    // 2. 添加 3cm 降采样 (Voxel Grid Filter)
-    // if (!cloud_in->empty()) {
-    //     pcl::VoxelGrid<pcl::PointXYZ> sor;
-    //     sor.setInputCloud(cloud_in);
-    //     // 设置体素大小为 0.03m (3cm)
-    //     sor.setLeafSize(0.05f, 0.05f, 0.05f);
-    //     sor.filter(*cloud_in);
-    // }
-   
-    // std::cout<<"size "<<cloud_in->size()<<std::endl;
+    
     double min_x = pose.first[0] - half_map_size_;
     min_x = std::max(min_x, cloud_at_map_origin[0] + 0.2);
     double max_x = pose.first[0] + half_map_size_;
@@ -268,6 +259,13 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
             true);  // 设置为true表示保留框外的点，去除框内的点
       crop_box_filter_.setInputCloud(cloud_in);
         crop_box_filter_.filter(*cloud_in);
+    // 离群点滤波
+     pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
+    ror.setInputCloud(cloud_in);
+    ror.setRadiusSearch(0.1); // 设置搜索半径 (如 0.15 米)
+    ror.setMinNeighborsInRadius(4); // 设定在该半径内至少所需的邻居点数，小于此数则视为离群点过滤掉
+    ror.filter(*cloud_in);
+    
 }
 void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
     //更新局部地图
