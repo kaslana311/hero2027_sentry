@@ -276,13 +276,15 @@ class DogMapNode : public rclcpp::Node {
         this->declare_parameter<int8_t>("LOG_OCC_HIT_odin1", 41);
         this->declare_parameter<int8_t>("LOG_OCC_FREE", -5);
         this->declare_parameter<uint8_t>("THR_OCC", 20);
-        this->declare_parameter<uint8_t>("MAX_LOG", 100);
+        this->declare_parameter<uint8_t>("MAX_LOG_MID360", 100);
+        this->declare_parameter<uint8_t>("MAX_LOG_ODIN1", 100);
         this->declare_parameter<uint8_t>("MIN_LOG", 10);
         int8_t LOG_OCC_HIT_MID360 = 40;   // 占据增量
         int8_t LOG_OCC_HIT_ODIN1 = 40;   // 占据增量
         int8_t LOG_OCC_FREE = -3;  // 空闲减量
         uint8_t THR_OCC = 30;      // 判定为障碍物的阈值
-        uint8_t MAX_LOG = 100;
+        uint8_t MAX_LOG_MID360 = 100;
+        uint8_t MAX_LOG_ODIN1 = 100;    
         uint8_t MIN_LOG = 5;
         this->declare_parameter<double>("half_map_size", 10.0);
         this->declare_parameter<double>("resolution_z", 0.03);
@@ -290,12 +292,14 @@ class DogMapNode : public rclcpp::Node {
         this->get_parameter("LOG_OCC_HIT_odin1", LOG_OCC_HIT_ODIN1);
         this->get_parameter("LOG_OCC_FREE", LOG_OCC_FREE);
         this->get_parameter("THR_OCC", THR_OCC);
-        this->get_parameter("MAX_LOG", MAX_LOG);
+        this->get_parameter("MAX_LOG_MID360", MAX_LOG_MID360);
+        this->get_parameter("MAX_LOG_ODIN1", MAX_LOG_ODIN1);
         this->get_parameter("MIN_LOG", MIN_LOG);
         std::cout <<" LOG_OCC_HIT "<<(int )LOG_OCC_HIT_MID360<<" "<<(int )LOG_OCC_HIT_ODIN1<<std::endl;
         std::cout <<" LOG_OCC_FREE "<<(int )LOG_OCC_FREE<<std::endl;
         std::cout <<" THR_OCC "<<(int )THR_OCC<<std::endl;
-        std::cout <<" MAX_LOG "<<(int )MAX_LOG<<std::endl;
+        std::cout <<" MAX_LOG_MID360 "<<(int )MAX_LOG_MID360<<std::endl;
+        std::cout <<" MAX_LOG_ODIN1 "<<(int )MAX_LOG_ODIN1<<std::endl;
         std::cout <<" MIN_LOG "<<(int )MIN_LOG<<std::endl;
         this->get_parameter("frame_save", frame_save);
         this->get_parameter("odin_topic", odin_topic);
@@ -316,7 +320,7 @@ class DogMapNode : public rclcpp::Node {
         occ_map_ = new OccMap(heighter_than_ground_threshold,
                               higher_than_car_threshold, half_map_size,
                               resolution_z, frame_save, map_yaml_path);
-        occ_map_->SetLOGParams(LOG_OCC_HIT_MID360, LOG_OCC_HIT_ODIN1, LOG_OCC_FREE, THR_OCC, MAX_LOG, MIN_LOG);
+        occ_map_->SetLOGParams(LOG_OCC_HIT_MID360, LOG_OCC_HIT_ODIN1, LOG_OCC_FREE, THR_OCC, MAX_LOG_MID360, MAX_LOG_ODIN1, MIN_LOG);
         cost_pub_.cost_pc_pub =
             this->create_publisher<sensor_msgs::msg::PointCloud2>(
                 "rog_map/inf_occ", qos);

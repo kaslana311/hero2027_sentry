@@ -48,12 +48,13 @@ class OccMap {
     bool IsOccupied(int index);
     bool IsOccupied(int ix, int iy, int iz);
     void Clear();
-    inline void SetLOGParams( int8_t LOG_OCC_HIT,int8_t LOG_OCC_HIT_1, int8_t LOG_OCC_FREE , uint8_t THR_OCC, uint8_t MAX_LOG ,uint8_t MIN_LOG ){
+    inline void SetLOGParams( int8_t LOG_OCC_HIT,int8_t LOG_OCC_HIT_1, int8_t LOG_OCC_FREE , uint8_t THR_OCC, uint8_t MAX_LOG_MID360, uint8_t MAX_LOG_ODIN1, uint8_t MIN_LOG ){
         this->LOG_OCC_HIT[0] = LOG_OCC_HIT;
         this->LOG_OCC_HIT[1] = LOG_OCC_HIT_1;
         this->LOG_OCC_FREE = LOG_OCC_FREE;
         this->THR_OCC = THR_OCC;
-        this->MAX_LOG = MAX_LOG;
+        this->MAX_LOG[0] = MAX_LOG_MID360;
+        this->MAX_LOG[1] = MAX_LOG_ODIN1;
         this->MIN_LOG = MIN_LOG;
     }
     void racyHandle(const Vec3i& start_idx, const std::vector<Vec3i>& obs_list);
@@ -163,6 +164,6 @@ class OccMap {
     int8_t LOG_OCC_HIT[2] = {40, 40};   // 占据增量
     int8_t LOG_OCC_FREE = -3;  // 空闲减量
     uint8_t THR_OCC = 30;      // 判定为障碍物的阈值
-    uint8_t MAX_LOG = 100;
+    uint8_t MAX_LOG[2] = {100, 100} ;   // 最大对数概率
     uint8_t MIN_LOG = 5;
 };

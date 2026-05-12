@@ -348,7 +348,7 @@ void OccMap::Update(pcl::PointCloud<HEROPointXYZK>::Ptr cloud, Pose pose) {
         //更新占据概率
         occ_map[index] =
             std::min(static_cast<int>(occ_map[index]) + LOG_OCC_HIT[point.device_id],
-                     static_cast<int>(MAX_LOG));
+                     static_cast<int>(MAX_LOG[point.device_id]));
         //加入观测列表
         if (occ_map[index] >= THR_OCC) {
             time_list_[index] = update_frame;
