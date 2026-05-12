@@ -1,13 +1,15 @@
-
+#include "dog_map/point_cloud_define.hpp"
 #include <pcl/filters/crop_box.h>
 #include <pcl/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <pcl/impl/point_types.hpp>
 #ifdef ODIN_WIDTH_LIDAR
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/time_synchronizer.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 #endif
 #include <iostream>
 #include <nav_msgs/msg/odometry.hpp>
@@ -35,7 +37,7 @@ class DogMapNode : public rclcpp::Node {
 #endif
         int unfinished_frame_cnt{0};
         Pose pc_pose;
-        pcl::PointCloud<pcl::PointXYZ> pc;
+        pcl::PointCloud<HEROPointXYZK> pc;
         rclcpp::TimerBase::SharedPtr update_timer;
         std::mutex update_lock;
     } rc_;
@@ -59,9 +61,14 @@ class DogMapNode : public rclcpp::Node {
 #ifndef ODIN_WIDTH_LIDAR    
     void cloudCallback(
         const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg) {
-            // std::cout<<"cloud cbk .."<<std::endl;
-        pcl::fromROSMsg(*cloud_msg, *cloud_in_);
-      
+
+        pcl::PointCloud<pcl::PointXYZ> temp_cloud_in;
+        pcl::fromROSMsg(*cloud_msg, temp_cloud_in);
+        cloud_in_->clear();
+        cloud_in_->points.reserve(temp_cloud_in.points.size());
+         for (auto& pt : temp_cloud_in.points) {
+            cloud_in_->points.emplace_back(pt.x, pt.y, pt.z);
+        }
         Eigen::Matrix4f tf_mat = Eigen::Matrix4f::Identity();
         try {
             tf_stamped = this->tf_buffer_->lookupTransform(
@@ -102,6 +109,7 @@ class DogMapNode : public rclcpp::Node {
             rc_.pc_pose.first[2] = tf_stamped.transform.translation.z;
            
         }
+        
         rc_.unfinished_frame_cnt++;
         map_empty_ = false;
         rc_.update_lock.unlock();
@@ -111,10 +119,34 @@ class DogMapNode : public rclcpp::Node {
     void cloudCallback(
         const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg,
         const sensor_msgs::msg::PointCloud2::ConstSharedPtr& odin_msg) {
-        pcl::PointCloud<pcl::PointXYZ> out;
-        pcl::fromROSMsg(*cloud_msg, *cloud_in_);
-        pcl::fromROSMsg(*odin_msg, out);
-        *cloud_in_ = *cloud_in_ + out;
+         pcl::PointCloud<pcl::PointXYZ> temp_cloud_in_360;
+        pcl::PointCloud<pcl::PointXYZ> temp_cloud_in_odin;
+        pcl::fromROSMsg(*cloud_msg, temp_cloud_in_360);
+        pcl::fromROSMsg(*odin_msg, temp_cloud_in_odin);
+        
+        //  清理 cloud_in_ 并准确预计算最终容量（360完整点数 + odin全点数预测）
+        cloud_in_->clear();
+        cloud_in_->reserve(temp_cloud_in_360.points.size() + temp_cloud_in_odin.points.size());
+
+        //  填充 360 雷达点云 
+        for (const auto& pt : temp_cloud_in_360.points) {
+            cloud_in_->emplace_back(pt.x, pt.y, pt.z, 0);
+        }
+
+        pcl::PointCloud<HEROPointXYZK>::Ptr out(new pcl::PointCloud<HEROPointXYZK>());
+        out->reserve(temp_cloud_in_odin.points.size());
+        for (const auto& pt : temp_cloud_in_odin.points) {
+            out->emplace_back(pt.x, pt.y, pt.z, 1);
+        }
+
+        sor_->setInputCloud(out);
+        sor_->setMeanK(50);
+        sor_->setStddevMulThresh(1.0);
+        
+        pcl::PointCloud<HEROPointXYZK> filtered_out;
+        sor_->filter(filtered_out);
+
+        cloud_in_->insert(cloud_in_->end(), filtered_out.begin(), filtered_out.end());
         Eigen::Matrix4f tf_mat = Eigen::Matrix4f::Identity();
         try {
             tf_stamped = this->tf_buffer_->lookupTransform(
@@ -180,8 +212,8 @@ class DogMapNode : public rclcpp::Node {
                    "work in real-time"
                 << std::endl;
         }
-            static pcl::PointCloud<pcl::PointXYZ>::Ptr temp_pc =
-        std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+            static pcl::PointCloud<HEROPointXYZK>::Ptr temp_pc =
+        std::make_shared<pcl::PointCloud<HEROPointXYZK>>();
         static Pose temp_pose;
         //从rc_中取出当前帧点云和位姿，进行地图更新
         rc_.update_lock.lock();
@@ -240,24 +272,27 @@ class DogMapNode : public rclcpp::Node {
         this->declare_parameter<std::string>("map_yaml_path", "");
         this->declare_parameter<double>("heighter_than_ground_threshold", 0.05);
         this->declare_parameter<double>("higher_than_car_threshold", 0.5);
-        this->declare_parameter<int8_t>("LOG_OCC_HIT", 10);
-        this->declare_parameter<int8_t>("LOG_OCC_FREE", 10);
-        this->declare_parameter<uint8_t>("THR_OCC", 10);
-        this->declare_parameter<uint8_t>("MAX_LOG", 10);
+        this->declare_parameter<int8_t>("LOG_OCC_HIT_mid360", 41);
+        this->declare_parameter<int8_t>("LOG_OCC_HIT_odin1", 41);
+        this->declare_parameter<int8_t>("LOG_OCC_FREE", -5);
+        this->declare_parameter<uint8_t>("THR_OCC", 20);
+        this->declare_parameter<uint8_t>("MAX_LOG", 100);
         this->declare_parameter<uint8_t>("MIN_LOG", 10);
-        int8_t LOG_OCC_HIT = 40;   // 占据增量
+        int8_t LOG_OCC_HIT_MID360 = 40;   // 占据增量
+        int8_t LOG_OCC_HIT_ODIN1 = 40;   // 占据增量
         int8_t LOG_OCC_FREE = -3;  // 空闲减量
         uint8_t THR_OCC = 30;      // 判定为障碍物的阈值
         uint8_t MAX_LOG = 100;
         uint8_t MIN_LOG = 5;
         this->declare_parameter<double>("half_map_size", 10.0);
         this->declare_parameter<double>("resolution_z", 0.03);
-        this->get_parameter("LOG_OCC_HIT", LOG_OCC_HIT);
+        this->get_parameter("LOG_OCC_HIT_mid360", LOG_OCC_HIT_MID360);
+        this->get_parameter("LOG_OCC_HIT_odin1", LOG_OCC_HIT_ODIN1);
         this->get_parameter("LOG_OCC_FREE", LOG_OCC_FREE);
         this->get_parameter("THR_OCC", THR_OCC);
         this->get_parameter("MAX_LOG", MAX_LOG);
         this->get_parameter("MIN_LOG", MIN_LOG);
-        std::cout <<" LOG_OCC_HIT "<<(int )LOG_OCC_HIT<<std::endl;
+        std::cout <<" LOG_OCC_HIT "<<(int )LOG_OCC_HIT_MID360<<" "<<(int )LOG_OCC_HIT_ODIN1<<std::endl;
         std::cout <<" LOG_OCC_FREE "<<(int )LOG_OCC_FREE<<std::endl;
         std::cout <<" THR_OCC "<<(int )THR_OCC<<std::endl;
         std::cout <<" MAX_LOG "<<(int )MAX_LOG<<std::endl;
@@ -273,7 +308,7 @@ class DogMapNode : public rclcpp::Node {
                             higher_than_car_threshold);
         this->get_parameter("half_map_size", half_map_size);
        
-        cloud_in_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+        cloud_in_ = std::make_shared<pcl::PointCloud<HEROPointXYZK>>();
         const rclcpp::QoS qos(
             rclcpp::QoS(1).best_effort().keep_last(1).durability_volatile());
           const rclcpp::QoS qos_sub(
@@ -281,7 +316,7 @@ class DogMapNode : public rclcpp::Node {
         occ_map_ = new OccMap(heighter_than_ground_threshold,
                               higher_than_car_threshold, half_map_size,
                               resolution_z, frame_save, map_yaml_path);
-        occ_map_->SetLOGParams(LOG_OCC_HIT,LOG_OCC_FREE,THR_OCC,MAX_LOG,MIN_LOG);
+        occ_map_->SetLOGParams(LOG_OCC_HIT_MID360, LOG_OCC_HIT_ODIN1, LOG_OCC_FREE, THR_OCC, MAX_LOG, MIN_LOG);
         cost_pub_.cost_pc_pub =
             this->create_publisher<sensor_msgs::msg::PointCloud2>(
                 "rog_map/inf_occ", qos);
@@ -319,6 +354,7 @@ class DogMapNode : public rclcpp::Node {
             rc_.sync = std::make_shared<message_filters::Synchronizer<ROSCallback::SyncPolicy>>(
                 ROSCallback::SyncPolicy(10), *rc_.cloud_sub_sync, *rc_.odin_sub_sync);
             rc_.sync->registerCallback(std::bind(&DogMapNode::cloudCallback, this, std::placeholders::_1, std::placeholders::_2));
+            sor_ = std::make_shared<pcl::StatisticalOutlierRemoval<HEROPointXYZK>>();
             #endif
             rc_.update_cbk_group = this->create_callback_group(
                 rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -342,9 +378,12 @@ class DogMapNode : public rclcpp::Node {
 
     geometry_msgs::msg::TransformStamped tf_stamped;
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in_;
+    pcl::PointCloud<HEROPointXYZK>::Ptr cloud_in_;
 
    private:
+#ifdef ODIN_WIDTH_LIDAR
+    std::shared_ptr<pcl::StatisticalOutlierRemoval<HEROPointXYZK>> sor_;
+#endif
     double half_map_size{10.0};
     double heighter_than_ground_threshold{0.05};
     double higher_than_car_threshold{0.5};

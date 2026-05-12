@@ -230,10 +230,10 @@ void OccMap::racyHandle(const Vec3i& start_idx,
     // Bresenham算法实现3D网格的射线处理,发现符合障碍物标准,加入time_list_
 }
 
-void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
+void OccMap::PassFilter(pcl::PointCloud<HEROPointXYZK>::Ptr cloud_in,
                         Pose pose) {
     //高度滤波
-    pcl::PassThrough<pcl::PointXYZ> pass;
+    pcl::PassThrough<HEROPointXYZK> pass;
     pass.setInputCloud(cloud_in);
     pass.setFilterFieldName("z");
     pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.3);
@@ -276,7 +276,7 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
     // ror.filter(*cloud_in);
     
 }
-void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
+void OccMap::Update(pcl::PointCloud<HEROPointXYZK>::Ptr cloud, Pose pose) {
     //更新局部地图
 
     PassFilter(cloud, pose);
@@ -347,7 +347,7 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
             xi + yi * grid_map_.cols + zi * grid_map_.cols * grid_map_.rows;
         //更新占据概率
         occ_map[index] =
-            std::min(static_cast<int>(occ_map[index]) + LOG_OCC_HIT,
+            std::min(static_cast<int>(occ_map[index]) + LOG_OCC_HIT[point.device_id],
                      static_cast<int>(MAX_LOG));
         //加入观测列表
         if (occ_map[index] >= THR_OCC) {
