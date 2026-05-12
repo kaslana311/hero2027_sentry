@@ -73,8 +73,9 @@ LidarMergeNode::LidarMergeNode(const std::string & name) : Node(name)
 // ...existing code...
 
 bool LidarMergeNode::isBlind(const livox_ros_driver2::msg::CustomPoint & pt) {
-  if(pt.tag!=0) return true; // tag不为0的点直接丢弃，认为是盲区点
-  if(pt.reflectivity<5) return true; // 强度为0的点直接丢弃，认为是盲区点
+  if(((pt.tag&0x30)!=0x10)&&((pt.tag&0x30)!=0x00)) return true; // tag不为0的点直接丢弃，认为是盲区点s
+  // if((pt.reflectivity<30)&&((pt.tag&0x30)==0x10)) return true; // 强度为0的点直接丢弃，认为是盲区点
+  // if(pt.reflectivity<5) return true;
   double distance = std::sqrt((pt.x - ori_x) * (pt.x - ori_x) + (pt.y - ori_y) * (pt.y - ori_y) + (pt.z - ori_z) * (pt.z - ori_z));
  return distance < blind;
 } 
@@ -218,7 +219,7 @@ void LidarMergeNode::Sync_lidarCallback(
   // ori_marker.lifetime = rclcpp::Duration::from_seconds(0.2).to_msg();
   ori_marker_pub_->publish(ori_marker);
 #endif
-
+  std::cout<<out_idx<<std::endl;
   PublishPointCloud(std::move(fused_msg));
 
   auto end_time = std::chrono::steady_clock::now();

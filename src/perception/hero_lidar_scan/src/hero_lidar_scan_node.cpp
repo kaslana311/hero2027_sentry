@@ -527,7 +527,7 @@ void HeroLidarScanNode::workerLoop() {
         crop_filter_.filter(filtered_cloud);
 
         pcl::PointCloud<pcl::PointXYZI> voxel_filtered_cloud;
-        if (filter_size_ > 0.0) {
+        if (0) {
             pcl::VoxelGrid<pcl::PointXYZI> voxel_filter;
             auto crop_ptr = std::make_shared<pcl::PointCloud<pcl::PointXYZI>>(
                 filtered_cloud);
