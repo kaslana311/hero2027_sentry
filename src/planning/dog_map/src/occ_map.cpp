@@ -130,8 +130,16 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
                         break;
                     }
                 }
-                double dzf = (max_z_occ_index - min_z_occ_index) * resolution_z;
+                int dzf_i= (max_z_occ_index - min_z_occ_index);
+                double dzf = dzf_i * resolution_z;
                 if (dzf < higher_than_ground_threshold_) continue;  //地面过滤
+                int occ_count=0;
+                for(int i=min_z_occ_index;i<max_z_occ_index;i++){
+                        if(IsOccupied(idx,idy,i))
+                             occ_count++;   
+                        }
+                double rate =1.0*occ_count/dzf_i;
+                if(rate<0.5 ) continue;
                 if (dzf < 0.12 &&
                     (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
                     continue;  //过高过滤
@@ -260,11 +268,12 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
       crop_box_filter_.setInputCloud(cloud_in);
         crop_box_filter_.filter(*cloud_in);
     // 离群点滤波
-     pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
-    ror.setInputCloud(cloud_in);
-    ror.setRadiusSearch(0.1); // 设置搜索半径 (如 0.15 米)
-    ror.setMinNeighborsInRadius(4); // 设定在该半径内至少所需的邻居点数，小于此数则视为离群点过滤掉
-    ror.filter(*cloud_in);
+    // if(cloud_in->size()==0) return ;
+    //  pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
+    // ror.setInputCloud(cloud_in);
+    // ror.setRadiusSearch(0.1); // 设置搜索半径 (如 0.15 米)
+    // ror.setMinNeighborsInRadius(4); // 设定在该半径内至少所需的邻居点数，小于此数则视为离群点过滤掉
+    // ror.filter(*cloud_in);
     
 }
 void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
