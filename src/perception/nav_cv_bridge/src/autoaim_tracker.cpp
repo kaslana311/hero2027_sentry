@@ -11,97 +11,220 @@ AutoaimTracker::AutoaimTracker(const rclcpp::NodeOptions& options)
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-    tracker_sub_ = this->create_subscription<interfaces::msg::TrackerOutput>(
+    // Declare and initialize parameters
+    this->declare_parameter("timeout_sec", 1.0);
+    this->declare_parameter("radar_switch_dist", 5.5);
+    this->declare_parameter("autoaim_switch_dist", 4.5);
+
+    autoaim_switch_dist_ =
+        this->get_parameter("autoaim_switch_dist").as_double();
+    radar_switch_dist_ = this->get_parameter("radar_switch_dist").as_double();
+    timeout_sec_ = this->get_parameter("timeout_sec").as_double();
+
+    autoaim_sub_ = this->create_subscription<interfaces::msg::TrackerOutput>(
         "/tracker/autoaim", rclcpp::SensorDataQoS(),
-        std::bind(&AutoaimTracker::trackerCallback, this,
+        std::bind(&AutoaimTracker::autoaimCallback, this,
                   std::placeholders::_1));
 
-    odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "/odometry/filtered", rclcpp::SensorDataQoS(),
-        std::bind(&AutoaimTracker::odomCallback, this, std::placeholders::_1));
+    radar_sub_ = this->create_subscription<interfaces::msg::TrackerOutput>(
+        "/tracker/radar", rclcpp::SensorDataQoS(),
+        std::bind(&AutoaimTracker::radarCallback, this, std::placeholders::_1));
 
-    tracker_pub_ = this->create_publisher<interfaces::msg::TrackerOutput>(
-        "/tracker/absolute_targets", rclcpp::SensorDataQoS());
+    global_target_pub_ =
+        this->create_publisher<interfaces::msg::GlobalTargetArray>(
+            "/global_targets", rclcpp::SensorDataQoS());
 
     marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
-        "~/absolute_targets_marker", rclcpp::QoS(1));
+        "~/global_targets_marker", rclcpp::QoS(1));
 
-    RCLCPP_INFO(this->get_logger(), "AutoaimTracker node initialized.");
+    // 5Hz timer for publishing the fused target info
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(200),
+        std::bind(&AutoaimTracker::timerCallback, this));
+
+    RCLCPP_INFO(this->get_logger(),
+                "AutoaimTracker (Fusion) node initialized. Publishing at 5Hz");
 }
 
-void AutoaimTracker::odomCallback(nav_msgs::msg::Odometry::SharedPtr msg) {
-    std::lock_guard<std::mutex> lock(odom_mutex_);
-    current_odom_ = *msg;
-    has_odom_ = true;
-}
-
-void AutoaimTracker::trackerCallback(
+void AutoaimTracker::autoaimCallback(
     interfaces::msg::TrackerOutput::SharedPtr msg) {
-    if (!has_odom_) {
-        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                             "Waiting for odom...");
-        return;
-    }
-
-    nav_msgs::msg::Odometry odom;
-    {
-        std::lock_guard<std::mutex> lock(odom_mutex_);
-        odom = current_odom_;
-    }
-
-    geometry_msgs::msg::TransformStamped map_to_base;
+    geometry_msgs::msg::TransformStamped baselink_to_map;
     try {
-        map_to_base =
-            tf_buffer_->lookupTransform("map", "base_link", tf2::TimePointZero);
+        // Use the timestamp from the message, timeout logic applied
+        baselink_to_map =
+            tf_buffer_->lookupTransform("map", "base_link", msg->header.stamp,
+                                        rclcpp::Duration::from_seconds(0.05));
     } catch (tf2::TransformException& ex) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                             "TF Error: %s", ex.what());
+                             "Autoaim TF Error: %s", ex.what());
         return;
     }
 
-    auto abs_msg = std::make_shared<interfaces::msg::TrackerOutput>();
-    abs_msg->header = msg->header;
-    abs_msg->header.frame_id = "map";
+    std::lock_guard<std::mutex> lock(targets_mutex_);
+    rclcpp::Time now_stamp = msg->header.stamp;
 
-    visualization_msgs::msg::MarkerArray marker_array;
-
-    int id = 0;
     for (const auto& target : msg->targets) {
-        geometry_msgs::msg::Point p_base;
-        p_base = target.position;
+        std::string t_id = target.id;
 
+        geometry_msgs::msg::Point p_base = target.position;
         geometry_msgs::msg::Point p_map;
-        tf2::doTransform(p_base, p_map, map_to_base);
+        tf2::doTransform(p_base, p_map, baselink_to_map);
 
-        interfaces::msg::Target abs_target = target;
-        abs_target.position = p_map;
+        targets_[t_id].id = t_id;
+        targets_[t_id].last_autoaim_time = now_stamp;
+        targets_[t_id].autoaim_pos_map = p_map;
+    }
+}
 
-        abs_msg->targets.push_back(abs_target);
+void AutoaimTracker::radarCallback(
+    interfaces::msg::TrackerOutput::SharedPtr msg) {
+    std::lock_guard<std::mutex> lock(targets_mutex_);
+    rclcpp::Time now_stamp = msg->header.stamp;
 
-        visualization_msgs::msg::Marker enemy_marker;
-        enemy_marker.header = abs_msg->header;
-        enemy_marker.header.stamp = this->now();
-        enemy_marker.ns = "guard_attack";
-        enemy_marker.id = id++;
-        enemy_marker.type = visualization_msgs::msg::Marker::SPHERE;
-        enemy_marker.action = visualization_msgs::msg::Marker::ADD;
-        enemy_marker.pose.position.x = abs_target.position.x;
-        enemy_marker.pose.position.y = abs_target.position.y;
-        enemy_marker.pose.position.z = 0.1;
-        enemy_marker.pose.orientation.w = 1.0;
-        enemy_marker.scale.x = 0.2;
-        enemy_marker.scale.y = 0.2;
-        enemy_marker.scale.z = 0.2;
-        enemy_marker.color.r = 0.0;
-        enemy_marker.color.g = 0.0;
-        enemy_marker.color.b = 0.0;
-        enemy_marker.color.a = 0.8;
-        enemy_marker.lifetime = rclcpp::Duration::from_seconds(3.0);
-        marker_array.markers.push_back(enemy_marker);
+    // Simulate radar map frame data
+    for (const auto& target : msg->targets) {
+        std::string t_id = target.id;
+
+        targets_[t_id].id = t_id;
+        targets_[t_id].last_radar_time = now_stamp;
+        targets_[t_id].radar_pos_map = target.position;
+    }
+}
+
+void AutoaimTracker::timerCallback() {
+    std::lock_guard<std::mutex> lock(targets_mutex_);
+    rclcpp::Time current_time = this->now();
+
+    // Check my position at current time via TF for hysteresis decision
+    bool has_self_pos = false;
+    geometry_msgs::msg::Point self_pos_map;
+    try {
+        auto transform =
+            tf_buffer_->lookupTransform("map", "base_link", tf2::TimePointZero);
+        self_pos_map.x = transform.transform.translation.x;
+        self_pos_map.y = transform.transform.translation.y;
+        self_pos_map.z = transform.transform.translation.z;
+        has_self_pos = true;
+    } catch (tf2::TransformException& ex) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                             "Timer TF Error (Self Pos): %s", ex.what());
     }
 
-    tracker_pub_->publish(*abs_msg);
-    marker_pub_->publish(marker_array);
+    auto out_msg = std::make_shared<interfaces::msg::GlobalTargetArray>();
+    out_msg->header.frame_id = "map";
+    out_msg->header.stamp = current_time;
+
+    visualization_msgs::msg::MarkerArray marker_array;
+    int marker_id = 0;
+
+    for (auto it = targets_.begin(); it != targets_.end();) {
+        TargetState& state = it->second;
+
+        // Note: checking nanoseconds > 0 is necessary if uninitialized Time
+        // object is used.
+        bool autoaim_valid =
+            (state.last_autoaim_time.nanoseconds() > 0) &&
+            ((current_time - state.last_autoaim_time).seconds() < timeout_sec_);
+        bool radar_valid =
+            (state.last_radar_time.nanoseconds() > 0) &&
+            ((current_time - state.last_radar_time).seconds() < timeout_sec_);
+
+        // Double timeout -> erase
+        if (!autoaim_valid && !radar_valid) {
+            it = targets_.erase(it);
+            continue;
+        }
+
+        bool use_radar_this_tick = state.using_radar;
+        geometry_msgs::msg::Point final_pos;
+
+        if (has_self_pos) {
+            double dx = 0.0, dy = 0.0;
+            if (autoaim_valid) {
+                dx = state.autoaim_pos_map.x - self_pos_map.x;
+                dy = state.autoaim_pos_map.y - self_pos_map.y;
+            } else {
+                dx = state.radar_pos_map.x - self_pos_map.x;
+                dy = state.radar_pos_map.y - self_pos_map.y;
+            }
+            double dist = std::hypot(dx, dy);
+
+            if (state.using_radar) {
+                if (autoaim_valid && dist < autoaim_switch_dist_) {
+                    use_radar_this_tick = false;  // switch to autoaim
+                }
+            } else {
+                if (radar_valid &&
+                    (dist > radar_switch_dist_ || !autoaim_valid)) {
+                    use_radar_this_tick = true;  // switch to radar
+                }
+            }
+        } else {
+            // fallback: autoaim first
+            use_radar_this_tick = !autoaim_valid;
+        }
+
+        // Fallback checks incase logic failed
+        if (use_radar_this_tick && !radar_valid && autoaim_valid) {
+            // 想用雷达，但雷达刚超时，自瞄还活着，强切自瞄
+            use_radar_this_tick = false;
+        } else if (!use_radar_this_tick && !autoaim_valid && radar_valid) {
+            // 想用自瞄，但这帧自瞄丢了，雷达还在，强切雷达
+            use_radar_this_tick = true;
+        }
+
+        // state commit
+        state.using_radar = use_radar_this_tick;
+
+        interfaces::msg::GlobalTarget g_target;
+        g_target.id = state.id;
+
+        if (use_radar_this_tick) {
+            final_pos = state.radar_pos_map;
+            g_target.position = final_pos;
+        } else {
+            final_pos = state.autoaim_pos_map;
+            g_target.position = final_pos;
+        }
+
+        out_msg->targets.push_back(g_target);
+
+        // visualization
+        visualization_msgs::msg::Marker marker;
+        marker.header = out_msg->header;
+        marker.ns = "global_targets";
+        marker.id = marker_id++;
+        marker.type = visualization_msgs::msg::Marker::SPHERE;
+        marker.action = visualization_msgs::msg::Marker::ADD;
+        marker.pose.position = final_pos;
+        marker.pose.position.z = 0.5;
+        marker.pose.orientation.w = 1.0;
+        marker.scale.x = 0.3;
+        marker.scale.y = 0.3;
+        marker.scale.z = 0.3;
+
+        if (use_radar_this_tick) {
+            marker.color.r = 0.0;
+            marker.color.g = 0.0;
+            marker.color.b = 1.0;  // blue for radar
+        } else {
+            marker.color.r = 1.0;
+            marker.color.g = 0.0;
+            marker.color.b = 0.0;  // red for autoaim
+        }
+        marker.color.a = 0.8;
+        marker.lifetime =
+            rclcpp::Duration::from_seconds(0.3);  // survive slightly over timer
+
+        marker_array.markers.push_back(marker);
+
+        ++it;
+    }
+
+    if (!out_msg->targets.empty()) {
+        global_target_pub_->publish(*out_msg);
+        marker_pub_->publish(marker_array);
+    }
 }
 
 }  // namespace nav_cv_bridge
