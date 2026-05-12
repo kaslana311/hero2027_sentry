@@ -55,8 +55,7 @@ class PublishNavOutputNode : public SyncActionNode {
         try {
             // 获取 target_tf_name 在 base_link 下的坐标
             auto transform_stamped = tf_buffer_->lookupTransform(
-                "base_link", target_tf_name, tf2::TimePointZero,
-                rclcpp::Duration::from_seconds(0.5));
+                "base_link", target_tf_name, tf2::TimePointZero);
 
             interfaces::msg::NavOutput msg;
             msg.header.stamp = node_->now();
