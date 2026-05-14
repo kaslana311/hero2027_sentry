@@ -1269,24 +1269,24 @@ int main(int argc, char **argv) {
         string all_points_dir(
             "src/common/point_cloud_files/source_pcd/fast_lio_latest_map.pcd");
 
-//    std::string base_dir =
-//         "src/common/point_cloud_files/source_pcd/fast_lio_latest_map";
-//     std::string ext = ".pcd";
+   std::string base_dir =
+        "src/common/point_cloud_files/source_pcd/fast_lio_latest_map";
+    std::string ext = ".pcd";
 
-//     fs::path file_path(base_dir + ext);
+    fs::path file_path(base_dir + ext);
 
-//     int index = 0;
-//     while (fs::exists(file_path)) {
-//         index++;
-//         file_path = fs::path(base_dir + "_" + std::to_string(index) + ext);
-//     }
+    int index = 0;
+    while (fs::exists(file_path)) {
+        index++;
+        file_path = fs::path(base_dir + "_" + std::to_string(index) + ext);
+    }
 
-//     std::string final_file = file_path.string();
+    std::string final_file = file_path.string();
         pcl::PCDWriter pcd_writer;
         // cout << "current scan saved to /PCD/" << file_name<<endl;
-        cout << "current scan saved to" << all_points_dir << endl;
+        cout << "current scan saved to" << final_file << endl;
 
-        pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+        pcd_writer.writeBinary(final_file, *pcl_wait_save);
     }
 
     if (runtime_pos_log) {

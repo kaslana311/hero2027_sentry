@@ -1,5 +1,7 @@
 #include "dog_map/point_cloud_define.hpp"
 #include <pcl/filters/crop_box.h>
+#include <pcl/filters/filter.h>
+#include <pcl/filters/passthrough.h>
 #include <pcl/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/buffer.h>
@@ -100,7 +102,14 @@ class DogMapNode : public rclcpp::Node {
 
         // pcl::PointCloud<pcl::PointXYZ> temp_pc;
         pcl::transformPointCloud(*cloud_in_, *cloud_in_, tf_mat);
+         if (!cloud_in_->empty()) {
+            auto msg = sensor_msgs::msg::PointCloud2();
+            pcl::toROSMsg(*cloud_in_, msg);
 
+            msg.header.frame_id = "map";
+            msg.header.stamp = this->get_clock()->now();
+            cost_pub_.ground_pc_pub->publish(std::move(msg));
+        }
         rc_.update_lock.lock();
         rc_.pc = *cloud_in_;
         {
@@ -120,13 +129,18 @@ class DogMapNode : public rclcpp::Node {
         const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg,
         const sensor_msgs::msg::PointCloud2::ConstSharedPtr& odin_msg) {
          pcl::PointCloud<pcl::PointXYZ> temp_cloud_in_360;
-        pcl::PointCloud<pcl::PointXYZ> temp_cloud_in_odin;
+        pcl::PointCloud<pcl::PointXYZ>::Ptr temp_cloud_in_odin=std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
         pcl::fromROSMsg(*cloud_msg, temp_cloud_in_360);
-        pcl::fromROSMsg(*odin_msg, temp_cloud_in_odin);
+        pcl::fromROSMsg(*odin_msg, *temp_cloud_in_odin);
+        pcl::PassThrough<pcl::PointXYZ> ps;
+        ps.setFilterFieldName("z");
+        ps.setInputCloud(temp_cloud_in_odin);
+        ps.setFilterLimits(0.06, 1.0);
+        ps.filter(*temp_cloud_in_odin);
         
         //  清理 cloud_in_ 并准确预计算最终容量（360完整点数 + odin全点数预测）
         cloud_in_->clear();
-        cloud_in_->reserve(temp_cloud_in_360.points.size() + temp_cloud_in_odin.points.size());
+        cloud_in_->reserve(temp_cloud_in_360.points.size() + temp_cloud_in_odin->points.size());
 
         //  填充 360 雷达点云 
         for (const auto& pt : temp_cloud_in_360.points) {
@@ -134,8 +148,8 @@ class DogMapNode : public rclcpp::Node {
         }
 
         pcl::PointCloud<HEROPointXYZK>::Ptr out(new pcl::PointCloud<HEROPointXYZK>());
-        out->reserve(temp_cloud_in_odin.points.size());
-        for (const auto& pt : temp_cloud_in_odin.points) {
+        out->reserve(temp_cloud_in_odin->points.size());
+        for (const auto& pt : temp_cloud_in_odin->points) {
             out->emplace_back(pt.x, pt.y, pt.z, 1);
         }
 
@@ -146,12 +160,13 @@ class DogMapNode : public rclcpp::Node {
         pcl::PointCloud<HEROPointXYZK> filtered_out;
         sor_->filter(filtered_out);
 
-        cloud_in_->insert(cloud_in_->end(), filtered_out.begin(), filtered_out.end());
+        // cloud_in_->insert(cloud_in_->end(), filtered_out.begin(), filtered_out.end());
+        *cloud_in_=*out+*cloud_in_;
         Eigen::Matrix4f tf_mat = Eigen::Matrix4f::Identity();
         try {
             tf_stamped = this->tf_buffer_->lookupTransform(
                 "map", cloud_msg->header.frame_id, tf2::TimePointZero);
-            tf_stamped.transform.translation.z += 0.3;  //添加平移,防止越界
+            tf_stamped.transform.translation.z += 0.26;  //添加平移,防止越界
             const auto& tr = tf_stamped.transform.translation;
             const auto& rr = tf_stamped.transform.rotation;
 
@@ -176,7 +191,14 @@ class DogMapNode : public rclcpp::Node {
         }
 
         pcl::transformPointCloud(*cloud_in_, *cloud_in_, tf_mat);
+        if (!cloud_in_->empty()) {
+            auto msg = sensor_msgs::msg::PointCloud2();
+            pcl::toROSMsg(*cloud_in_, msg);
 
+            msg.header.frame_id = "map";
+            msg.header.stamp = this->get_clock()->now();
+            cost_pub_.ground_pc_pub->publish(std::move(msg));
+        }
         rc_.update_lock.lock();
         rc_.pc = *cloud_in_;
         {

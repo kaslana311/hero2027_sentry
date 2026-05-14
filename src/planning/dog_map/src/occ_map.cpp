@@ -100,7 +100,7 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
     iterators.reserve(time_list_.size());
     for (auto it = time_list_.begin(); it != time_list_.end(); ++it) {
         iterators.emplace_back(it, false);
-    }   
+    }    
  
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, iterators.size()),
@@ -139,7 +139,7 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
                              occ_count++;   
                         }
                 double rate =1.0*occ_count/dzf_i;
-                if(rate<0.5 ) continue;
+                // if(rate<0.5 &&dzf<0.12) continue;
                 if (dzf < 0.12 &&
                     (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
                     continue;  //过高过滤
@@ -236,7 +236,7 @@ void OccMap::PassFilter(pcl::PointCloud<HEROPointXYZK>::Ptr cloud_in,
     pcl::PassThrough<HEROPointXYZK> pass;
     pass.setInputCloud(cloud_in);
     pass.setFilterFieldName("z");
-    pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.3);
+    pass.setFilterLimits(0.03, higher_than_car_threshold_ + 0.3);
     pass.filter(*cloud_in);
     
     double min_x = pose.first[0] - half_map_size_;

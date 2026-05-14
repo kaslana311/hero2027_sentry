@@ -75,7 +75,7 @@ source /opt/ros/humble/setup.sh
 ```
 
 ### 2.4 Run Livox ROS Driver 2:
-
+c
 #### For ROS:
 
 ```shell

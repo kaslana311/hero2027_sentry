@@ -124,7 +124,7 @@ void LidarMergeNode::Sync_lidarCallback(
   const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg1,
   const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg2)
 {
-  auto start_time = std::chrono::steady_clock::now();
+  auto start_time =  std::chrono::steady_clock::now();
 
   auto fused_msg = std::make_unique<livox_ros_driver2::msg::CustomMsg>(); 
   

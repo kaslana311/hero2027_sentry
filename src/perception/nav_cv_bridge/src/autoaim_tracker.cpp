@@ -1,6 +1,7 @@
 #include "nav_cv_bridge/autoaim_tracker.hpp"
 
 #include <memory>
+#include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
