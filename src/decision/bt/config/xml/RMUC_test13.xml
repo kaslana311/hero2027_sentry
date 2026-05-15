@@ -57,7 +57,7 @@
                     <CheckValue value="{current_hp}" expected="100" operator="gt"/>
                     <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
                     <PublishNavOutput target_tf_name="rune" mode="2"/>
-                    <RuneStateMachine flag_name="small_rune_flag_1"/>
+                    <RuneStateMachine flag_name="small_rune_flag_1" status_key="small_energy_state" target_state="1"/>
                   </ReactiveSequence>
                 </Sequence>
 
@@ -76,7 +76,7 @@
                     <CheckValue value="{stage_time}" expected="330" operator="le"/>
                     <CheckValue value="{stage_time}" expected="240" operator="gt"/>
                     <PublishNavOutput target_tf_name="rune" mode="2"/>
-                    <RuneStateMachine flag_name="small_rune_flag_2"/>
+                    <RuneStateMachine flag_name="small_rune_flag_2" status_key="small_energy_state" target_state="1"/>
                   </ReactiveSequence>
                 </Sequence>
 
@@ -97,7 +97,7 @@
                     <CheckValue value="{stage_time}" expected="330" operator="le"/>
                     <CheckValue value="{stage_time}" expected="240" operator="gt"/>
                     <PublishNavOutput target_tf_name="rune" mode="3"/>
-                    <RuneStateMachine flag_name="big_rune_flag_1"/>
+                    <RuneStateMachine flag_name="big_rune_flag_1" status_key="big_energy_state" target_state="1"/>
                   </ReactiveSequence>
                 </Sequence>
 
@@ -117,7 +117,7 @@
                     <CheckValue value="{stage_time}" expected="330" operator="le"/>
                     <CheckValue value="{stage_time}" expected="240" operator="gt"/>
                     <PublishNavOutput target_tf_name="rune" mode="3"/>
-                    <RuneStateMachine flag_name="big_rune_flag_2"/>
+                    <RuneStateMachine flag_name="big_rune_flag_2" status_key="big_energy_state" target_state="1"/>
                   </ReactiveSequence>
                 </Sequence>
 
@@ -137,13 +137,13 @@
                     <CheckValue value="{stage_time}" expected="330" operator="le"/>
                     <CheckValue value="{stage_time}" expected="240" operator="gt"/>
                     <PublishNavOutput target_tf_name="rune" mode="3"/>
-                    <RuneStateMachine flag_name="big_rune_flag_3"/>
+                    <RuneStateMachine flag_name="big_rune_flag_3" status_key="big_energy_state" target_state="1"/>
                   </ReactiveSequence>
                 </Sequence>
               </Fallback>
-              <!-- 血量高且己方前哨站未被击毁 -->
+              <!-- 血量高且敌方前哨站被击毁 -->
               <Sequence>
-                <CheckValue value="{friend_outpost}" expected="0" operator="eq"/>
+                <CheckValue value="{enemy_outpost_status}" expected="0" operator="eq"/>
                 <Fallback>                  <!-- 状态机的每一状态检查不通过返回false就进入下一状态 -->
                   <!-- 巡航点0: x="0.0" y="3.0" -->
                   <Sequence>
@@ -168,12 +168,6 @@
                   <!-- 巡航点1: x="0.0" y="6.0" -->
                   <Sequence>
                     <CheckValue value="{cruise_state}" expected="1" operator="eq"/>
-                    <!-- <ReactiveSequence>
-                                    <CheckValue value="{stage_time}" expected="0" operator="gt"/>
-                                    <CheckValue value="{current_hp}" expected="100" operator="gt"/>
-                                    <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
-                                    <Nav x="-1.34" y="3.08" /> -->
-                    <!-- </ReactiveSequence> -->
                     <ReactiveSequence>
                       <CheckValue value="{stage_time}" expected="0" operator="gt"/>
                       <CheckValue value="{current_hp}" expected="100" operator="gt"/>
@@ -196,7 +190,7 @@
 
               <!-- 血量高且己方前哨站被击毁 -->
               <Sequence>
-                <CheckValue value="{friend_outpost}" expected="100" operator="eq"/>
+                <CheckValue value="{enemy_outpost_status}" expected="0" operator="gt"/>
                 <LogMessage message="前哨站你怎么似了"/>
                 <ReactiveSequence>
                   <CheckValue value="{stage_time}" expected="0" operator="gt"/>
@@ -205,10 +199,12 @@
                   <Nav x="0.0" y="1.0" />
                 </ReactiveSequence>
                 <ReactiveSequence>
+                  <CheckValue value="{enemy_outpost_status}" expected="0" operator="gt"/>
                   <CheckValue value="{stage_time}" expected="0" operator="gt"/>
                   <CheckValue value="{current_hp}" expected="210" operator="gt"/>
                   <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
-                  <Guardian guard_duration = "10.0"/>
+                  <PublishNavOutput target_tf_name="outpost" mode="1"/>
+                  <Guardian guard_duration = "20.0"/>
                 </ReactiveSequence>
               </Sequence>
             </Fallback>
@@ -268,6 +264,8 @@
       </Action>
       <Action ID="RuneStateMachine" editable="true">
         <input_port name="flag_name"/>
+        <input_port name="status_key"/>
+        <input_port name="target_state"/>
       </Action>
       <Action ID="Guardian" editable="true">
         <input_port name="guard_duration"/>

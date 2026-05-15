@@ -98,17 +98,9 @@ class PublishNavOutputNode : public SyncActionNode {
 class RuneStateMachineNode : public StatefulActionNode {
    public:
     RuneStateMachineNode(const std::string& name, const NodeConfig& config)
-        : StatefulActionNode(name, config), current_rune_status_(1) {
+        : StatefulActionNode(name, config) {
         node_ = config.blackboard->get<rclcpp::Node::SharedPtr>("node");
         blackboard_ = config.blackboard;
-
-        // 订阅能量机关状态，假设话题为 RuneStatusSync，数据类型
-        // std_msgs::msg::UInt8
-        status_sub_ = node_->create_subscription<std_msgs::msg::UInt8>(
-            "RuneStatusSync", 10,
-            [this](const std_msgs::msg::UInt8::SharedPtr msg) {
-                current_rune_status_ = msg->data;
-            });
 
         // 发布串口触发指令的话题
         activate_pub_ = node_->create_publisher<std_msgs::msg::Bool>(
@@ -120,8 +112,14 @@ class RuneStateMachineNode : public StatefulActionNode {
     }
 
     static PortsList providedPorts() {
-        return {InputPort<std::string>(
-            "flag_name", "Blackboard flag name to set to 1 on entry")};
+        return {
+            InputPort<std::string>("flag_name",
+                                   "Blackboard flag name to set to 1 on entry"),
+            InputPort<std::string>("status_key",
+                                   "Key on blackboard to monitor setup (e.g., "
+                                   "small_energy_state)"),
+            InputPort<int>("target_state",
+                           "State value representing activated (default 1)")};
     }
 
     NodeStatus onStart() override {
@@ -148,9 +146,24 @@ class RuneStateMachineNode : public StatefulActionNode {
         auto now = node_->now();
         auto duration = (now - start_time_).seconds();
 
-        // 当状态变为 3：已激活
-        if (current_rune_status_ == 3) {
-            RCLCPP_INFO(node_->get_logger(), "Rune Activated successfully!");
+        // 获取需要读取的黑板键值名称与目标脱出状态
+        std::string status_key;
+        int target_state = 1;
+        if (!getInput("status_key", status_key)) {
+            RCLCPP_ERROR(node_->get_logger(),
+                         "RuneStateMachineNode: missing status_key!");
+            return NodeStatus::FAILURE;
+        }
+        getInput("target_state", target_state);
+
+        int current_rune_status = 0;
+        blackboard_->get(status_key, current_rune_status);
+
+        // 当状态达到目标激活状态
+        if (current_rune_status == target_state) {
+            RCLCPP_INFO(node_->get_logger(),
+                        "Rune (%s) Activated successfully!",
+                        status_key.c_str());
             publishActivateCommand(false);
             publishDisableAutoAim();
             return NodeStatus::SUCCESS;
@@ -199,10 +212,6 @@ class RuneStateMachineNode : public StatefulActionNode {
         msg.point.pose.orientation.z = 0.0;
         nav_output_pub_->publish(msg);
     }
-
-    rclcpp::Node::SharedPtr node_;
-    BT::Blackboard::Ptr blackboard_;
-    rclcpp::Time start_time_;
 
     // 内部状态维护
     int current_rune_status_;  // 1：未激活 2：正在激活 3：已激活
