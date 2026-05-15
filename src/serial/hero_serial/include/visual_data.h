@@ -53,7 +53,7 @@ typedef struct {
     uint8_t game_type : 4;       // 比赛类型
     uint8_t game_progress : 4;   // 当前比赛阶段
     uint16_t stage_remain_time;  // 当前阶段剩余时间
-    uint8_t dart_target;  // 当前飞镖靶标，0反应敌方前哨站存活，非0即被摧毁
+    uint8_t dart_target : 4;  // 当前飞镖靶标，0反应敌方前哨站存活，非0即被摧毁
     uint8_t
         small_energy_state : 2;  // 小能量机关状态 0为默认 1为激活 2为正在激活
     uint8_t big_energy_state : 2;  // 大能量机关状态 0为默认 1为激活 2为正在激活
@@ -195,8 +195,8 @@ typedef struct {
 #define CMD_ID_Robot_wheel_odometry \
     0x0D  // 底盘向导航发送的轮式里程计速度数据ID
 #define CMD_ID_CV_to_Nav_Massage \
-    0x0F  // 视觉发送给导航的是否正在瞄准的信息ID（视觉发送给导航）
-#define CMD_ID_com_opponent_position 0x10  // 多机通信-对方机器人位置数据ID
+    0x15  // 视觉发送给导航的是否正在瞄准的信息ID（视觉发送给导航）
+#define CMD_ID_com_opponent_position 0x0F  // 多机通信-对方机器人位置数据ID
 
 // 设置 发送次数（有限次就写正整数，无限次发送写-1） 和 每几个周期发送一次
 #define CMD_SET_VISUAL_CTRL -1, 2   // 视觉发送控制指令

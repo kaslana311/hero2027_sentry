@@ -499,6 +499,8 @@ void ChassisNode::RefreePubTimerCallback() {
     msg.competition_stage = game_info_t_data.game_progress;
     msg.stage_time = game_info_t_data.stage_remain_time;
     msg.dart_target = game_info_t_data.dart_target;
+    msg.small_energy_state = game_info_t_data.small_energy_state;
+    msg.big_energy_state = game_info_t_data.big_energy_state;
 
     msg.robot_id = robot_info_t_data.robot_id;
     msg.current_hp = robot_info_t_data.remain_HP;
