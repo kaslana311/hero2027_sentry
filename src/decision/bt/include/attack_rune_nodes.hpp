@@ -213,10 +213,10 @@ class RuneStateMachineNode : public StatefulActionNode {
         nav_output_pub_->publish(msg);
     }
 
-    // 内部状态维护
-    int current_rune_status_;  // 1：未激活 2：正在激活 3：已激活
+    rclcpp::Node::SharedPtr node_;
+    BT::Blackboard::Ptr blackboard_;
+    rclcpp::Time start_time_;
 
-    rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr status_sub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr activate_pub_;
     rclcpp::Publisher<interfaces::msg::NavOutput>::SharedPtr nav_output_pub_;
 };

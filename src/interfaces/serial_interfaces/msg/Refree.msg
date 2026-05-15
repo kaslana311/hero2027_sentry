@@ -32,7 +32,7 @@ uint8 energy_activation
 uint8 highland_status
 uint8 trapezoid_status
 uint16 dart_hit_time
-uint8 dart_target
+# uint8 dart_target
 uint8 center_control
 
 # 本机状态
