@@ -84,7 +84,7 @@ class GuardWithAttackNode : public StatefulActionNode {
             std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
         // 读取话题名（构造时读取一次，避免每次 tick 解析）
-        std::string tracker_topic = "/tracker/global_targets";
+        std::string tracker_topic = "/global_targets";
         std::string costmap_topic = "/global_costmap/costmap";
 
         // 创建独立 callback group（不阻塞主线程）
@@ -147,7 +147,7 @@ class GuardWithAttackNode : public StatefulActionNode {
             InputPort<int>("occ_threshold", 50, "OccupancyGrid cost 可行阈值"),
             InputPort<double>("nav_update_interval", 2.0,
                               "导航目标最小更新间隔（秒）"),
-            InputPort<std::string>("tracker_topic", "/tracker/global_targets",
+            InputPort<std::string>("tracker_topic", "/global_targets",
                                    "GlobalTargetArray 话题"),
             InputPort<std::string>("costmap_topic", "/global_costmap/costmap",
                                    "代价地图话题"),

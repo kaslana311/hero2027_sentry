@@ -23,7 +23,7 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
 )
 
-add_executable(${PROJECT_NAME}_node src/merge.cpp)
+add_executable(${PROJECT_NAME}_node src/lidars.cpp)
 
 ament_target_dependencies(${PROJECT_NAME}_node
   rclcpp
