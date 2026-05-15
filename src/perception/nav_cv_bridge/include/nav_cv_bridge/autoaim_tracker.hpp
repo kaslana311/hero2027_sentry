@@ -39,7 +39,7 @@ class AutoaimTracker : public rclcpp::Node {
 
    private:
     void autoaimCallback(interfaces::msg::TrackerOutput::SharedPtr msg);
-    void radarCallback(interfaces::msg::TrackerOutput::SharedPtr msg);
+    void radarCallback(interfaces::msg::GlobalTargetArray::SharedPtr msg);
     void timerCallback();
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -47,7 +47,7 @@ class AutoaimTracker : public rclcpp::Node {
 
     rclcpp::Subscription<interfaces::msg::TrackerOutput>::SharedPtr
         autoaim_sub_;
-    rclcpp::Subscription<interfaces::msg::TrackerOutput>::SharedPtr radar_sub_;
+    rclcpp::Subscription<interfaces::msg::GlobalTargetArray>::SharedPtr radar_sub_;
 
     rclcpp::Publisher<interfaces::msg::GlobalTargetArray>::SharedPtr
         global_target_pub_;

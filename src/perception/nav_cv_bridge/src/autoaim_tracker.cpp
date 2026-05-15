@@ -26,7 +26,7 @@ AutoaimTracker::AutoaimTracker(const rclcpp::NodeOptions& options)
         std::bind(&AutoaimTracker::autoaimCallback, this,
                   std::placeholders::_1));
 
-    radar_sub_ = this->create_subscription<interfaces::msg::TrackerOutput>(
+    radar_sub_ = this->create_subscription<interfaces::msg::GlobalTargetArray>(
         "/tracker/radar", rclcpp::SensorDataQoS(),
         std::bind(&AutoaimTracker::radarCallback, this, std::placeholders::_1));
 
@@ -77,7 +77,7 @@ void AutoaimTracker::autoaimCallback(
 }
 
 void AutoaimTracker::radarCallback(
-    interfaces::msg::TrackerOutput::SharedPtr msg) {
+    interfaces::msg::GlobalTargetArray::SharedPtr msg) {
     std::lock_guard<std::mutex> lock(targets_mutex_);
     rclcpp::Time now_stamp = msg->header.stamp;
 
@@ -150,10 +150,13 @@ void AutoaimTracker::timerCallback() {
             double dist = std::hypot(dx, dy);
 
             if (state.using_radar) {
-                if (autoaim_valid && dist < autoaim_switch_dist_) {
+                // 如果上一次用的是雷达，那么需要满足距离条件才切回自瞄，否则继续用雷达
+                if (autoaim_valid &&
+                    (dist < autoaim_switch_dist_ || !radar_valid)) {
                     use_radar_this_tick = false;  // switch to autoaim
                 }
             } else {
+                // 如果上一次用的是自瞄，那么需要满足距离条件才切回雷达，否则继续用自瞄
                 if (radar_valid &&
                     (dist > radar_switch_dist_ || !autoaim_valid)) {
                     use_radar_this_tick = true;  // switch to radar
@@ -217,6 +220,26 @@ void AutoaimTracker::timerCallback() {
             rclcpp::Duration::from_seconds(0.3);  // survive slightly over timer
 
         marker_array.markers.push_back(marker);
+
+        // 文字可视化：用于展示目标的 ID
+        visualization_msgs::msg::Marker text_marker;
+        text_marker.header = out_msg->header;
+        text_marker.ns = "global_targets_id";
+        text_marker.id = marker_id++;
+        text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+        text_marker.action = visualization_msgs::msg::Marker::ADD;
+        text_marker.pose.position = final_pos;
+        text_marker.pose.position.z = 0.9;  // 悬浮在球体 (0.5) 的上方
+        text_marker.pose.orientation.w = 1.0;
+        text_marker.scale.z = 0.25;  // 字体大小
+        text_marker.color.r = 1.0;
+        text_marker.color.g = 1.0;
+        text_marker.color.b = 1.0;
+        text_marker.color.a = 1.0;    // 纯白色
+        text_marker.text = state.id;  // 打印名称（比如 "hero"）
+        text_marker.lifetime = rclcpp::Duration::from_seconds(0.3);
+
+        marker_array.markers.push_back(text_marker);
 
         ++it;
     }
