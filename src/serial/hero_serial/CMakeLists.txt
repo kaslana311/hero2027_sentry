@@ -48,19 +48,12 @@ target_link_libraries(drv_cmd_com drv_CRC)
 
 add_executable(chassis_node src/chassis_node.cpp src/boost_asio.cpp)
 target_link_libraries(chassis_node drv_cmd_com drv_CRC)
-add_executable(gimbal_node src/gimbal_node.cpp src/boost_asio.cpp)
-target_link_libraries(gimbal_node drv_cmd_com drv_CRC)
 
 ament_target_dependencies(chassis_node rclcpp geometry_msgs serial_interfaces nav_msgs interfaces std_msgs)
-ament_target_dependencies(gimbal_node rclcpp std_msgs serial_interfaces interfaces)
-
 
 target_link_libraries(chassis_node Threads::Threads)
-target_link_libraries(gimbal_node Threads::Threads)
-
 
 install(TARGETS
-  gimbal_node
   chassis_node
   DESTINATION lib/${PROJECT_NAME}
 )
