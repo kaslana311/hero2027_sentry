@@ -463,37 +463,7 @@ void ChassisNode::ChassisCmdTimerCallback() {
 }
 
 void ChassisNode::RefreePubTimerCallback() {
-    // RCLCPP_INFO(this->get_logger(), "发布回调");
     serial_interfaces::msg::Refree msg;
-    // std::cout << "比赛类型: " << static_cast<int>(game_info_t_data.game_type)
-    //           << std::endl;
-    // std::cout << "比赛阶段: "
-    //           << static_cast<int>(game_info_t_data.game_progress) <<
-    //           std::endl;
-    // std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time <<
-    // "秒"
-    //           << std::endl;
-    // std::cout << "机器人ID: " << static_cast<int>(robot_info_t_data.robot_id)
-    //           << std::endl;
-    // std::cout << "当前血量: " << robot_info_t_data.remain_HP << std::endl;
-    // std::cout << "17mm弹药剩余: "
-    //           << robot_info_t_data.shooter_cooling_rate <<
-    //           std::endl;
-    // std::cout << "堡垒上允许发弹："
-    //           << bullet_remaining_t_data.projectile_allowance_fortress
-    //           << std::endl;
-    // std::cout << "红方哨兵：" << game_robot_survivors.red_7_robot_HP
-    //           << std::endl;
-    // std::cout << "蓝方哨兵：" << game_robot_survivors.blue_7_robot_HP
-    //           << std::endl;
-    // std::cout << "红方前哨：" << game_robot_survivors.red_outpost_HP
-    //           << std::endl;
-    // std::cout << "蓝方前哨：" << game_robot_survivors.blue_outpost_HP
-    //           << std::endl;
-    // std::cout << "报点x:" << robot_command_map_data.target_position_x
-    //           << std::endl;
-    // std::cout << "报点y:" << robot_command_map_data.target_position_y
-    //           << std::endl;
 
     msg.competition_type = game_info_t_data.game_type;
     msg.competition_stage = game_info_t_data.game_progress;
@@ -506,13 +476,8 @@ void ChassisNode::RefreePubTimerCallback() {
     msg.current_hp = robot_info_t_data.remain_HP;
 
     msg.bullet_17mm = robot_info_t_data.shooter_cooling_rate;
-    msg.projectile_allowance_fortress =
-        bullet_remaining_t_data.projectile_allowance_fortress;
-
-    // msg.red_sentry = game_robot_survivors.red_7_robot_HP;
-    // msg.blue_sentry = game_robot_survivors.blue_7_robot_HP;
-    // msg.red_outpost = game_robot_survivors.red_outpost_HP;
-    // msg.blue_outpost = game_robot_survivors.blue_outpost_HP;
+    // msg.projectile_allowance_fortress =
+    //     bullet_remaining_t_data.projectile_allowance_fortress;
     refree_pub_->publish(msg);
 
     // if ((robot_command_map_data.target_position_x !=
