@@ -56,6 +56,7 @@ ament_target_dependencies(decision_node
 ament_target_dependencies(refree_pub
   rclcpp
   behaviortree_cpp
+  interfaces
   serial_interfaces
   tf2_geometry_msgs
   nav2_msgs
@@ -67,6 +68,7 @@ ament_target_dependencies(refree_pub
 ament_target_dependencies(radar_pub
   rclcpp
   behaviortree_cpp
+  interfaces
   serial_interfaces
   tf2_geometry_msgs
   nav2_msgs
