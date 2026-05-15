@@ -18,6 +18,13 @@ void VelOdometry_Global_Callback(void* data) {
     }
 }
 
+// 全局回调函数，用于敌方机器人位置数据
+void OpponentPosition_Global_Callback(void* data) {
+    if (g_chassis_node_instance) {
+        g_chassis_node_instance->OpponentPosition_Callback(data);
+    }
+}
+
 void ChassisNode::VelOdometry_Callback(void* data) {
     // 发布轮式里程计速度（用于 EKF 融合）
     nav_msgs::msg::Odometry wheel_odom_msg;
@@ -67,6 +74,45 @@ void ChassisNode::VelOdometry_Callback(void* data) {
     }
 
     wheel_odom_vel_pub_->publish(wheel_odom_msg);
+}
+
+void ChassisNode::OpponentPosition_Callback(void* data) {
+    if (!data) return;
+    com_opponent_position_t* pos_data =
+        static_cast<com_opponent_position_t*>(data);
+
+    interfaces::msg::GlobalTargetArray msg;
+    msg.header.stamp = this->now();
+    msg.header.frame_id = "map";
+
+    // 辅助闭包函数，用于解析并压入数据（假设发送来的数据单位为 cm，需要除以 100
+    // 转为 m） 如果实际单位是 mm，请将 100.0 改为 1000.0
+    auto add_target = [&](uint16_t x, uint16_t y, const std::string& id_name) {
+        if (x != 0 || y != 0) {  // 假设 0,0 意味着该机器人位置未知/无效
+            interfaces::msg::GlobalTarget target;
+            target.id = id_name;
+            target.position.x = x / 100.0;  // 转换为米
+            target.position.y = y / 100.0;  // 转换为米
+            target.position.z = 0.0;
+            msg.targets.push_back(target);
+        }
+    };
+
+    add_target(pos_data->opponent_hero_position_x,
+               pos_data->opponent_hero_position_y, "1");  // hero
+    add_target(pos_data->opponent_engineer_position_x,
+               pos_data->opponent_engineer_position_y, "2");  // engineer
+    add_target(pos_data->opponent_infantry_3_position_x,
+               pos_data->opponent_infantry_3_position_y, "3");  // infantry_3
+    add_target(pos_data->opponent_infantry_4_position_x,
+               pos_data->opponent_infantry_4_position_y, "4");  // infantry_4
+    add_target(pos_data->opponent_sentry_position_x,
+               pos_data->opponent_sentry_position_y, "SENTRY");  // sentry
+
+    // 只有当有有效目标时才发布，避免发布空数组干扰决策
+    if (!msg.targets.empty()) {
+        radar_pub_->publish(msg);
+    }
 }
 
 ChassisNode ::ChassisNode() : Node("chassis_node") {
@@ -123,6 +169,10 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     wheel_odom_vel_pub_ =
         this->create_publisher<nav_msgs::msg::Odometry>("/wheel_odometry", 10);
 
+    // 雷达(全局敌方)位置发布器
+    radar_pub_ = this->create_publisher<interfaces::msg::GlobalTargetArray>(
+        "/tracker/radar", rclcpp::SensorDataQoS());
+
     reach_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
         "arrived_at_goal", 10,
         std::bind(&ChassisNode::ReachCallback, this, std::placeholders::_1)
@@ -135,6 +185,13 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         std::bind(&ChassisNode::HpDangerCallback, this, std::placeholders::_1)
         // 不指定回调组，使用默认组
     );
+
+    // 订阅能量机关激活控制消息
+    rune_activate_subscription_ =
+        this->create_subscription<std_msgs::msg::Bool>(
+            "RuneActivateCommand", 10,
+            std::bind(&ChassisNode::RuneActivateCallback, this,
+                      std::placeholders::_1));
 
     // 订阅自瞄状态消息 (TrackerOutput)
     const rclcpp::QoS qos(
@@ -175,6 +232,9 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     Attach_Receive_callback(
         CMD_ID_Robot_wheel_odometry, sizeof(Robot_wheel_odometry_t),
         (void*)&robot_wheel_odometry_data, VelOdometry_Global_Callback);
+    Attach_Receive_callback(
+        CMD_ID_com_opponent_position, sizeof(com_opponent_position_t),
+        (void*)&com_opponent_position_data, OpponentPosition_Global_Callback);
 
     Attach_SendCmd(serial_dev_,               // 设备句柄
                    CMD_ID_VISUAL_CTRL,        // 命令ID
@@ -228,6 +288,19 @@ void ChassisNode::HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg) {
         // 分离线程，让它在后台运行
         danger_thread.detach();
     }
+}
+
+// 能量机关激活控制回调函数
+void ChassisNode::RuneActivateCallback(
+    const std_msgs::msg::Bool::SharedPtr msg) {
+    if (msg->data) {
+        sentry_cmd_info_t_data.energy_mechanism_activate = 1;
+    } else {
+        sentry_cmd_info_t_data.energy_mechanism_activate = 0;
+    }
+    RCLCPP_INFO(this->get_logger(),
+                "能量机关串口指令更新: energy_mechanism_activate = %d",
+                sentry_cmd_info_t_data.energy_mechanism_activate);
 }
 
 void ChassisNode::ReachCallback(const std_msgs::msg::Bool::SharedPtr msg) {
@@ -397,7 +470,8 @@ void ChassisNode::RefreePubTimerCallback() {
     // std::cout << "比赛阶段: "
     //           << static_cast<int>(game_info_t_data.game_progress) <<
     //           std::endl;
-    // std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time << "秒"
+    // std::cout << "阶段剩余时间: " << game_info_t_data.stage_remain_time <<
+    // "秒"
     //           << std::endl;
     // std::cout << "机器人ID: " << static_cast<int>(robot_info_t_data.robot_id)
     //           << std::endl;
@@ -424,6 +498,7 @@ void ChassisNode::RefreePubTimerCallback() {
     msg.competition_type = game_info_t_data.game_type;
     msg.competition_stage = game_info_t_data.game_progress;
     msg.stage_time = game_info_t_data.stage_remain_time;
+    msg.dart_target = game_info_t_data.dart_target;
 
     msg.robot_id = robot_info_t_data.robot_id;
     msg.current_hp = robot_info_t_data.remain_HP;

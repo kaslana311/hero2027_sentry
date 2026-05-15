@@ -25,6 +25,7 @@
 #include "geometry_msgs/msg/point_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
+#include "interfaces/msg/global_target_array.hpp"
 #include "interfaces/msg/tracker_output.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -44,6 +45,7 @@ class ChassisNode : public rclcpp::Node {
     ~ChassisNode();  // 需要自定义析构函数来停止线程
 
     void VelOdometry_Callback(void* data);
+    void OpponentPosition_Callback(void* data);
 
    private:
     BoostAsio boost_asio_;
@@ -67,11 +69,17 @@ class ChassisNode : public rclcpp::Node {
     // 血量危险状态订阅者
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
         hp_danger_subscription_;
+    // 能量机关激活命令订阅者
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
+        rune_activate_subscription_;
     // 自瞄状态订阅者 (TrackerOutput)
     rclcpp::Subscription<interfaces::msg::TrackerOutput>::SharedPtr
         aiming_subscription_;
     // 轮式里程计速度发布器
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr wheel_odom_vel_pub_;
+
+    // 雷达(全局敌方)位置发布器
+    rclcpp::Publisher<interfaces::msg::GlobalTargetArray>::SharedPtr radar_pub_;
 
     // 修改：为高频读写创建专用的回调组
     rclcpp::CallbackGroup::SharedPtr read_cb_group_;
@@ -106,9 +114,9 @@ class ChassisNode : public rclcpp::Node {
     LinuxDevice* device = new LinuxDevice();
     rt_device_t serial_dev_;
     Ctrl_info_t ctrl_info_t_data = {0, 0, 1200, 1, 0};
-    sentry_cmd_info_t sentry_cmd_info_t_data = {1, 0, 0, 0, 0, 3, 0};
+    sentry_cmd_info_t sentry_cmd_info_t_data = {1, 0, 0, 0, 0, 3, 0, 0};
 
-    Game_info_t game_info_t_data = {0, 0, 0};
+    Game_info_t game_info_t_data = {0, 0, 0, 0, 0, 0};
     Event_data_t event_data_t_data = {0};
     Robot_info_t robot_info_t_data = {0, 0, 0, 0, 0, 0, 0};
     Robot_position_t robot_position_t_data = {0, 0, 0};
@@ -121,6 +129,8 @@ class ChassisNode : public rclcpp::Node {
     Robot_command_map_t robot_command_map_data = {0, 0, 0, 0, 0};
     Robot_command_map_t last_robot_command_map_data = {0, 0, 0, 0, 0};
     Robot_wheel_odometry_t robot_wheel_odometry_data = {0.0, 0.0};
+    com_opponent_position_t com_opponent_position_data = {0, 0, 0, 0, 0, 0,
+                                                          0, 0, 0, 0, 0, 0};
     geometry_msgs::msg::Point trigger_position;
     geometry_msgs::msg::Point last_trigger_position;
 
@@ -130,6 +140,7 @@ class ChassisNode : public rclcpp::Node {
 
     void CmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
     void HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg);
+    void RuneActivateCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void AimingCallback(const interfaces::msg::TrackerOutput::SharedPtr msg);
     void ChassisCmdTimerCallback();
     // RefreeTimerCallback 已被 ReceiveThreadFunc 替代
