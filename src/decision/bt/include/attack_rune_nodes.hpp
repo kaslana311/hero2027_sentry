@@ -31,7 +31,7 @@ class PublishNavOutputNode : public SyncActionNode {
 
         // 创建发布者
         publisher_ = node_->create_publisher<interfaces::msg::NavOutput>(
-            "nav_output", 10);
+            "/carrot_pose", 10);
     }
 
     static PortsList providedPorts() {

@@ -92,6 +92,7 @@
 #include "geometry_msgs/msg/twist_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
+#include "interfaces/msg/nav_output.hpp"
 
 // MINCO 轨迹消息
 #include "interfaces/msg/minco_trajectory.hpp"
@@ -405,7 +406,7 @@ class HeroMpcController : public nav2_core::Controller {
 
     /// Carrot Pose 发布器（预测点在 base_link 坐标系下的位置）
     rclcpp_lifecycle::LifecyclePublisher<
-        geometry_msgs::msg::PoseStamped>::SharedPtr carrot_pose_pub_;
+        interfaces::msg::NavOutput>::SharedPtr carrot_pose_pub_;
 
     // =========================================================================
     // MPC 相关
