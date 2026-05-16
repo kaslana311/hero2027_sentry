@@ -2,6 +2,9 @@
 uint8 competition_type
 uint8 competition_stage
 uint16 stage_time
+uint8 dart_target
+uint8 small_energy_state
+uint8 big_energy_state
 
 # 红方血量
 uint16 red_hero
@@ -29,7 +32,7 @@ uint8 energy_activation
 uint8 highland_status
 uint8 trapezoid_status
 uint16 dart_hit_time
-uint8 dart_target
+# uint8 dart_target
 uint8 center_control
 
 # 本机状态

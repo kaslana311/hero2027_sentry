@@ -7,7 +7,7 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <unordered_map>
-
+#include <pcl/filters/radius_outlier_removal.h>
 #include "dog_map/eigen_alias.hpp"
 
 OccMap::OccMap(double heighter_than_ground_threshold,
@@ -48,6 +48,7 @@ OccMap::OccMap(double heighter_than_ground_threshold,
     std::cout << "[DOG_MAP] path " << pgm_path << std::endl;
     std::cout << " -- [DOG_MAP] half_map_size: " << half_map_size_
               << ", resolution_z: " << resolution_z << std::endl;
+    std::cout<<" -- [DOG_MAP] OccMap resolution "<<resolution<<  std::endl;
     std::cout << " -- [DOG_MAP] higher_than_ground_threshold: "
               << higher_than_ground_threshold_
               << ", higher_than_car_threshold: " << higher_than_car_threshold_
@@ -99,7 +100,7 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
     iterators.reserve(time_list_.size());
     for (auto it = time_list_.begin(); it != time_list_.end(); ++it) {
         iterators.emplace_back(it, false);
-    }   
+    }    
  
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, iterators.size()),
@@ -129,8 +130,16 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
                         break;
                     }
                 }
-                double dzf = (max_z_occ_index - min_z_occ_index) * resolution_z;
+                int dzf_i= (max_z_occ_index - min_z_occ_index);
+                double dzf = dzf_i * resolution_z;
                 if (dzf < higher_than_ground_threshold_) continue;  //地面过滤
+                int occ_count=0;
+                for(int i=min_z_occ_index;i<max_z_occ_index;i++){
+                        if(IsOccupied(idx,idy,i))
+                             occ_count++;   
+                        }
+                double rate =1.0*occ_count/dzf_i;
+                // if(rate<0.5 &&dzf<0.12) continue;
                 if (dzf < 0.12 &&
                     (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
                     continue;  //过高过滤
@@ -221,23 +230,15 @@ void OccMap::racyHandle(const Vec3i& start_idx,
     // Bresenham算法实现3D网格的射线处理,发现符合障碍物标准,加入time_list_
 }
 
-void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
+void OccMap::PassFilter(pcl::PointCloud<HEROPointXYZK>::Ptr cloud_in,
                         Pose pose) {
     //高度滤波
-    pcl::PassThrough<pcl::PointXYZ> pass;
+    pcl::PassThrough<HEROPointXYZK> pass;
     pass.setInputCloud(cloud_in);
     pass.setFilterFieldName("z");
-    pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.3);
+    pass.setFilterLimits(0.03, higher_than_car_threshold_ + 0.3);
     pass.filter(*cloud_in);
-    // 2. 添加 3cm 降采样 (Voxel Grid Filter)
-    if (!cloud_in->empty()) {
-        pcl::VoxelGrid<pcl::PointXYZ> sor;
-        sor.setInputCloud(cloud_in);
-        // 设置体素大小为 0.03m (3cm)
-        sor.setLeafSize(0.05f, 0.05f, 0.05f);
-        sor.filter(*cloud_in);
-    }
-    // std::cout<<"size "<<cloud_in->size()<<std::endl;
+    
     double min_x = pose.first[0] - half_map_size_;
     min_x = std::max(min_x, cloud_at_map_origin[0] + 0.2);
     double max_x = pose.first[0] + half_map_size_;
@@ -256,8 +257,26 @@ void OccMap::PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in,
     pass.setFilterFieldName("y");
     pass.setFilterLimits(min_y, max_y);
     pass.filter(*cloud_in);
+      crop_box_filter_.setMin(Eigen::Vector4f(crop_min_x+pose.first[0], crop_min_y+pose.first[1],
+                                                crop_min_z,
+                                                1.0f));  // 设置最小点坐标
+        crop_box_filter_.setMax(Eigen::Vector4f(crop_max_x+pose.first[0], crop_max_y+pose.first[1],
+                                                crop_max_z,
+                                                1.0f));  // 设置最大点坐标
+        crop_box_filter_.setNegative(
+            true);  // 设置为true表示保留框外的点，去除框内的点
+      crop_box_filter_.setInputCloud(cloud_in);
+        crop_box_filter_.filter(*cloud_in);
+    // 离群点滤波
+    // if(cloud_in->size()==0) return ;
+    //  pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
+    // ror.setInputCloud(cloud_in);
+    // ror.setRadiusSearch(0.1); // 设置搜索半径 (如 0.15 米)
+    // ror.setMinNeighborsInRadius(4); // 设定在该半径内至少所需的邻居点数，小于此数则视为离群点过滤掉
+    // ror.filter(*cloud_in);
+    
 }
-void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
+void OccMap::Update(pcl::PointCloud<HEROPointXYZK>::Ptr cloud, Pose pose) {
     //更新局部地图
 
     PassFilter(cloud, pose);
@@ -328,8 +347,8 @@ void OccMap::Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose) {
             xi + yi * grid_map_.cols + zi * grid_map_.cols * grid_map_.rows;
         //更新占据概率
         occ_map[index] =
-            std::min(static_cast<int>(occ_map[index]) + LOG_OCC_HIT,
-                     static_cast<int>(MAX_LOG));
+            std::min(static_cast<int>(occ_map[index]) + LOG_OCC_HIT[point.device_id],
+                     static_cast<int>(MAX_LOG[point.device_id]));
         //加入观测列表
         if (occ_map[index] >= THR_OCC) {
             time_list_[index] = update_frame;

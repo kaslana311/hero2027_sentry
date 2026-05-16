@@ -1,96 +1,63 @@
-#include <atomic>
 #include <memory>
 #include <thread>
 
 #include "rclcpp/rclcpp.hpp"
 #include "serial_interfaces/msg/refree.hpp"
-#include "std_msgs/msg/bool.hpp"
-#include "std_msgs/msg/string.hpp"
 
 using namespace std::chrono_literals;
 
-// 3.定义节点类；
-class MinimalPublisher : public rclcpp::Node {
+class RefreeSimulatorNode : public rclcpp::Node {
    public:
-    MinimalPublisher() : Node("minimal_publisher"), count_(0) {
-        // 3-1.创建发布方；
+    RefreeSimulatorNode() : Node("refree_simulator_node") {
+        // 与 chassis_node 保持一致
         refree_pub_ = this->create_publisher<serial_interfaces::msg::Refree>(
-            "refree_msg", 1);
-        reached_pub_ =
-            this->create_publisher<std_msgs::msg::Bool>("reached_msg", 1);
-        // 3-2.创建定时器；
+            "refree_msg", 10);
+
         timer_ = this->create_wall_timer(
-            500ms, std::bind(&MinimalPublisher::timer_callback, this));
-        // 3-3.创建参数更新回调
-        param_callback_handle_ = add_on_set_parameters_callback(
-            std::bind(&MinimalPublisher::parameters_callback, this,
-                      std::placeholders::_1));
-        // 3-4.参数声明
-        this->declare_parameter("competition_type", 0);
-        this->declare_parameter("competition_stage", 0);
-        this->declare_parameter("stage_time", 0);
-        this->declare_parameter("current_hp", 0);
-        this->declare_parameter("blue_hero", 0);
-        this->declare_parameter("is_reached", true);
-        this->declare_parameter("blue_outpost", 0);
-        this->declare_parameter("red_outpost", 0);
-        this->declare_parameter("bullet_17mm", 0);
-        this->declare_parameter("hero_x", 0.0);
-        this->declare_parameter("hero_y", 0.0);
+            100ms, std::bind(&RefreeSimulatorNode::timer_callback, this));
+
+        // 声明需要模拟的参数
+        this->declare_parameter("competition_type", 1);
+        this->declare_parameter("competition_stage", 4);
+        this->declare_parameter("stage_time", 300);  // 剩余300s
+        this->declare_parameter("dart_target", 0);
+
+        // 比赛环境和能量机关
+        this->declare_parameter("small_energy_state", 0);
+        this->declare_parameter("big_energy_state", 0);
+
+        this->declare_parameter("robot_id", 7);      // 7 蓝方哨兵
+        this->declare_parameter("current_hp", 600);  // 哨兵当前血量
+        this->declare_parameter("bullet_17mm", 100);
     }
 
    private:
     void timer_callback() {
-        // 3-3.组织消息并发布。
-        auto message = serial_interfaces::msg::Refree();
-        message.competition_type =
-            this->get_parameter("competition_type").as_int();
-        message.competition_stage =
+        auto msg = serial_interfaces::msg::Refree();
+        msg.competition_type = this->get_parameter("competition_type").as_int();
+        msg.competition_stage =
             this->get_parameter("competition_stage").as_int();
-        message.stage_time = this->get_parameter("stage_time").as_int();
-        message.current_hp = this->get_parameter("current_hp").as_int();
-        message.blue_hero = this->get_parameter("blue_hero").as_int();
-        message.blue_outpost = this->get_parameter("blue_outpost").as_int();
-        message.red_outpost = this->get_parameter("red_outpost").as_int();
-        message.bullet_17mm = this->get_parameter("bullet_17mm").as_int();
-        message.hero_x = this->get_parameter("hero_x").as_double();
-        message.hero_y = this->get_parameter("hero_y").as_double();
+        msg.stage_time = this->get_parameter("stage_time").as_int();
+        msg.dart_target = this->get_parameter("dart_target").as_int();
+        msg.small_energy_state =
+            this->get_parameter("small_energy_state").as_int();
+        msg.big_energy_state = this->get_parameter("big_energy_state").as_int();
 
-        auto is_reached = std_msgs::msg::Bool();
-        is_reached.data = this->get_parameter("is_reached").as_bool();
+        msg.robot_id = this->get_parameter("robot_id").as_int();
+        msg.current_hp = this->get_parameter("current_hp").as_int();
 
-        // RCLCPP_INFO(this->get_logger(), "发布裁判端消息！！");
-        refree_pub_->publish(message);
-        reached_pub_->publish(is_reached);
-    }
+        msg.bullet_17mm = this->get_parameter("bullet_17mm").as_int();
 
-    // 参数动态调整回调
-    rcl_interfaces::msg::SetParametersResult parameters_callback(
-        const std::vector<rclcpp::Parameter> &parameters) {
-        rcl_interfaces::msg::SetParametersResult result;
-        result.successful = true;
-
-        for (const auto &param : parameters) {
-            RCLCPP_INFO(this->get_logger(), "参数更新: %s => %s",
-                        param.get_name().c_str(),
-                        param.value_to_string().c_str());
-        }
-        return result;
+        refree_pub_->publish(msg);
     }
 
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<serial_interfaces::msg::Refree>::SharedPtr refree_pub_;
-    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reached_pub_;
-    OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
-    size_t count_;
 };
 
 int main(int argc, char *argv[]) {
-    // 2.初始化 ROS2 客户端；
     rclcpp::init(argc, argv);
-    // 4.调用spin函数，并传入节点对象指针。
-    rclcpp::spin(std::make_shared<MinimalPublisher>());
-    // 5.释放资源；
+    rclcpp::spin(std::make_shared<RefreeSimulatorNode>());
     rclcpp::shutdown();
     return 0;
 }

@@ -16,8 +16,8 @@ typedef struct {
 
 // 哨兵自主决策指令信息子命令id:0x120(机器人间通信)
 #pragma pack(push, 1)
-typedef struct  // 关于哨兵自主决策，裁判手册中说，哨兵底盘通过机器人间通信向裁判端转发的消息是一个字节内容（就是下边这个）
-{  // 而哨兵底盘从裁判系统还会接收到哨兵自主决策指令的反馈信息，是两个字节，还包括脱战信息等（是下边关于底盘发送的内容，具体信息查阅手册）
+//哨兵自主决策指令信息子命令id:0x120(0x301)
+typedef struct {
     uint32_t confirm_revive : 1;  // 0bit, 是否确认复活，0表示不复活，1表示复活
     uint32_t
         confirm_exchange_revive : 1;  // 1bit,
@@ -30,8 +30,11 @@ typedef struct  // 关于哨兵自主决策，裁判手册中说，哨兵底盘�
     uint32_t
         exchange_health_request_count : 4;  // 17-20bit,
                                             // 远程兑换血量的请求次数，从0开始递增，每次变化只能是1
-    uint32_t sentry_status : 2;
-    uint32_t reserved : 9;  // 21-31bit, 保留位，当前未使用
+    uint32_t sentry_status : 2;  // 21-22bit, 哨兵当前姿态
+    uint32_t
+        energy_mechanism_activate : 1;  // 23bit,
+                                        // 是否激活能量机关，0为默认，1表示激活
+    uint32_t reserved : 8;  // 24-31bit, 保留位，当前未使用
 } sentry_cmd_info_t;
 #pragma pack(pop)
 
@@ -50,7 +53,11 @@ typedef struct {
     uint8_t game_type : 4;       // 比赛类型
     uint8_t game_progress : 4;   // 当前比赛阶段
     uint16_t stage_remain_time;  // 当前阶段剩余时间
-} Game_info_t;                   // 比赛状态数据
+    uint8_t dart_target : 4;  // 当前飞镖靶标，0反应敌方前哨站存活，非0即被摧毁
+    uint8_t
+        small_energy_state : 2;  // 小能量机关状态 0为默认 1为激活 2为正在激活
+    uint8_t big_energy_state : 2;  // 大能量机关状态 0为默认 1为激活 2为正在激活
+} Game_info_t;                     // 比赛状态数据
 #pragma pack(pop)
 
 #pragma pack(push, 1)
@@ -151,6 +158,24 @@ typedef struct {
 } CV_to_Nav_Massage_t;
 #pragma pack(pop)
 
+/* 多机通信-对方机器人位置数据 */
+#pragma pack(push, 1)
+typedef struct {
+    uint16_t opponent_hero_position_x;
+    uint16_t opponent_hero_position_y;
+    uint16_t opponent_engineer_position_x;
+    uint16_t opponent_engineer_position_y;
+    uint16_t opponent_infantry_3_position_x;
+    uint16_t opponent_infantry_3_position_y;
+    uint16_t opponent_infantry_4_position_x;
+    uint16_t opponent_infantry_4_position_y;
+    uint16_t opponent_aerial_position_x;
+    uint16_t opponent_aerial_position_y;
+    uint16_t opponent_sentry_position_x;
+    uint16_t opponent_sentry_position_y;
+} com_opponent_position_t;
+#pragma pack(pop)
+
 /***********设置的CMDid,发送次数，发送周期********************************* */
 #define CMD_ID_VISUAL_CTRL 0x01   // 视觉发送控制指令ID
 #define CMD_ID_VISUAL_RADAR 0x02  // 视觉发送雷达数据ID
@@ -169,8 +194,7 @@ typedef struct {
 #define CMD_ID_Robot_command_map 0x0C
 #define CMD_ID_Robot_wheel_odometry \
     0x0D  // 底盘向导航发送的轮式里程计速度数据ID
-#define CMD_ID_CV_to_Nav_Massage \
-    0x0F  // 视觉发送给导航的是否正在瞄准的信息ID（视觉发送给导航）
+#define CMD_ID_com_opponent_position 0x0F  // 多机通信-对方机器人位置数据ID
 
 // 设置 发送次数（有限次就写正整数，无限次发送写-1） 和 每几个周期发送一次
 #define CMD_SET_VISUAL_CTRL -1, 2   // 视觉发送控制指令

@@ -33,6 +33,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MincoTrajectory.msg"
   "msg/TrackerOutput.msg"
   "msg/NavOutput.msg"
+  "msg/GlobalTarget.msg"
+  "msg/GlobalTargetArray.msg"
   
   DEPENDENCIES sensor_msgs geometry_msgs std_msgs
 )

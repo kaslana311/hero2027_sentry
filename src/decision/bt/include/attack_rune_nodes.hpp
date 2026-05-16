@@ -55,8 +55,7 @@ class PublishNavOutputNode : public SyncActionNode {
         try {
             // 获取 target_tf_name 在 base_link 下的坐标
             auto transform_stamped = tf_buffer_->lookupTransform(
-                "base_link", target_tf_name, tf2::TimePointZero,
-                rclcpp::Duration::from_seconds(0.5));
+                "base_link", target_tf_name, tf2::TimePointZero);
 
             interfaces::msg::NavOutput msg;
             msg.header.stamp = node_->now();
@@ -99,34 +98,46 @@ class PublishNavOutputNode : public SyncActionNode {
 class RuneStateMachineNode : public StatefulActionNode {
    public:
     RuneStateMachineNode(const std::string& name, const NodeConfig& config)
-        : StatefulActionNode(name, config), current_rune_status_(1) {
+        : StatefulActionNode(name, config) {
         node_ = config.blackboard->get<rclcpp::Node::SharedPtr>("node");
-
-        // 订阅能量机关状态，假设话题为 RuneStatusSync，数据类型
-        // std_msgs::msg::UInt8
-        status_sub_ = node_->create_subscription<std_msgs::msg::UInt8>(
-            "RuneStatusSync", 10,
-            [this](const std_msgs::msg::UInt8::SharedPtr msg) {
-                current_rune_status_ = msg->data;
-            });
+        blackboard_ = config.blackboard;
 
         // 发布串口触发指令的话题
         activate_pub_ = node_->create_publisher<std_msgs::msg::Bool>(
             "RuneActivateCommand", 10);
+
+        // 发布自瞄模式的话题
+        nav_output_pub_ = node_->create_publisher<interfaces::msg::NavOutput>(
+            "nav_output", 10);
     }
 
     static PortsList providedPorts() {
-        return {};  // 暂无必要的XML配置端口输入
+        return {
+            InputPort<std::string>("flag_name",
+                                   "Blackboard flag name to set to 1 on entry"),
+            InputPort<std::string>("status_key",
+                                   "Key on blackboard to monitor setup (e.g., "
+                                   "small_energy_state)"),
+            InputPort<int>("target_state",
+                           "State value representing activated (default 1)")};
     }
 
     NodeStatus onStart() override {
         // 进入打符状态：记录时间
         start_time_ = node_->now();
 
+        // 设置黑板上的标志位
+        std::string flag_name;
+        if (getInput("flag_name", flag_name)) {
+            blackboard_->set<int>(flag_name, 1);
+        }
+
         // 发布开始打符请求 (activate = true)
         publishActivateCommand(true);
         RCLCPP_INFO(node_->get_logger(),
-                    "RuneStateMachineNode Started, triggered activate=true");
+                    "RuneStateMachineNode Started, triggered activate=true, "
+                    "set flag: %s",
+                    flag_name.c_str());
 
         return NodeStatus::RUNNING;
     }
@@ -135,10 +146,26 @@ class RuneStateMachineNode : public StatefulActionNode {
         auto now = node_->now();
         auto duration = (now - start_time_).seconds();
 
-        // 当状态变为 3：已激活
-        if (current_rune_status_ == 3) {
-            RCLCPP_INFO(node_->get_logger(), "Rune Activated successfully!");
+        // 获取需要读取的黑板键值名称与目标脱出状态
+        std::string status_key;
+        int target_state = 1;
+        if (!getInput("status_key", status_key)) {
+            RCLCPP_ERROR(node_->get_logger(),
+                         "RuneStateMachineNode: missing status_key!");
+            return NodeStatus::FAILURE;
+        }
+        getInput("target_state", target_state);
+
+        int current_rune_status = 0;
+        blackboard_->get(status_key, current_rune_status);
+
+        // 当状态达到目标激活状态
+        if (current_rune_status == target_state) {
+            RCLCPP_INFO(node_->get_logger(),
+                        "Rune (%s) Activated successfully!",
+                        status_key.c_str());
             publishActivateCommand(false);
+            publishDisableAutoAim();
             return NodeStatus::SUCCESS;
         }
 
@@ -146,6 +173,7 @@ class RuneStateMachineNode : public StatefulActionNode {
         if (duration > 20.0) {
             RCLCPP_WARN(node_->get_logger(), "Rune Activation TIMEOUT (20s)!");
             publishActivateCommand(false);
+            publishDisableAutoAim();
             return NodeStatus::FAILURE;
         }
 
@@ -158,6 +186,7 @@ class RuneStateMachineNode : public StatefulActionNode {
         RCLCPP_INFO(node_->get_logger(),
                     "RuneStateMachineNode Halted (interrupted)");
         publishActivateCommand(false);
+        publishDisableAutoAim();
     }
 
    private:
@@ -167,12 +196,27 @@ class RuneStateMachineNode : public StatefulActionNode {
         activate_pub_->publish(msg);
     }
 
+    void publishDisableAutoAim() {
+        interfaces::msg::NavOutput msg;
+        msg.header.stamp = node_->now();
+        msg.header.frame_id = "base_link";
+        msg.mode = 4;  // Disable mode
+        msg.point.header = msg.header;
+        msg.point.pose.position.x = 0.0;
+        msg.point.pose.position.y = 0.0;
+        msg.point.pose.position.z = 0.0;
+        // orientation 默认为全0或四元数无旋转状态
+        msg.point.pose.orientation.w = 1.0;
+        msg.point.pose.orientation.x = 0.0;
+        msg.point.pose.orientation.y = 0.0;
+        msg.point.pose.orientation.z = 0.0;
+        nav_output_pub_->publish(msg);
+    }
+
     rclcpp::Node::SharedPtr node_;
+    BT::Blackboard::Ptr blackboard_;
     rclcpp::Time start_time_;
 
-    // 内部状态维护
-    int current_rune_status_;  // 1：未激活 2：正在激活 3：已激活
-
-    rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr status_sub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr activate_pub_;
+    rclcpp::Publisher<interfaces::msg::NavOutput>::SharedPtr nav_output_pub_;
 };

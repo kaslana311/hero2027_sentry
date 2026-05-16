@@ -27,7 +27,7 @@
 #include <vector>
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "interfaces/msg/tracker_output.hpp"
+#include "interfaces/msg/global_target_array.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -84,7 +84,7 @@ class GuardWithAttackNode : public StatefulActionNode {
             std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
         // 读取话题名（构造时读取一次，避免每次 tick 解析）
-        std::string tracker_topic = "/tracker/absolute_targets";
+        std::string tracker_topic = "/global_targets";
         std::string costmap_topic = "/global_costmap/costmap";
 
         // 创建独立 callback group（不阻塞主线程）
@@ -96,11 +96,12 @@ class GuardWithAttackNode : public StatefulActionNode {
         rclcpp::SubscriptionOptions sub_opts;
         sub_opts.callback_group = cb_group_;
 
-        // 订阅 TrackerOutput
+        // 订阅 TrackerOutput (GlobalTargetArray)
         tracker_sub_ =
-            node_->create_subscription<interfaces::msg::TrackerOutput>(
+            node_->create_subscription<interfaces::msg::GlobalTargetArray>(
                 tracker_topic, rclcpp::SensorDataQoS(),
-                [this](const interfaces::msg::TrackerOutput::SharedPtr msg) {
+                [this](
+                    const interfaces::msg::GlobalTargetArray::SharedPtr msg) {
                     std::lock_guard<std::mutex> lock(tracker_mutex_);
                     latest_tracker_ = msg;
                     last_tracker_time_ = node_->now();
@@ -146,8 +147,8 @@ class GuardWithAttackNode : public StatefulActionNode {
             InputPort<int>("occ_threshold", 50, "OccupancyGrid cost 可行阈值"),
             InputPort<double>("nav_update_interval", 2.0,
                               "导航目标最小更新间隔（秒）"),
-            InputPort<std::string>("tracker_topic", "/tracker/absolute_targets",
-                                   "TrackerOutput 话题"),
+            InputPort<std::string>("tracker_topic", "/global_targets",
+                                   "GlobalTargetArray 话题"),
             InputPort<std::string>("costmap_topic", "/global_costmap/costmap",
                                    "代价地图话题"),
         };
@@ -470,7 +471,7 @@ class GuardWithAttackNode : public StatefulActionNode {
      */
     bool findNearestEnemy(double self_x, double self_y, double& ex,
                           double& ey) {
-        interfaces::msg::TrackerOutput::SharedPtr tracker;
+        interfaces::msg::GlobalTargetArray::SharedPtr tracker;
         rclcpp::Time tracker_time;
         {
             std::lock_guard<std::mutex> lock(tracker_mutex_);
@@ -666,11 +667,11 @@ class GuardWithAttackNode : public StatefulActionNode {
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
-    // TrackerOutput 订阅
-    rclcpp::Subscription<interfaces::msg::TrackerOutput>::SharedPtr
+    // TrackerOutput (GlobalTargetArray) 订阅
+    rclcpp::Subscription<interfaces::msg::GlobalTargetArray>::SharedPtr
         tracker_sub_;
     std::mutex tracker_mutex_;
-    interfaces::msg::TrackerOutput::SharedPtr latest_tracker_;
+    interfaces::msg::GlobalTargetArray::SharedPtr latest_tracker_;
     rclcpp::Time last_tracker_time_;
 
     // Costmap 订阅

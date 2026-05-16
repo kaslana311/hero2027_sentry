@@ -6,16 +6,22 @@
 #include <pcl/point_types.h>
 #include <tbb/parallel_for.h>
 #include <yaml-cpp/yaml.h>
-
+#include "dog_map/point_cloud_define.hpp"
 #include <cstdint>
 #include <memory>
 #include <opencv2/core/mat.hpp>
 #include <pcl/impl/point_types.hpp>
 #include <vector>
-
+#include <pcl/filters/crop_box.h>
 #include "dog_map/eigen_alias.hpp"
 #include "dog_map/static_fix_map.hpp"
 using namespace analy_utils;
+const float crop_min_x = -0.5f;
+const float crop_min_y = -0.5f;
+const float crop_min_z = -10.5f;
+const float crop_max_x = 0.8f;
+const float crop_max_y = 0.5f;
+const float crop_max_z = 10.0f;
 template <typename T>
 T yaml_get_value(const YAML::Node& node, const std::string& key) {
     try {
@@ -36,18 +42,20 @@ class OccMap {
            const std::string& pgm_yaml_path = "");
     ~OccMap();
     void InitMap(cv::Mat& grid_map);
-    void Update(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, Pose pose);
+    void Update(pcl::PointCloud<HEROPointXYZK>::Ptr cloud, Pose pose);
     bool IsOccupied(const Vec2i& idx);
     bool IsOccupied(const Vec3i& idx);
     bool IsOccupied(int index);
     bool IsOccupied(int ix, int iy, int iz);
     void Clear();
-    inline void SetLOGParams( int8_t LOG_OCC_HIT, int8_t LOG_OCC_FREE , uint8_t THR_OCC, uint8_t MAX_LOG ,uint8_t MIN_LOG ){
-        this->LOG_OCC_HIT=LOG_OCC_HIT;
-        this->LOG_OCC_FREE=LOG_OCC_FREE;
-        this->THR_OCC=THR_OCC;
-        this->MAX_LOG=MAX_LOG;
-        this->MIN_LOG=MIN_LOG;
+    inline void SetLOGParams( int8_t LOG_OCC_HIT,int8_t LOG_OCC_HIT_1, int8_t LOG_OCC_FREE , uint8_t THR_OCC, uint8_t MAX_LOG_MID360, uint8_t MAX_LOG_ODIN1, uint8_t MIN_LOG ){
+        this->LOG_OCC_HIT[0] = LOG_OCC_HIT;
+        this->LOG_OCC_HIT[1] = LOG_OCC_HIT_1;
+        this->LOG_OCC_FREE = LOG_OCC_FREE;
+        this->THR_OCC = THR_OCC;
+        this->MAX_LOG[0] = MAX_LOG_MID360;
+        this->MAX_LOG[1] = MAX_LOG_ODIN1;
+        this->MIN_LOG = MIN_LOG;
     }
     void racyHandle(const Vec3i& start_idx, const std::vector<Vec3i>& obs_list);
     void UpdateStaticMap(int idx, int idy);
@@ -58,7 +66,7 @@ class OccMap {
     bool IsStaticMapPoint(int index);
     void TimeGoON();
     void PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc);
-    void PassFilter(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, Pose pose);
+    void PassFilter(pcl::PointCloud<HEROPointXYZK>::Ptr cloud_in, Pose pose);
     inline void racyHandle(const Vec3i& start_idx, const Vec3i& end_idx,
                            Vec3f& start_f, Vec3f& res) {
         // TODO  Amanatides-Woo
@@ -135,7 +143,7 @@ class OccMap {
     double resolution_z;
     int frame_save_;
     std::string pgm_yaml_path;
-
+    pcl::CropBox<HEROPointXYZK> crop_box_filter_;
    private:
     cv::Mat grid_map_;
     uint8_t* occ_map;
@@ -153,9 +161,9 @@ class OccMap {
     std::map<int, long long> time_list_;  //索引+未观测到的累计帧数
 
 
-    int8_t LOG_OCC_HIT = 40;   // 占据增量
+    int8_t LOG_OCC_HIT[2] = {40, 40};   // 占据增量
     int8_t LOG_OCC_FREE = -3;  // 空闲减量
     uint8_t THR_OCC = 30;      // 判定为障碍物的阈值
-    uint8_t MAX_LOG = 100;
+    uint8_t MAX_LOG[2] = {100, 100} ;   // 最大对数概率
     uint8_t MIN_LOG = 5;
 };

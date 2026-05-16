@@ -1,10 +1,10 @@
 hero_lidar_scan_node:
   ros__parameters:
     # 话题配置
-    lidar1_topic: "livox/lidar_192_168_1_193"  # 左雷达
+    lidar1_topic: "/livox/fused_cloud"  # 左雷达
     lidar2_topic: "livox/lidar_192_168_1_126"  # 右雷达
     odom_topic: "/odin1/odometry_highfreq"
-    fused_cloud_topic: "/odin/cloud_slam"
+    fused_cloud_topic: "/livox/cloud_scans"
 
     # 雷达1外参 (相对于base_link)
     lidar1_x: 0.0

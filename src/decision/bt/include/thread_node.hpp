@@ -35,6 +35,9 @@ class BlackboardUpdater {
                 blackboard_->set("competition_type", msg->competition_type);
                 blackboard_->set("competition_stage", msg->competition_stage);
                 blackboard_->set("stage_time", msg->stage_time);
+                blackboard_->set("enemy_outpost_status", msg->dart_target);
+                blackboard_->set("small_energy_state", msg->small_energy_state);
+                blackboard_->set("big_energy_state", msg->big_energy_state);
 
                 // 根据预先知道的我方颜色对裁判系统消息区分敌我
                 if (is_red_team_) {

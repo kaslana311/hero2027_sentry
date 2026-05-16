@@ -6,9 +6,9 @@
       init_yaw: 0.0
       init_pitch: 0.0
       init_roll: 0.0
-      init_pose: [0.0,0.0,0.0, 0.0, 0.0, 0.0]
+      init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
       pcd_path: "src/common/point_cloud_files/filtered_pcd/fast_lio_latest_map.pcd"
-      cloud_topic: "/odin1/cloud_slam"
+      cloud_topic: "/livox/cloud_scans"
       # 添加角度约束参数S
       gate_yaw_deg: 15.0     # 偏航角约束范围（正负2度）
       gate_pitch_deg: 100.5   # 俯仰角约束范围（正负5度）
@@ -30,19 +30,19 @@
       f_min_z: -20.5
       f_max_x: 10.6
       f_max_y: 10.37
-      f_max_z: 45.0
+      f_max_z: 2.0
 
       scan_z_min: -0.1
       scan_z_max: 0.3
       resolution: 0.01
       use_precomputed_contour_map: true
       contour_map_pgm_path: "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/fast_lio_latest_map_contour.pgm"
-      contour_map_origin_x: -0.861736
-      contour_map_origin_y: -7.53321
+      contour_map_origin_x: -7.38124
+      contour_map_origin_y: -9.0111
       match_tolerance_cells: 1
       search_x_bounds: 0.20
       search_y_bounds: 0.20
       search_yaw_bounds_deg: 20.0
       trans_step: 0.01
-      yaw_step_deg: 0.2
-      max_scan_count: 5
+      yaw_step_deg: 0.1
+      max_scan_count: 10
