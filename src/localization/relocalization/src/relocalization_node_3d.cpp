@@ -226,10 +226,10 @@ void RelocalizationNode::GlobalLocalizationTimerCallback() {
     const double yaw_step = std::max(0.5, yaw_search_step_deg_) * M_PI / 180.0;
     std::vector<double> yaw_seeds;
     yaw_seeds.push_back(0.0);
-    for (double a = yaw_step; a <= yaw_gate + 1e-6; a += yaw_step) {
-        yaw_seeds.push_back(+a);
-        yaw_seeds.push_back(-a);
-    }
+    // for (double a = yaw_step; a <= yaw_gate + 1e-6; a += yaw_step) {
+    //     yaw_seeds.push_back(+a);
+    //     yaw_seeds.push_back(-a);
+    // }
     static bool first = true;
     double best_fitness = 1.0;
     bool success = false;
