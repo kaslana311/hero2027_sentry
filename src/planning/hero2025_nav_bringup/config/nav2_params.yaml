@@ -242,7 +242,7 @@ smoother_server:
       stage1_max_iterations: 8000     # 阶段1 最大迭代次数
       # ========== 第二阶段优化权重：优化动力学性质 ==========
       weight_smooth: 1.0           # 平滑性权重
-      weight_obstacle: 5000.0       # 避障权重（ESDF）
+      weight_obstacle: 7500.0       # 避障权重（ESDF）
       weight_feasibility: 100.0     # 动力学可行性权重
       weight_time: 25.0            # 时间正则化权重
       weight_mean_time: 100.0          # 平均时间约束权重
