@@ -44,6 +44,9 @@ int main(int argc, char** argv) {
     blackboard->set<int>("competition_type", 0);
     blackboard->set<int>("competition_stage", 0);
     blackboard->set<int>("stage_time", 0);
+    blackboard->set<int>("enemy_outpost_status", 0);
+    blackboard->set<int>("small_energy_state", 0);
+    blackboard->set<int>("big_energy_state", 0);
 
     blackboard->set("friend_hero", 400);
     blackboard->set("friend_engineer", 400);

@@ -83,19 +83,19 @@
                 <Sequence>
                   <CheckValue value="{big_rune_flag_1}" expected="0" operator="eq"/>
                   <CheckValue value="{stage_time}" expected="240" operator="le"/>
-                  <CheckValue value="{stage_time}" expected="165" operator="gt"/>
+                  <CheckValue value="{stage_time}" expected="150" operator="gt"/>
                   <CheckValue value="{current_hp}" expected="100" operator="gt"/>
                   <LogMessage message="尝试激活第一次大能量机关"/>
                   <ReactiveSequence>
-                    <CheckValue value="{stage_time}" expected="165" operator="gt"/>
-                    <CheckValue value="{stage_time}" expected="330" operator="le"/>
-                    <CheckValue value="{stage_time}" expected="240" operator="gt"/>
+                    <CheckValue value="{stage_time}" expected="240" operator="le"/>
+                    <CheckValue value="{stage_time}" expected="150" operator="gt"/>
+                    <CheckValue value="{current_hp}" expected="100" operator="gt"/>
                     <Nav x="7.03" y="-3.51" />
                   </ReactiveSequence>
                   <ReactiveSequence>
                     <!-- mode 3: Large Energy -->
-                    <CheckValue value="{stage_time}" expected="330" operator="le"/>
-                    <CheckValue value="{stage_time}" expected="240" operator="gt"/>
+                    <CheckValue value="{stage_time}" expected="240" operator="le"/>
+                    <CheckValue value="{stage_time}" expected="150" operator="gt"/>
                     <PublishNavOutput target_tf_name="rune" mode="3"/>
                     <RuneStateMachine flag_name="big_rune_flag_1" status_key="big_energy_state" target_state="1"/>
                   </ReactiveSequence>
@@ -103,19 +103,19 @@
 
                 <Sequence>
                   <CheckValue value="{big_rune_flag_2}" expected="0" operator="eq"/>
-                  <CheckValue value="{stage_time}" expected="165" operator="le"/>
+                  <CheckValue value="{stage_time}" expected="150" operator="le"/>
                   <CheckValue value="{stage_time}" expected="90" operator="gt"/>
                   <CheckValue value="{current_hp}" expected="100" operator="gt"/>
                   <LogMessage message="尝试激活第二次大能量机关"/>
                   <ReactiveSequence>
-                    <CheckValue value="{stage_time}" expected="330" operator="le"/>
-                    <CheckValue value="{stage_time}" expected="240" operator="gt"/>
+                    <CheckValue value="{stage_time}" expected="150" operator="le"/>
                     <CheckValue value="{stage_time}" expected="90" operator="gt"/>
+                    <CheckValue value="{current_hp}" expected="100" operator="gt"/>
                     <Nav x="7.03" y="-3.51" />
                   </ReactiveSequence>
                   <ReactiveSequence>
-                    <CheckValue value="{stage_time}" expected="330" operator="le"/>
-                    <CheckValue value="{stage_time}" expected="240" operator="gt"/>
+                    <CheckValue value="{stage_time}" expected="150" operator="le"/>
+                    <CheckValue value="{stage_time}" expected="90" operator="gt"/>
                     <PublishNavOutput target_tf_name="rune" mode="3"/>
                     <RuneStateMachine flag_name="big_rune_flag_2" status_key="big_energy_state" target_state="1"/>
                   </ReactiveSequence>
@@ -128,14 +128,14 @@
                   <CheckValue value="{current_hp}" expected="100" operator="gt"/>
                   <LogMessage message="尝试激活第三次大能量机关"/>
                   <ReactiveSequence>
-                    <CheckValue value="{stage_time}" expected="330" operator="le"/>
-                    <CheckValue value="{stage_time}" expected="240" operator="gt"/>
+                    <CheckValue value="{stage_time}" expected="90" operator="le"/>
                     <CheckValue value="{stage_time}" expected="0" operator="gt"/>
+                    <CheckValue value="{current_hp}" expected="100" operator="gt"/>
                     <Nav x="7.03" y="-3.51" />
                   </ReactiveSequence>
                   <ReactiveSequence>
-                    <CheckValue value="{stage_time}" expected="330" operator="le"/>
-                    <CheckValue value="{stage_time}" expected="240" operator="gt"/>
+                    <CheckValue value="{stage_time}" expected="90" operator="le"/>
+                    <CheckValue value="{stage_time}" expected="0" operator="gt"/>
                     <PublishNavOutput target_tf_name="rune" mode="3"/>
                     <RuneStateMachine flag_name="big_rune_flag_3" status_key="big_energy_state" target_state="1"/>
                   </ReactiveSequence>
