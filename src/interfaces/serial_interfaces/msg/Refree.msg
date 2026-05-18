@@ -71,6 +71,8 @@ bool sentry_confirm_revive
 bool sentry_immediate_revive
 uint16 sentry_revive_cost
 
+uint8 energy_mechanism_available
+
 # 附加状态
 bool additional_status_bit0
 uint16 additional_status_bits1_11  # Bits 1-11: 17mm剩余可兑换数

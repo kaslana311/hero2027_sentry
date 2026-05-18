@@ -16,7 +16,7 @@ typedef struct {
 
 // 哨兵自主决策指令信息子命令id:0x120(机器人间通信)
 #pragma pack(push, 1)
-//哨兵自主决策指令信息子命令id:0x120(0x301)
+// 哨兵自主决策指令信息子命令id:0x120(0x301)
 typedef struct {
     uint32_t confirm_revive : 1;  // 0bit, 是否确认复活，0表示不复活，1表示复活
     uint32_t
@@ -34,7 +34,7 @@ typedef struct {
     uint32_t
         energy_mechanism_activate : 1;  // 23bit,
                                         // 是否激活能量机关，0为默认，1表示激活
-    uint32_t reserved : 8;  // 24-31bit, 保留位，当前未使用
+    uint32_t reserved : 8;              // 24-31bit, 保留位，当前未使用
 } sentry_cmd_info_t;
 #pragma pack(pop)
 
@@ -55,14 +55,14 @@ typedef struct {
     uint16_t stage_remain_time;  // 当前阶段剩余时间
     uint8_t dart_target : 4;  // 当前飞镖靶标，0反应敌方前哨站存活，非0即被摧毁
     uint8_t
-        small_energy_state : 2;  // 小能量机关状态 0为默认 1为激活 2为正在激活
+        small_energy_state : 2;    // 小能量机关状态 0为默认 1为激活 2为正在激活
     uint8_t big_energy_state : 2;  // 大能量机关状态 0为默认 1为激活 2为正在激活
 } Game_info_t;                     // 比赛状态数据
 #pragma pack(pop)
 
 #pragma pack(push, 1)
 typedef struct {
-    uint16_t robot_1_HP;  // 己方 英雄机器人血量，未上场以及罚下血量为 0
+    uint16_t robot_1_HP;   // 己方 英雄机器人血量，未上场以及罚下血量为 0
     uint16_t robot_2_HP;   // 己方 工程机器人血量
     uint16_t robot_3_HP;   // 己方 步兵机器人血量
     uint16_t robot_4_HP;   // 己方 步兵机器人血量
@@ -124,12 +124,51 @@ typedef struct {
 } Ground_robot_position_t;  // 地面机器人位置数据
 #pragma pack(pop)
 
+// #pragma pack(push, 1)
+// typedef struct  //
+// 这里的该信息是指裁判系统反馈的数据，两个字节，和上边那个不一样（具体内容查看手册中id:0x20D）
+// {
+//     uint32_t sentry_info;
+//     uint16_t sentry_info_2;
+// } Sentry_info_t;  // 哨兵自主决策反馈数据
+// #pragma pack(pop)
+
+/* ID: 0x020D  Byte:  4   哨兵自主决策信息同步，固定以1Hz频率发送  */
 #pragma pack(push, 1)
-typedef struct  // 这里的该信息是指裁判系统反馈的数据，两个字节，和上边那个不一样（具体内容查看手册中id:0x20D）
-{
-    uint32_t sentry_info;
-    uint16_t sentry_info_2;
-} Sentry_info_t;  // 哨兵自主决策反馈数据
+typedef struct {
+    uint32_t exchanged_ammo_amount : 11;  // bit0~10,
+                                          // 哨兵成功兑换的允许发弹量，开局为0
+    uint32_t
+        remote_exchange_ammo_count : 4;  // bit11~14,
+                                         // 哨兵成功远程兑换允许发弹量的次数，开局为0
+    uint32_t
+        remote_exchange_health_count : 4;  // bit15~18,
+                                           // 哨兵成功远程兑换血量的次数，开局为0
+    uint32_t
+        free_revive_available : 1;  // bit19, 当前是否可以确认免费复活，1=可以
+    uint32_t exchange_revive_available : 1;  // bit20,
+                                             // 当前是否可以兑换立即复活，1=可以
+    uint32_t exchange_revive_cost : 10;      // bit21~30,
+                                         // 当前若兑换立即复活需要花费的金币数
+    uint32_t reserved : 1;  // bit31, 保留
+} sentry_info_t;
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+typedef struct {
+    uint16_t disengage_status : 1;            // bit0, 脱战状态
+    uint16_t exchange_17mm_amount : 11;       // bit1~11, 17mm 兑换数
+    uint16_t sentry_posture : 2;              // bit12~13, 姿态
+    uint16_t energy_mechanism_available : 1;  // bit14, 能量机关可激活
+    uint16_t reserved : 1;                    // bit15, 保留
+} sentry_info_2_t;
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+typedef struct {
+    sentry_info_t sentry_info;
+    sentry_info_2_t sentry_info_2;
+} ext_sentry_info_t;
 #pragma pack(pop)
 
 #pragma pack(push, 1)
@@ -177,13 +216,13 @@ typedef struct {
 #pragma pack(pop)
 
 /***********设置的CMDid,发送次数，发送周期********************************* */
-#define CMD_ID_VISUAL_CTRL 0x01   // 视觉发送控制指令ID
-#define CMD_ID_VISUAL_RADAR 0x02  // 视觉发送雷达数据ID
+#define CMD_ID_VISUAL_CTRL 0x01      // 视觉发送控制指令ID
+#define CMD_ID_VISUAL_RADAR 0x02     // 视觉发送雷达数据ID
 #define CMD_ID_SENTRY_CMD_INFO 0x03  // 视觉发送哨兵数据ID（视觉发送给底盘）
-#define CMD_ID_GAME_INFO 0x04             // 向视觉发送比赛信息
+#define CMD_ID_GAME_INFO 0x04        // 向视觉发送比赛信息
 #define CMD_ID_GAME_ROBOT_survivors 0x05  // 向视觉发送机器人血量信息
 #define CMD_ID_EVENT_DATA 0x06            // 向视觉发送场地事件信息
-#define CMD_ID_ROBOT_INFO 0x07  // 向视觉发送机器人信息（自身信息）
+#define CMD_ID_ROBOT_INFO 0x07            // 向视觉发送机器人信息（自身信息）
 #define CMD_ID_ROBOT_POSITION \
     0x08  // 向视觉发送本机器人位置信息（自身位置信息）
 #define CMD_ID_Bullet_remaining 0x09  // 向视觉发送剩余子弹数和剩余金币数量
@@ -197,13 +236,13 @@ typedef struct {
 #define CMD_ID_com_opponent_position 0x0F  // 多机通信-对方机器人位置数据ID
 
 // 设置 发送次数（有限次就写正整数，无限次发送写-1） 和 每几个周期发送一次
-#define CMD_SET_VISUAL_CTRL -1, 2   // 视觉发送控制指令
-#define CMD_SET_VISUAL_RADAR -1, 2  // 视觉发送雷达数据ID
+#define CMD_SET_VISUAL_CTRL -1, 2      // 视觉发送控制指令
+#define CMD_SET_VISUAL_RADAR -1, 2     // 视觉发送雷达数据ID
 #define CMD_SET_SENTRY_CMD_INFO -1, 2  // 视觉发送哨兵数据ID（视觉发送给底盘）
-#define CMD_SET_GAME_INFO -1, 2             // 向视觉发送比赛信息
+#define CMD_SET_GAME_INFO -1, 2        // 向视觉发送比赛信息
 #define CMD_SET_GAME_ROBOT_survivors -1, 2  // 向视觉发送机器人血量信息
 #define CMD_SET_EVENT_DATA -1, 2            // 向视觉发送场地事件信息
-#define CMD_SET_ROBOT_INFO -1, 2  // 向视觉发送机器人信息（自身信息）
+#define CMD_SET_ROBOT_INFO -1, 2            // 向视觉发送机器人信息（自身信息）
 #define CMD_SET_ROBOT_POSITION \
     -1, 2  // 向视觉发送本机器人位置信息（自身位置信息）
 #define CMD_SET_Bullet_remaining -1, 2  // 向视觉发送剩余子弹数和剩余金币数量

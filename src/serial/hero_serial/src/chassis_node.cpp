@@ -235,6 +235,8 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     Attach_Receive_callback(
         CMD_ID_com_opponent_position, sizeof(com_opponent_position_t),
         (void*)&com_opponent_position_data, OpponentPosition_Global_Callback);
+    Attach_Receive_callback(CMD_ID_Sentry_info, sizeof(ext_sentry_info_t),
+                            (void*)&ext_sentry_info_data, Callback_func_data1);
 
     Attach_SendCmd(serial_dev_,               // 设备句柄
                    CMD_ID_VISUAL_CTRL,        // 命令ID
@@ -476,6 +478,8 @@ void ChassisNode::RefreePubTimerCallback() {
     msg.current_hp = robot_info_t_data.remain_HP;
 
     msg.bullet_17mm = robot_info_t_data.shooter_cooling_rate;
+    msg.energy_mechanism_available =
+        ext_sentry_info_data.sentry_info_2.energy_mechanism_available;
     // msg.projectile_allowance_fortress =
     //     bullet_remaining_t_data.projectile_allowance_fortress;
     refree_pub_->publish(msg);
