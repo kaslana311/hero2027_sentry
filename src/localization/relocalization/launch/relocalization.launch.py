@@ -18,6 +18,20 @@ def generate_launch_description():
     parameters=[os.path.join(os.path.join(get_package_share_directory('tf_manager')),"config","tf_manage_node.yaml")]
   )
 
+  static_tf_outpost_node = Node(
+    package='tf2_ros',
+    executable='static_transform_publisher',
+    name='static_tf_map_to_outpost',
+    arguments=['11.5', '3.7', '1.0', '0.0', '0.0', '0', 'map', 'outpost']
+  )
+
+  static_tf_rune_node = Node(
+    package='tf2_ros',
+    executable='static_transform_publisher',
+    name='static_tf_map_to_rune',
+    arguments=['9.11', '-0.262', '1.0', '0.0', '0.0', '0', 'map', 'rune']
+  )
+
   relocalization_node = Node(
     package='relocalization',
     executable='relocalization_node',
@@ -40,5 +54,5 @@ def generate_launch_description():
           arguments=['-d', rviz_config_file],
           output='own_log')
   
-  return LaunchDescription([relocalization_node,declare_rviz_config_file_cmd,start_rviz_cmd])
+  return LaunchDescription([static_tf_outpost_node, static_tf_rune_node, relocalization_node,declare_rviz_config_file_cmd,start_rviz_cmd])
   # return LaunchDescription([odom_base_link_node]) 

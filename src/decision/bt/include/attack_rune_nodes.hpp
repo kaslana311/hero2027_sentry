@@ -165,7 +165,7 @@ class RuneStateMachineNode : public StatefulActionNode {
                         "Rune (%s) Activated successfully!",
                         status_key.c_str());
             publishActivateCommand(false);
-            publishDisableAutoAim();
+            // publishDisableAutoAim();
             return NodeStatus::SUCCESS;
         }
 
@@ -173,7 +173,7 @@ class RuneStateMachineNode : public StatefulActionNode {
         if (duration > 20.0) {
             RCLCPP_WARN(node_->get_logger(), "Rune Activation TIMEOUT (20s)!");
             publishActivateCommand(false);
-            publishDisableAutoAim();
+            // publishDisableAutoAim();
             return NodeStatus::FAILURE;
         }
 
@@ -186,7 +186,7 @@ class RuneStateMachineNode : public StatefulActionNode {
         RCLCPP_INFO(node_->get_logger(),
                     "RuneStateMachineNode Halted (interrupted)");
         publishActivateCommand(false);
-        publishDisableAutoAim();
+        // publishDisableAutoAim();
     }
 
    private:

@@ -1,16 +1,16 @@
-*-refree_pub:
+refree_pub:
   ros__parameters:
     competition_type: 1
-    competition_stage: 4 
-    stage_time: 100
+    competition_stage: 1 
+    stage_time: 410
+    dart_target: 0
+
+    small_energy_state: 0
+    big_energy_state: 0
+
     current_hp: 400
     is_reached: true
     
-    red_outpost: 400
-
-    blue_hero: 300
-    blue_outpost: 400
+    robot_id: 7
+    current_hp: 600
     bullet_17mm: 400
-
-    hero_x: 0.0
-    hero_y: 1.5
