@@ -160,7 +160,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
 
     // 发布裁判系统信息给决策节点
     refree_pub_ = this->create_publisher<serial_interfaces::msg::Refree>(
-        "refree_msg", 10);  // 使用默认组
+        "refree_msg_back", 10);  // 使用默认组
     // 触发式消息发送
     trigger_pub_ = this->create_publisher<geometry_msgs::msg::Point>(
         "trigger_msg", 10);  // 使用默认组
@@ -171,7 +171,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
 
     // 雷达(全局敌方)位置发布器
     radar_pub_ = this->create_publisher<interfaces::msg::GlobalTargetArray>(
-        "/tracker/radar_back", rclcpp::SensorDataQoS());
+        "/tracker/radar", rclcpp::SensorDataQoS());
 
     reach_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
         "arrived_at_goal", 10,

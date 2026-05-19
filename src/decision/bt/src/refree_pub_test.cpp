@@ -26,6 +26,8 @@ class RefreeSimulatorNode : public rclcpp::Node {
         this->declare_parameter("small_energy_state", 0);
         this->declare_parameter("big_energy_state", 0);
 
+        this->declare_parameter("rune_available", 1);
+
         this->declare_parameter("robot_id", 7);      // 7 蓝方哨兵
         this->declare_parameter("current_hp", 600);  // 哨兵当前血量
         this->declare_parameter("bullet_17mm", 100);
@@ -42,6 +44,7 @@ class RefreeSimulatorNode : public rclcpp::Node {
         msg.small_energy_state =
             this->get_parameter("small_energy_state").as_int();
         msg.big_energy_state = this->get_parameter("big_energy_state").as_int();
+        msg.energy_mechanism_available = this->get_parameter("rune_available").as_int();
 
         msg.robot_id = this->get_parameter("robot_id").as_int();
         msg.current_hp = this->get_parameter("current_hp").as_int();

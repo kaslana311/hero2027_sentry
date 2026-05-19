@@ -6,6 +6,7 @@
 #include <tf2_ros/transform_listener.h>
 
 #include <chrono>
+#include <rclcpp/qos.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/u_int8.hpp>
@@ -31,7 +32,7 @@ class PublishNavOutputNode : public SyncActionNode {
 
         // 创建发布者
         publisher_ = node_->create_publisher<interfaces::msg::NavOutput>(
-            "/carrot_pose", 10);
+            "/carrot_pose", rclcpp::SensorDataQoS());
     }
 
     static PortsList providedPorts() {

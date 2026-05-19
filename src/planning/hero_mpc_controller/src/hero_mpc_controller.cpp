@@ -47,6 +47,7 @@
 #include <algorithm>
 #include <cmath>
 #include <rclcpp/logging.hpp>
+#include <rclcpp/qos.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "nav2_core/exceptions.hpp"
@@ -197,7 +198,7 @@ void HeroMpcController::configure(
         node->create_publisher<visualization_msgs::msg::MarkerArray>(
             plugin_name_ + "/reference_path", 10);
     carrot_pose_pub_ = node->create_publisher<interfaces::msg::NavOutput>(
-        "/carrot_pose", 10);
+        "/carrot_pose", rclcpp::SensorDataQoS());
 
     RCLCPP_INFO(logger_, "[%s] 配置完成: max_vel=%.2f, max_omega=%.2f, dt=%.4f",
                 plugin_name_.c_str(), max_vel_, max_omega_,
@@ -690,13 +691,13 @@ void HeroMpcController::publishPredictedPath(
             // 才发布，避免导航过冲时产生原地掉头
             double dist_to_base = std::hypot(carrot_in_base.pose.position.x,
                                              carrot_in_base.pose.position.y);
-            if (dist_to_base > 0.15) {
-                interfaces::msg::NavOutput nav_output_msg;
-                nav_output_msg.header = carrot_in_base.header;
-                nav_output_msg.mode = 0; // 0: normal navigation
-                nav_output_msg.point = carrot_in_base;
-                carrot_pose_pub_->publish(nav_output_msg);
-            }
+            // if (dist_to_base > 0.15) {
+            interfaces::msg::NavOutput nav_output_msg;
+            nav_output_msg.header = carrot_in_base.header;
+            nav_output_msg.mode = 0; // 0: normal navigation
+            nav_output_msg.point = carrot_in_base;
+            carrot_pose_pub_->publish(nav_output_msg);
+            // }
         } catch (const tf2::TransformException& ex) {
             RCLCPP_WARN_THROTTLE(logger_, *clock_, 1000,
                                  "[%s] 无法获取 map->base_link 变换: %s",
