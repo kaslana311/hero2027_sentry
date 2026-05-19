@@ -48,6 +48,8 @@ int main(int argc, char** argv) {
     blackboard->set<int>("small_energy_state", 0);
     blackboard->set<int>("big_energy_state", 0);
 
+    blackboard->set<int>("rune_available", 0);
+
     blackboard->set("friend_hero", 400);
     blackboard->set("friend_engineer", 400);
     blackboard->set("friend_infantry3", 400);

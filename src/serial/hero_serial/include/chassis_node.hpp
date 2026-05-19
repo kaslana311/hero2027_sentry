@@ -123,7 +123,7 @@ class ChassisNode : public rclcpp::Node {
     Bullet_remaining_t bullet_remaining_t_data = {0, 0, 0, 0};
     Ground_robot_position_t ground_robot_position_t_data = {0, 0, 0, 0,
                                                             0, 0, 0, 0};
-    Sentry_info_t sentry_info_t_data = {0, 0};
+    // Sentry_info_t sentry_info_t_data = {0, 0};
     ext_sentry_info_t ext_sentry_info_data = {0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 0, 0};
     Game_robot_survivors_t game_robot_survivors = {400, 400, 400,  400,

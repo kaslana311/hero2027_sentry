@@ -103,6 +103,8 @@ class BlackboardUpdater {
                 blackboard_->set("heat_limit", msg->heat_limit);
                 blackboard_->set("chassis_heat_limit", msg->chassis_heat_limit);
 
+                blackboard_->set("rune_available", msg->energy_mechanism_available);
+
                 // 位置信息
                 blackboard_->set("position_x", msg->position_x);
                 blackboard_->set("position_y", msg->position_y);
