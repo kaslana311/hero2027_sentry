@@ -7,14 +7,15 @@
 #include <Eigen/Dense>
 #include <memory>
 #include <mutex>
+#include <rclcpp/publisher.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
 #include <unordered_map>
 #include <visualization_msgs/msg/marker_array.hpp>
-
+#include "nav_cv_bridge/color_info_map.hpp"
 #include "interfaces/msg/global_target_array.hpp"
 #include "interfaces/msg/tracker_output.hpp"
-
+#include "serial_interfaces/msg/mask_id.hpp"
 namespace nav_cv_bridge {
 
 struct TargetState {
@@ -53,12 +54,12 @@ class AutoaimTracker : public rclcpp::Node {
         global_target_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
         marker_pub_;
-
+    rclcpp::Publisher<serial_interfaces::msg::MaskID>::SharedPtr mask_id_pub_;
     rclcpp::TimerBase::SharedPtr timer_;
 
     std::mutex targets_mutex_;
     std::unordered_map<std::string, TargetState> targets_;
-
+    std::shared_ptr<colorMap::ColorMapModel> color_map_model_;
     // 参数
     double timeout_sec_{1.0};
     double radar_switch_dist_{5.5};

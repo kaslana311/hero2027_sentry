@@ -1,5 +1,4 @@
 #include "nav_cv_bridge/autoaim_tracker.hpp"
-
 #include <memory>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -16,12 +15,18 @@ AutoaimTracker::AutoaimTracker(const rclcpp::NodeOptions& options)
     this->declare_parameter("timeout_sec", 1.0);
     this->declare_parameter("radar_switch_dist", 5.5);
     this->declare_parameter("autoaim_switch_dist", 4.5);
-
+    this->declare_parameter("color_map_file", "/home/z/ros_ws/src/pb2025_sentry_nav/pb2025_nav_bringup/map/simulation/rmul_2026.png");
+    this->declare_parameter("yaml_file", "/home/z/ros_ws/src/pb2025_sentry_nav/pb2025_nav_bringup/map/simulation/rmul_2026.yaml");
+    std::string color_map_file, yaml_file;
+    this->get_parameter("yaml_file", yaml_file);
+    this->get_parameter("color_map_file", color_map_file);
+    color_map_model_= std::make_shared<colorMap::ColorMapModel>(color_map_file, yaml_file);
     autoaim_switch_dist_ =
         this->get_parameter("autoaim_switch_dist").as_double();
     radar_switch_dist_ = this->get_parameter("radar_switch_dist").as_double();
     timeout_sec_ = this->get_parameter("timeout_sec").as_double();
-
+    mask_id_pub_ = this->create_publisher<serial_interfaces::msg::MaskID>(
+        "MaskID", rclcpp::QoS(10));
     autoaim_sub_ = this->create_subscription<interfaces::msg::TrackerOutput>(
         "/tracker/autoaim", rclcpp::SensorDataQoS(),
         std::bind(&AutoaimTracker::autoaimCallback, this,
@@ -190,6 +195,17 @@ void AutoaimTracker::timerCallback() {
             final_pos = state.autoaim_pos_map;
             g_target.position = final_pos;
         }
+        if(g_target.id=="2"&&color_map_model_){
+           unsigned int mx,my;
+           if(color_map_model_->World2ColorMap(g_target.position.x, g_target.position.y, mx, my)){
+           if(color_map_model_->GetColorMapInfo(mx,  my) == colorMap::RED) {
+                serial_interfaces::msg::MaskID mask_msg;
+                mask_msg.mask_id .push_back(g_target.id); 
+                mask_id_pub_->publish(mask_msg);
+                RCLCPP_INFO(this->get_logger(), "目标 %s 位于豁免区域，发布 MaskID=1", g_target.id.c_str());
+            continue;}
+        }
+    }
 
         out_msg->targets.push_back(g_target);
 

@@ -4,12 +4,15 @@
 #include <random>
 #include <std_msgs/msg/bool.hpp>
 #include <thread>
-
+#include <serial_interfaces/msg/target_switch.hpp>
+#include <serial_interfaces/msg/target_switchs.hpp>
+#include <serial_interfaces/msg/refree.hpp>
+#include <serial_interfaces/msg/radar.hpp>
 #include "behavior_node.hpp"
 #include "cruiser_node.hpp"
 #include "feasibility_calculate_node.hpp"
 #include "geometry_msgs/msg/point_stamped.hpp"
-#include "serial_interfaces/msg/gimbaldecision.hpp"
+
 
 using namespace std::literals;
 
@@ -370,7 +373,7 @@ class GimbalSerialNode {
         : node_(node), blackboard_(blackboard), running_(false) {
         // 创建发布者
         gimbal_pub_ =
-            node_->create_publisher<serial_interfaces::msg::Gimbaldecision>(
+            node_->create_publisher<serial_interfaces::msg::TargetSwitchs>(
                 "gimbal_decision", 10);
 
         RCLCPP_INFO(node_->get_logger(), "云台控制节点已创建");
@@ -397,41 +400,17 @@ class GimbalSerialNode {
         rclcpp::Rate rate(10);  // 10Hz的更新频率
 
         while (running_ && rclcpp::ok()) {
-            auto msg = serial_interfaces::msg::Gimbaldecision();
-            msg.targets.resize(7);
-
+            auto msg = serial_interfaces::msg::TargetSwitchs();
+            msg.header.stamp = node_->now();
+            msg.ts.resize(7);
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 // 从黑板读取数据
-                uint8_t is_auto_aim;
-                if (blackboard_->get("is_auto_aim", is_auto_aim)) {
-                    msg.is_auto_aim = is_auto_aim;
-                }
-
-                uint8_t auto_aim_mode;
-                if (blackboard_->get("auto_aim_mode", auto_aim_mode)) {
-                    msg.auto_aim_mode = auto_aim_mode;
-                }
-
-                std::vector<serial_interfaces::msg::Target> targets;
+                std::vector<serial_interfaces::msg::TargetSwitch> targets;
                 if (blackboard_->get("targets", targets)) {
-                    msg.targets = targets;
+                    msg.ts = targets;
                 }
 
-                uint8_t is_gimbal_patrol;
-                if (blackboard_->get("is_gimbal_patrol", is_gimbal_patrol)) {
-                    msg.is_gimbal_patrol = is_gimbal_patrol;
-                }
-
-                float yaw_degrees;
-                if (blackboard_->get("yaw_degrees", yaw_degrees)) {
-                    msg.yaw_degrees = yaw_degrees;
-                }
-
-                uint8_t is_reached;
-                if (blackboard_->get("is_reached", is_reached)) {
-                    msg.is_reached = is_reached;
-                }
             }
 
             // 发布消息
@@ -446,7 +425,7 @@ class GimbalSerialNode {
     std::atomic<bool> running_;
     std::thread update_thread_;
     std::mutex mutex_;
-    rclcpp::Publisher<serial_interfaces::msg::Gimbaldecision>::SharedPtr
+    rclcpp::Publisher<serial_interfaces::msg::TargetSwitchs>::SharedPtr
         gimbal_pub_;
 };
 

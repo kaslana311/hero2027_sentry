@@ -5,7 +5,7 @@ project(interfaces)
 if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
-
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)

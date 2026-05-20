@@ -3,7 +3,7 @@
 #include <behaviortree_cpp/condition_node.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
-
+#include <behaviortree_cpp/basic_types.h>
 #include <cmath>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <mutex>
@@ -11,11 +11,12 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <string>
-
+#include <std_msgs/msg/bool.hpp>
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "serial_interfaces/msg/gimbaldecision.hpp"
-#include "serial_interfaces/msg/target.hpp"
+#include "serial_interfaces/msg/target_switch.hpp"
+
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 using namespace BT;
@@ -332,29 +333,17 @@ class AutoAimManagerNode : public ConditionNode {
 
     static PortsList providedPorts() {
         return {
-            InputPort<uint8_t>("is_auto_aim", "是否自瞄"),
-            InputPort<uint8_t>("auto_aim_mode", "自瞄模式"),
-            // InputPort<std::vector<serial_interfaces::msg::Target>>("targets",
-            // "目标优先级数组"),
             InputPort<std::string>("targets", "目标优先级数组（JSON 格式）"),
-            InputPort<uint8_t>("is_gimbal_patrol", "是否巡逻"),
-            InputPort<float>("yaw_degrees", "目标角度"),
-            InputPort<uint8_t>("is_reached", "是否到达终点")};
+            };
     }
 
     BT::NodeStatus tick() override {
         uint8_t is_auto_aim, auto_aim_mode, is_gimbal_patrol, is_reached;
         float yaw_degrees;
         std::string targets_str;
-        std::vector<serial_interfaces::msg::Target> targets;
+        std::vector<serial_interfaces::msg::TargetSwitch> targets;
 
         // 从端口获取所有输入并写入黑板
-        if (getInput("is_auto_aim", is_auto_aim)) {
-            config().blackboard->set("is_auto_aim", is_auto_aim);
-        }
-        if (getInput("auto_aim_mode", auto_aim_mode)) {
-            config().blackboard->set("auto_aim_mode", auto_aim_mode);
-        }
         if (getInput("targets", targets_str)) {
             try {
                 // 解析 JSON 字符串
@@ -362,9 +351,10 @@ class AutoAimManagerNode : public ConditionNode {
                 targets.resize(7);
                 // 将 JSON 数据转换为 Target 类型，并填充到 targets 数组
                 for (auto& el : j) {
-                    serial_interfaces::msg::Target target;
+                    serial_interfaces::msg::TargetSwitch target;
                     target.type = el["type"].get<uint8_t>();
                     target.priority = el["priority"].get<uint8_t>();
+                    target.distance = el["distance"].get<float>();
                     targets.push_back(target);
                 }
             } catch (const std::exception& e) {
@@ -376,15 +366,6 @@ class AutoAimManagerNode : public ConditionNode {
             // 将 targets 写入黑板
             config().blackboard->set("targets", targets);
             targets.clear();
-        }
-        if (getInput("is_gimbal_patrol", is_gimbal_patrol)) {
-            config().blackboard->set("is_gimbal_patrol", is_gimbal_patrol);
-        }
-        if (getInput("yaw_degrees", yaw_degrees)) {
-            config().blackboard->set("yaw_degrees", yaw_degrees);
-        }
-        if (getInput("is_reached", is_reached)) {
-            config().blackboard->set("is_reached", is_reached);
         }
 
         return NodeStatus::SUCCESS;

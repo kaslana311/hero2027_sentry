@@ -5,7 +5,7 @@ project(serial_interfaces)
 if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
-
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
@@ -33,8 +33,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Tobase.msg"
   "msg/Enemy.msg"
   "msg/Refree.msg"
-  "msg/Gimbaldecision.msg"
-  "msg/Target.msg"
+  "msg/MaskID.msg"
+  # "msg/Gimbaldecision.msg"
+  "msg/TargetSwitch.msg"
+  "msg/TargetSwitchs.msg"
   "srv/Map.srv"
   "msg/Radar.msg"
   DEPENDENCIES geometry_msgs
