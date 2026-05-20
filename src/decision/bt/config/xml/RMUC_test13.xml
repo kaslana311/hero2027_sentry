@@ -17,17 +17,14 @@
         <LogMessage message="剩余比赛时间：{stage_time}"/>
         <CheckValue value="{stage_time}" expected="0" operator="gt"/>
         <LogMessage message="比赛还有时间，比赛中"/>
-        <AutoAimManager is_auto_aim = "1"
-                            auto_aim_mode = "1" targets='[{"type":1,"priority":50},
-                                      {"type":2,"priority":30},
-                                      {"type":3,"priority":30},
-                                      {"type":4,"priority":40},
-                                      {"type":5,"priority":30},
-                                      {"type":6,"priority":100},
-                                      {"type":7,"priority":1}]'
-                            is_gimbal_patrol = "1"
-                            yaw_degrees = "45.5"
-                            is_reached = "1" />
+        <AutoAimManager targets='[
+                                      {"type":"1","priority":30,"distance":50},
+                                      {"type":"2","priority":30,"distance":50},
+                                      {"type":"3","priority":40,"distance":50},
+                                      {"type":"SENTRY","priority":30,"distance":50},
+                                      {"type":"OUTPOST","priority":100,"distance":50},
+                                      {"type":"BASE","priority":1,"distance":50}]'
+                           />
       </Sequence>
 
       <Sequence>

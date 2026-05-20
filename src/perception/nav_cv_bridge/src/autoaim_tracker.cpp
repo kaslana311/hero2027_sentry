@@ -196,6 +196,7 @@ void AutoaimTracker::timerCallback() {
             g_target.position = final_pos;
         }
         if(g_target.id=="2"&&color_map_model_){
+            std::cout<<"recieve_eginerr"<<std::endl;
            unsigned int mx,my;
            if(color_map_model_->World2ColorMap(g_target.position.x, g_target.position.y, mx, my)){
            if(color_map_model_->GetColorMapInfo(mx,  my) == colorMap::RED) {
@@ -203,6 +204,7 @@ void AutoaimTracker::timerCallback() {
                 mask_msg.mask_id .push_back(g_target.id); 
                 mask_id_pub_->publish(mask_msg);
                 RCLCPP_INFO(this->get_logger(), "目标 %s 位于豁免区域，发布 MaskID=1", g_target.id.c_str());
+            ++it;
             continue;}
         }
     }
