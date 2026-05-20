@@ -43,7 +43,8 @@ wait_for_topic "/livox/imu" 60
 gnome-terminal --tab --title="fusion" -- bash -c "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch hero_lidar_scan hero_lidar_scan.launch.py; bash"
 # zenoh 网线通信桥接
 gnome-terminal --tab --title="zenoh_bridge" -- bash -c \
-"ros2 run zenoh_bridge_dds zenoh_bridge_dds -d 1 -e tcp/192.168.123.20:7447 -a '.*/tracker/autoaim\$|.*/carrot_pose\$' 2>&1 | tee \"$LOG_DIR/zenoh_bridge.log\"; exec bash"
+"zenoh-bridge-ros2dds -d 1 -e tcp/192.168.123.20:7447 -c bash/zenoh_bridge.json5 2>&1 | tee \"$LOG_DIR/zenoh_bridge.log\"; exec bash"
+# "ros2 run zenoh_bridge_dds zenoh_bridge_dds -d 1 -e tcp/192.168.123.20:7447 -a '.*/tracker/autoaim\$|.*/carrot_pose\$' 2>&1 | tee \"$LOG_DIR/zenoh_bridge.log\"; exec bash"
 
 # 启动底盘节点
 gnome-terminal --tab --title="chassis" -- bash -c \

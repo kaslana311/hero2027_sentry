@@ -47,12 +47,12 @@
                   <CheckValue value="{current_hp}" expected="100" operator="gt"/>
                   <CheckValue value="{rune_available}" expected="1" operator="eq"/>
                   <LogMessage message="尝试激活第一次小能量机关"/>
-                  <!-- <ReactiveSequence>
+                  <ReactiveSequence>
                     <CheckValue value="{current_hp}" expected="100" operator="gt"/>
                     <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
                     <CheckValue value="{rune_available}" expected="1" operator="eq"/>
                     <Nav x="7.03" y="-3.51" />
-                  </ReactiveSequence> -->
+                  </ReactiveSequence>
                   <!-- 导航完成，开启小能量机关 -->
                   <ReactiveSequence>
                     <!-- PublishNavOutput node mode 2: Small Energy -->
