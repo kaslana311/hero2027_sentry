@@ -33,6 +33,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MincoTrajectory.msg"
   "msg/TrackerOutput.msg"
   "msg/NavOutput.msg"
+  "msg/MaskID.msg"
+  "msg/Gimbaldecision.msg"
+  "msg/TargetSwitch.msg"
+  "msg/TargetSwitchs.msg"
   "msg/GlobalTarget.msg"
   "msg/GlobalTargetArray.msg"
   

@@ -111,7 +111,7 @@ public:
     }
   }
   
-  cv::imwrite("/home/z/hero/2026/hero2026_-sentry/src/decision/bt/launch/res.png", res_mat);
+  cv::imwrite("/home/dji/hero2026_-sentry/src/perception/nav_cv_bridge/debug_img/res.png", res_mat);
 }
   /* 提取彩色区域地图指定位置信息*/
   inline int GetColorMapInfo(unsigned int mx, unsigned int my){

@@ -15,7 +15,7 @@
 #include "nav_cv_bridge/color_info_map.hpp"
 #include "interfaces/msg/global_target_array.hpp"
 #include "interfaces/msg/tracker_output.hpp"
-#include "serial_interfaces/msg/mask_id.hpp"
+#include "interfaces/msg/mask_id.hpp"
 namespace nav_cv_bridge {
 
 struct TargetState {
@@ -54,7 +54,7 @@ class AutoaimTracker : public rclcpp::Node {
         global_target_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
         marker_pub_;
-    rclcpp::Publisher<serial_interfaces::msg::MaskID>::SharedPtr mask_id_pub_;
+    rclcpp::Publisher<interfaces::msg::MaskID>::SharedPtr mask_id_pub_;
     rclcpp::TimerBase::SharedPtr timer_;
 
     std::mutex targets_mutex_;

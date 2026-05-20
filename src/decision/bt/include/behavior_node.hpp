@@ -14,8 +14,8 @@
 #include <std_msgs/msg/bool.hpp>
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "serial_interfaces/msg/gimbaldecision.hpp"
-#include "serial_interfaces/msg/target_switch.hpp"
+#include "interfaces/msg/gimbaldecision.hpp"
+#include "interfaces/msg/target_switch.hpp"
 
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
@@ -341,18 +341,18 @@ class AutoAimManagerNode : public ConditionNode {
         uint8_t is_auto_aim, auto_aim_mode, is_gimbal_patrol, is_reached;
         float yaw_degrees;
         std::string targets_str;
-        std::vector<serial_interfaces::msg::TargetSwitch> targets;
+        std::vector<interfaces::msg::TargetSwitch> targets;
 
         // 从端口获取所有输入并写入黑板
         if (getInput("targets", targets_str)) {
             try {
                 // 解析 JSON 字符串
                 json j = json::parse(targets_str);
-                targets.resize(7);
+               
                 // 将 JSON 数据转换为 Target 类型，并填充到 targets 数组
                 for (auto& el : j) {
-                    serial_interfaces::msg::TargetSwitch target;
-                    target.type = el["type"].get<uint8_t>();
+                    interfaces::msg::TargetSwitch target;
+                    target.type = el["type"].get<std::string>();
                     target.priority = el["priority"].get<uint8_t>();
                     target.distance = el["distance"].get<float>();
                     targets.push_back(target);

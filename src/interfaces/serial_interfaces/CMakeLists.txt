@@ -33,10 +33,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Tobase.msg"
   "msg/Enemy.msg"
   "msg/Refree.msg"
-  "msg/MaskID.msg"
-  # "msg/Gimbaldecision.msg"
-  "msg/TargetSwitch.msg"
-  "msg/TargetSwitchs.msg"
+
   "srv/Map.srv"
   "msg/Radar.msg"
   DEPENDENCIES geometry_msgs

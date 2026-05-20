@@ -4,8 +4,8 @@
 #include <random>
 #include <std_msgs/msg/bool.hpp>
 #include <thread>
-#include <serial_interfaces/msg/target_switch.hpp>
-#include <serial_interfaces/msg/target_switchs.hpp>
+#include <interfaces/msg/target_switch.hpp>
+#include <interfaces/msg/target_switchs.hpp>
 #include <serial_interfaces/msg/refree.hpp>
 #include <serial_interfaces/msg/radar.hpp>
 #include "behavior_node.hpp"
@@ -373,7 +373,7 @@ class GimbalSerialNode {
         : node_(node), blackboard_(blackboard), running_(false) {
         // 创建发布者
         gimbal_pub_ =
-            node_->create_publisher<serial_interfaces::msg::TargetSwitchs>(
+            node_->create_publisher<interfaces::msg::TargetSwitchs>(
                 "gimbal_decision", 10);
 
         RCLCPP_INFO(node_->get_logger(), "云台控制节点已创建");
@@ -400,13 +400,13 @@ class GimbalSerialNode {
         rclcpp::Rate rate(10);  // 10Hz的更新频率
 
         while (running_ && rclcpp::ok()) {
-            auto msg = serial_interfaces::msg::TargetSwitchs();
+            auto msg = interfaces::msg::TargetSwitchs();
             msg.header.stamp = node_->now();
-            msg.ts.resize(7);
+            // msg.ts.resize(7);
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 // 从黑板读取数据
-                std::vector<serial_interfaces::msg::TargetSwitch> targets;
+                std::vector<interfaces::msg::TargetSwitch> targets;
                 if (blackboard_->get("targets", targets)) {
                     msg.ts = targets;
                 }
@@ -425,7 +425,7 @@ class GimbalSerialNode {
     std::atomic<bool> running_;
     std::thread update_thread_;
     std::mutex mutex_;
-    rclcpp::Publisher<serial_interfaces::msg::TargetSwitchs>::SharedPtr
+    rclcpp::Publisher<interfaces::msg::TargetSwitchs>::SharedPtr
         gimbal_pub_;
 };
 
