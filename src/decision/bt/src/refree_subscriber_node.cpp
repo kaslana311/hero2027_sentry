@@ -75,6 +75,7 @@ int main(int argc, char** argv) {
 
     blackboard->set<double>("trigger_point_x", 0.0);
     blackboard->set<double>("trigger_point_y", 0.0);
+    blackboard->set<int>("trigger_flag", 0);
     blackboard->set<double>("x_offset", 0.0);
     blackboard->set<double>("y_offset", 0.0);
 
@@ -124,6 +125,7 @@ int main(int argc, char** argv) {
     factory.registerNodeType<BLUE_OffsetCalculatorNode>(
         "BLUE_OffsetCalculator");
     factory.registerNodeType<ClearCalculatorNode>("ClearCalculator");
+    factory.registerNodeType<ClearFlagNode>("ClearFlagNode");
     factory.registerNodeType<PointInQuadrilateralCondition>(
         "PointInQuadrilateral");
     factory.registerNodeType<GuardWithAttackNode>("GuardWithAttack");

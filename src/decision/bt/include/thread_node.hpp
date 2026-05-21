@@ -1,18 +1,18 @@
 #include <atomic>
 #include <chrono>
-#include <memory>
-#include <random>
-#include <std_msgs/msg/bool.hpp>
-#include <thread>
 #include <interfaces/msg/target_switch.hpp>
 #include <interfaces/msg/target_switchs.hpp>
-#include <serial_interfaces/msg/refree.hpp>
+#include <memory>
+#include <random>
 #include <serial_interfaces/msg/radar.hpp>
+#include <serial_interfaces/msg/refree.hpp>
+#include <std_msgs/msg/bool.hpp>
+#include <thread>
+
 #include "behavior_node.hpp"
 #include "cruiser_node.hpp"
 #include "feasibility_calculate_node.hpp"
 #include "geometry_msgs/msg/point_stamped.hpp"
-
 
 using namespace std::literals;
 
@@ -106,7 +106,8 @@ class BlackboardUpdater {
                 blackboard_->set("heat_limit", msg->heat_limit);
                 blackboard_->set("chassis_heat_limit", msg->chassis_heat_limit);
 
-                blackboard_->set("rune_available", msg->energy_mechanism_available);
+                blackboard_->set("rune_available",
+                                 msg->energy_mechanism_available);
 
                 // 位置信息
                 blackboard_->set("position_x", msg->position_x);
@@ -170,12 +171,30 @@ class BlackboardUpdater {
                 "trigger_msg", 10,
                 [this](const geometry_msgs::msg::Point::SharedPtr msg) {
                     std::lock_guard<std::mutex> lock(mutex_);
-                    // 更新触发点到黑板
-                    blackboard_->set("trigger_point_x", msg->x);
-                    blackboard_->set("trigger_point_y", msg->y);
 
-                    RCLCPP_INFO(node_->get_logger(),
-                                "黑板触发点更新: (%.3f, %.3f)", msg->x, msg->y);
+                    // 记录上一帧数据，用于比较是否有新触发
+                    static double last_trigger_x = 0.0;
+                    static double last_trigger_y = 0.0;
+
+                    // 仅当坐标均不为0（视为有效坐标），且与上一帧不一致时才被判定为新的触发式消息
+                    if ((msg->x != 0.0 || msg->y != 0.0) &&
+                        (msg->x != last_trigger_x ||
+                         msg->y != last_trigger_y)) {
+                        // 更新触发点到黑板
+                        blackboard_->set("trigger_point_x", msg->x);
+                        blackboard_->set("trigger_point_y", msg->y);
+
+                        // 黑板上的标志位 trigger_flag 置 1 证明有触发式消息
+                        blackboard_->set("trigger_flag", 1);
+
+                        last_trigger_x = msg->x;
+                        last_trigger_y = msg->y;
+
+                        RCLCPP_INFO(node_->get_logger(),
+                                    "产生新触发式消息，更新黑板触发点: (%.3f, "
+                                    "%.3f), flag=1",
+                                    msg->x, msg->y);
+                    }
                 });
 
         RCLCPP_INFO(node_->get_logger(), "黑板数据更新器已创建");
@@ -372,9 +391,8 @@ class GimbalSerialNode {
                               BT::Blackboard::Ptr blackboard)
         : node_(node), blackboard_(blackboard), running_(false) {
         // 创建发布者
-        gimbal_pub_ =
-            node_->create_publisher<interfaces::msg::TargetSwitchs>(
-                "gimbal_decision", 10);
+        gimbal_pub_ = node_->create_publisher<interfaces::msg::TargetSwitchs>(
+            "gimbal_decision", 10);
 
         RCLCPP_INFO(node_->get_logger(), "云台控制节点已创建");
     }
@@ -410,7 +428,6 @@ class GimbalSerialNode {
                 if (blackboard_->get("targets", targets)) {
                     msg.ts = targets;
                 }
-
             }
 
             // 发布消息
@@ -425,8 +442,7 @@ class GimbalSerialNode {
     std::atomic<bool> running_;
     std::thread update_thread_;
     std::mutex mutex_;
-    rclcpp::Publisher<interfaces::msg::TargetSwitchs>::SharedPtr
-        gimbal_pub_;
+    rclcpp::Publisher<interfaces::msg::TargetSwitchs>::SharedPtr gimbal_pub_;
 };
 
 /**

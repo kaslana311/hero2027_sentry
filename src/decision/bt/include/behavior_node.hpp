@@ -374,3 +374,34 @@ class AutoAimManagerNode : public ConditionNode {
    private:
     rclcpp::Node::SharedPtr node_;
 };
+
+/**
+ * @brief 清空标志位节点
+ */
+class ClearFlagNode : public BT::SyncActionNode {
+   public:
+    ClearFlagNode(const std::string& name, const BT::NodeConfig& config)
+        : BT::SyncActionNode(name, config) {}
+
+    static BT::PortsList providedPorts() {
+        return {
+            BT::InputPort<std::string>("flag_name", "黑板上的标志位名字"),
+            BT::InputPort<int>("expected_value", "期望改动的数据（如0）")
+        };
+    }
+
+    BT::NodeStatus tick() override {
+        std::string flag_name;
+        int expected_value;
+
+        if (!getInput("flag_name", flag_name)) {
+            throw BT::RuntimeError("missing required input [flag_name]");
+        }
+        if (!getInput("expected_value", expected_value)) {
+            throw BT::RuntimeError("missing required input [expected_value]");
+        }
+
+        config().blackboard->set(flag_name, expected_value);
+        return BT::NodeStatus::SUCCESS;
+    }
+};
