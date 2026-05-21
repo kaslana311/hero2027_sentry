@@ -46,6 +46,7 @@ class ChassisNode : public rclcpp::Node {
 
     void VelOdometry_Callback(void* data);
     void OpponentPosition_Callback(void* data);
+    void Trigger_Callback(void* data);
 
    private:
     BoostAsio boost_asio_;
@@ -92,12 +93,12 @@ class ChassisNode : public rclcpp::Node {
     // serial_interfaces::msg::Robot robot_reach_;
     bool has_arrived_ = true;
     // 该部分是为了生成正弦小陀螺
-    rclcpp::Time start_time_;                    // 添加时间记录
-    double amplitude_ = 800;                     // 振幅 (度)
-    double frequency_ = 1;                       // 频率 (Hz)
-                                                 // 用于保存数据的相关变量
-    int save_counter_ = 0;                       // 计数器，累加至阈值时保存
-    int save_interval_ms_ = 5000;                // 保存间隔(毫秒)，默认5秒
+    rclcpp::Time start_time_;      // 添加时间记录
+    double amplitude_ = 800;       // 振幅 (度)
+    double frequency_ = 1;         // 频率 (Hz)
+                                   // 用于保存数据的相关变量
+    int save_counter_ = 0;         // 计数器，累加至阈值时保存
+    int save_interval_ms_ = 5000;  // 保存间隔(毫秒)，默认5秒
     std::string save_path_ = "./referee_data/";  // 保存数据的文件夹路径
     std::atomic<bool> is_guarding{true};
 

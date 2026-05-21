@@ -25,6 +25,13 @@ void OpponentPosition_Global_Callback(void* data) {
     }
 }
 
+// 全局回调函数，用于裁判系统触发式消息数据
+void Trigger_Global_Callback(void* data) {
+    if (g_chassis_node_instance) {
+        g_chassis_node_instance->Trigger_Callback(data);
+    }
+}
+
 void ChassisNode::VelOdometry_Callback(void* data) {
     // 发布轮式里程计速度（用于 EKF 融合）
     nav_msgs::msg::Odometry wheel_odom_msg;
@@ -113,6 +120,19 @@ void ChassisNode::OpponentPosition_Callback(void* data) {
     if (!msg.targets.empty()) {
         radar_pub_->publish(msg);
     }
+}
+
+void ChassisNode::Trigger_Callback(void* data) {
+    if (!data) return;
+    Robot_command_map_t* cmd_data = static_cast<Robot_command_map_t*>(data);
+
+    // 串口层仅负责转发，不做任何状态比对和判断
+    geometry_msgs::msg::Point point;
+    point.x = cmd_data->target_position_x;
+    point.y = cmd_data->target_position_y;
+    point.z = 0.0;
+
+    trigger_pub_->publish(point);
 }
 
 ChassisNode ::ChassisNode() : Node("chassis_node") {
@@ -232,6 +252,9 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     Attach_Receive_callback(
         CMD_ID_Robot_wheel_odometry, sizeof(Robot_wheel_odometry_t),
         (void*)&robot_wheel_odometry_data, VelOdometry_Global_Callback);
+    Attach_Receive_callback(
+        CMD_ID_Robot_command_map, sizeof(Robot_command_map_t),
+        (void*)&robot_command_map_data, Trigger_Global_Callback);
     Attach_Receive_callback(
         CMD_ID_com_opponent_position, sizeof(com_opponent_position_t),
         (void*)&com_opponent_position_data, OpponentPosition_Global_Callback);
