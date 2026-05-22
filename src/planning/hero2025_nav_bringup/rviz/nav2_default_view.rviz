@@ -13,6 +13,7 @@ Panels:
         - /MarkerArray2
         - /PointCloud22
         - /PointCloud22/Topic1
+        - /MarkerArray3
         - /MarkerArray4
         - /PointCloud23
         - /PointCloud24
@@ -67,11 +68,15 @@ Visualization Manager:
         All Enabled: false
         base_link:
           Value: true
-        lidar_link:
-          Value: true
         map:
           Value: true
+        odin1_base_link:
+          Value: true
         odom:
+          Value: true
+        outpost:
+          Value: true
+        rune:
           Value: true
       Marker Scale: 1
       Name: TF
@@ -82,8 +87,12 @@ Visualization Manager:
         map:
           odom:
             base_link:
-              lidar_link:
+              odin1_base_link:
                 {}
+          outpost:
+            {}
+          rune:
+            {}
       Update Interval: 0
       Value: true
     - Class: rviz_default_plugins/Axes
@@ -430,9 +439,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 0.8550000190734863
+      Max Intensity: 0.925000011920929
       Min Color: 0; 0; 0
-      Min Intensity: 0.014999999664723873
+      Min Intensity: 0.03500000014901161
       Name: PointCloud2
       Position Transformer: XYZ
       Selectable: true
@@ -527,13 +536,14 @@ Visualization Manager:
       Enabled: true
       Name: MarkerArray
       Namespaces:
-        {}
+        global_targets: true
+        global_targets_id: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /autoaim_tracker/absolute_targets_marker
+        Value: /autoaim_tracker/global_targets_marker
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
@@ -557,7 +567,7 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 255; 255
-      Color Transformer: ""
+      Color Transformer: RGB8
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
@@ -566,7 +576,7 @@ Visualization Manager:
       Min Color: 0; 0; 0
       Min Intensity: 0
       Name: PointCloud2
-      Position Transformer: ""
+      Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
       Size (m): 0.009999999776482582
@@ -591,7 +601,7 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 255; 255
-      Color Transformer: ""
+      Color Transformer: RGB8
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
@@ -600,7 +610,7 @@ Visualization Manager:
       Min Color: 0; 0; 0
       Min Intensity: 0
       Name: PointCloud2
-      Position Transformer: ""
+      Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
       Size (m): 0.009999999776482582
@@ -645,16 +655,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 9.7037992477417
+      Distance: 16.764083862304688
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 3.504542112350464
-        Y: -0.5058960318565369
-        Z: 1.5032720565795898
+        X: 4.8000969886779785
+        Y: 0.17503470182418823
+        Z: 1.5048785209655762
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
@@ -663,7 +673,7 @@ Visualization Manager:
       Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 3.240002155303955
+      Yaw: 3.1549994945526123
     Saved: ~
 Window Geometry:
   Displays:
