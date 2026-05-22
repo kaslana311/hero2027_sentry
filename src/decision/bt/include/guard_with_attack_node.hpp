@@ -140,6 +140,10 @@ class GuardWithAttackNode : public StatefulActionNode {
     static PortsList providedPorts() {
         return {
             InputPort<double>("guard_duration", "驻守持续时间（秒）"),
+            InputPort<double>(
+                "sense_radius", 10.0,
+                "感知/"
+                "警戒半径，只追击在此范围内的敌人（米，以驻守锚点为中心）"),
             InputPort<double>("move_radius", 3.0,
                               "以初始位置为中心的最大活动半径（米）"),
             InputPort<double>("engage_distance", 2.5,
@@ -164,6 +168,7 @@ class GuardWithAttackNode : public StatefulActionNode {
                         "GuardWithAttack: 使用默认驻守时间 7s");
             guard_duration_ = 7.0;
         }
+        getInput("sense_radius", sense_radius_);
         getInput("move_radius", move_radius_);
         getInput("engage_distance", engage_distance_);
         getInput("occ_threshold", occ_threshold_);
@@ -193,9 +198,9 @@ class GuardWithAttackNode : public StatefulActionNode {
 
         RCLCPP_INFO(node_->get_logger(),
                     "GuardWithAttack: 开始驻守 %.1fs, 锚点=(%.2f, %.2f), "
-                    "半径=%.1fm, 交战距离=%.1fm",
+                    "感知半径=%.1fm, 活动半径=%.1fm, 交战距离=%.1fm",
                     guard_duration_, guard_origin_x_, guard_origin_y_,
-                    move_radius_, engage_distance_);
+                    sense_radius_, move_radius_, engage_distance_);
 
         return NodeStatus::RUNNING;
     }
@@ -494,6 +499,14 @@ class GuardWithAttackNode : public StatefulActionNode {
         for (const auto& target : tracker->targets) {
             double tx = target.position.x;
             double ty = target.position.y;
+
+            // 过滤掉不在驻守锚点感知半径内的敌人
+            double dist_to_origin =
+                std::hypot(tx - guard_origin_x_, ty - guard_origin_y_);
+            if (dist_to_origin > sense_radius_) {
+                continue;
+            }
+
             double dist = std::hypot(tx - self_x, ty - self_y);
             if (dist < min_dist) {
                 min_dist = dist;
@@ -690,6 +703,7 @@ class GuardWithAttackNode : public StatefulActionNode {
 
     // 参数
     double guard_duration_{7.0};
+    double sense_radius_{10.0};
     double move_radius_{3.0};
     double engage_distance_{2.5};
     int occ_threshold_{50};
