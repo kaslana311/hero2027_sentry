@@ -33,6 +33,12 @@ void Trigger_Global_Callback(void* data) {
 }
 
 void ChassisNode::VelOdometry_Callback(void* data) {
+    // geometry_msgs::msg::Point point;
+    // point.x = robot_wheel_odometry_data.vel_x;
+    // point.y = robot_wheel_odometry_data.vel_y;
+    // point.z = 0.0;
+
+    // trigger_pub_->publish(point);
     // 发布轮式里程计速度（用于 EKF 融合）
     nav_msgs::msg::Odometry wheel_odom_msg;
     wheel_odom_msg.header.stamp = this->now();
@@ -128,8 +134,8 @@ void ChassisNode::Trigger_Callback(void* data) {
 
     // 串口层仅负责转发，不做任何状态比对和判断
     geometry_msgs::msg::Point point;
-    point.x = cmd_data->target_position_x;
-    point.y = cmd_data->target_position_y;
+    point.x = cmd_data->target_position_x /100.0;
+    point.y = cmd_data->target_position_y /100.0;
     point.z = 0.0;
 
     trigger_pub_->publish(point);
@@ -140,7 +146,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     g_chassis_node_instance = this;
 
     // 初始化串口
-    if (!boost_asio_.Init("/dev/chassis", 115200)) {
+    if (!boost_asio_.Init("/dev/chassis", 460800)) {
         RCLCPP_ERROR(this->get_logger(), "底盘串口初始化失败");
         rclcpp::shutdown();  // 结束程序
         return;
