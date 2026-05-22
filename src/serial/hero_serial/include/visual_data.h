@@ -173,8 +173,8 @@ typedef struct {
 
 #pragma pack(push, 1)
 typedef struct {
-    uint16_t target_position_x;  // 目标 x 位置坐标，单位 m
-    uint16_t target_position_y;
+    float target_position_x;  // 目标 x 位置坐标，单位 m
+    float target_position_y;
     uint8_t
         commd_keyboard;  // 发送指令时，云台手按下的键盘信息 无按键按下则为 0
     uint8_t

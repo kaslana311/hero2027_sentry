@@ -134,8 +134,8 @@ void ChassisNode::Trigger_Callback(void* data) {
 
     // 串口层仅负责转发，不做任何状态比对和判断
     geometry_msgs::msg::Point point;
-    point.x = cmd_data->target_position_x /100.0;
-    point.y = cmd_data->target_position_y /100.0;
+    point.x = cmd_data->target_position_x;
+    point.y = cmd_data->target_position_y;
     point.z = 0.0;
 
     trigger_pub_->publish(point);

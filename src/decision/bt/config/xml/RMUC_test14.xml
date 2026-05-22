@@ -47,7 +47,7 @@
                                         <CheckValue value="{current_hp}" expected="100" operator="gt"/>
                                         <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
                                         <LogMessage message="到达触发点，开始驻守并准备清理标志位"/>
-                                        <Guardian guard_duration="3.0"/>
+                                        <Guardian guard_duration="8.0"/>
                                     </ReactiveSequence>
                                     <ClearFlagNode flag_name="trigger_flag" expected_value="0"/>
                                     <LogMessage message="触发式任务完成，标志位已归零"/>
