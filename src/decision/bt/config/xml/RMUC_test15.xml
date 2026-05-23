@@ -7,10 +7,10 @@
             <CheckValue value="{competition_type}" expected="1" operator="eq"/>
             <ReactiveFallback>
                 <!-- 阶段五：比赛结束退出 -->
-                <SubTree ID="Stage5_GameOver"/>
+                <SubTree ID="Stage5_GameOver" _autoremap="true"/>
 
                 <!-- 阶段四：比赛进行中的战斗逻辑 -->
-                <SubTree ID="Stage4_Combat"/>
+                <SubTree ID="Stage4_Combat" _autoremap="true"/>
             </ReactiveFallback>
         </Sequence>
     </BehaviorTree>
@@ -30,10 +30,10 @@
             <ReactiveFallback>
                 <!-- 优先级1（最高）：生存撤退（低血量/低弹丸） -->
                 <!-- 如果满足低血量条件，它将抢占并打断后面任何的高血量战术节点 -->
-                <SubTree ID="DangerRetreat"/>
+                <SubTree ID="DangerRetreat" _autoremap="true"/>
 
                 <!-- 优先级2：高血量/充足弹丸战术分配 -->
-                <SubTree ID="HealthTactics"/>
+                <SubTree ID="HealthTactics" _autoremap="true"/>
             </ReactiveFallback>
         </Sequence>
     </BehaviorTree>
@@ -72,16 +72,16 @@
             <!-- 从上到下优先级依次降低 -->
             <ReactiveFallback>
                 <!-- P1: 触发式信号 -->
-                <SubTree ID="TriggeredTask"/>
+                <SubTree ID="TriggeredTask" _autoremap="true"/>
 
                 <!-- P2: 能量机关 -->
-                <SubTree ID="RuneTasks"/>
+                <SubTree ID="RuneTasks" _autoremap="true"/>
 
                 <!-- P3: 被动防守（前哨站存活） -->
-                <SubTree ID="DefenseOutpost"/>
+                <SubTree ID="DefenseOutpost" _autoremap="true"/>
 
                 <!-- P4: 主动巡航（前哨站摧毁后） -->
-                <SubTree ID="CruiseTask"/>
+                <SubTree ID="CruiseTask" _autoremap="true"/>
             </ReactiveFallback>
         </Sequence>
     </BehaviorTree>
