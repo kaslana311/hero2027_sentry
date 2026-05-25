@@ -6,23 +6,14 @@ uint8 dart_target
 uint8 small_energy_state
 uint8 big_energy_state
 
-# 红方血量
-uint16 red_hero
-uint16 red_engineer
-uint16 red_infantry3
-uint16 red_infantry4
-uint16 red_sentry
-uint16 red_outpost
-uint16 red_base
-
-# 蓝方血量
-uint16 blue_hero
-uint16 blue_engineer
-uint16 blue_infantry3
-uint16 blue_infantry4
-uint16 blue_sentry
-uint16 blue_outpost
-uint16 blue_base
+# 己方血量
+uint16 friend_hero
+uint16 friend_engineer
+uint16 friend_infantry3
+uint16 friend_infantry4
+uint16 friend_sentry
+uint16 friend_outpost
+uint16 friend_base
 
 # 战场状态
 bool status_supply_non_overlap

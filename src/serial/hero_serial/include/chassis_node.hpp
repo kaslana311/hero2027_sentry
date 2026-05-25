@@ -127,8 +127,8 @@ class ChassisNode : public rclcpp::Node {
     // Sentry_info_t sentry_info_t_data = {0, 0};
     ext_sentry_info_t ext_sentry_info_data = {0, 0, 0, 0, 0, 0,
                                               0, 0, 0, 0, 1, 0};
-    Game_robot_survivors_t game_robot_survivors = {400, 400, 400,  400,
-                                                   400, 400, 1500, 5000};
+    game_robot_HP_t game_robot_HP_data = {400, 400, 400,  400,
+                                          0,   400, 1500, 5000};
     Robot_command_map_t robot_command_map_data = {0, 0, 0, 0, 0};
     Robot_command_map_t last_robot_command_map_data = {0, 0, 0, 0, 0};
     Robot_wheel_odometry_t robot_wheel_odometry_data = {0.0, 0.0};

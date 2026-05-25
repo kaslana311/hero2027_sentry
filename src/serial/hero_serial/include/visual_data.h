@@ -62,15 +62,15 @@ typedef struct {
 
 #pragma pack(push, 1)
 typedef struct {
-    uint16_t robot_1_HP;   // 己方 英雄机器人血量，未上场以及罚下血量为 0
-    uint16_t robot_2_HP;   // 己方 工程机器人血量
-    uint16_t robot_3_HP;   // 己方 步兵机器人血量
-    uint16_t robot_4_HP;   // 己方 步兵机器人血量
-    uint16_t reserve;      // 保留位
-    uint16_t robot_7_HP;   // 己方 哨兵机器人血量
-    uint16_t outpost_HP;   // 己方 前哨站血量
-    uint16_t base_HP;      // 己方 基地血量
-} Game_robot_survivors_t;  // 比赛机器人血量数据
+    uint16_t ally_1_robot_HP;
+    uint16_t ally_2_robot_HP;
+    uint16_t ally_3_robot_HP;
+    uint16_t ally_4_robot_HP;
+    uint16_t reserved;
+    uint16_t ally_7_robot_HP;
+    uint16_t ally_outpost_HP;
+    uint16_t ally_base_HP;
+} game_robot_HP_t;  // 比赛机器人血量数据
 #pragma pack(pop)
 
 #pragma pack(push, 1)

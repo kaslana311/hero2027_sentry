@@ -255,8 +255,8 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
                             (void*)&bullet_remaining_t_data,
                             Callback_func_data1);
     Attach_Receive_callback(CMD_ID_GAME_ROBOT_survivors,
-                            sizeof(Game_robot_survivors_t),
-                            (void*)&game_robot_survivors, Callback_func_data1);
+                            sizeof(game_robot_HP_t), (void*)&game_robot_HP_data,
+                            Callback_func_data1);
     Attach_Receive_callback(
         CMD_ID_Robot_wheel_odometry, sizeof(Robot_wheel_odometry_t),
         (void*)&robot_wheel_odometry_data, VelOdometry_Global_Callback);
@@ -266,6 +266,9 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     Attach_Receive_callback(
         CMD_ID_com_opponent_position, sizeof(com_opponent_position_t),
         (void*)&com_opponent_position_data, OpponentPosition_Global_Callback);
+    Attach_Receive_callback(
+        CMD_ID_Ground_robot_position, sizeof(Ground_robot_position_t),
+        (void*)&ground_robot_position_t_data, Callback_func_data1);
     Attach_Receive_callback(CMD_ID_Sentry_info, sizeof(ext_sentry_info_t),
                             (void*)&ext_sentry_info_data, Callback_func_data1);
 
@@ -507,6 +510,26 @@ void ChassisNode::RefreePubTimerCallback() {
 
     msg.robot_id = robot_info_t_data.robot_id;
     msg.current_hp = robot_info_t_data.remain_HP;
+
+    // 己方血量
+    msg.friend_hero = game_robot_HP_data.ally_1_robot_HP;
+    msg.friend_engineer = game_robot_HP_data.ally_2_robot_HP;
+    msg.friend_infantry3 = game_robot_HP_data.ally_3_robot_HP;
+    msg.friend_infantry4 = game_robot_HP_data.ally_4_robot_HP;
+    msg.friend_sentry = game_robot_HP_data.ally_7_robot_HP;
+    msg.friend_outpost = game_robot_HP_data.ally_outpost_HP;
+    msg.friend_base = game_robot_HP_data.ally_base_HP;
+
+    // 队友位置 (基于 global_red_map)
+    msg.hero_x = ground_robot_position_t_data.hero_x;
+    msg.hero_y = ground_robot_position_t_data.hero_y;
+    msg.engineer_x = ground_robot_position_t_data.engineer_x;
+    msg.engineer_y = ground_robot_position_t_data.engineer_y;
+    msg.infantry3_x = ground_robot_position_t_data.standard_3_x;
+    msg.infantry3_y = ground_robot_position_t_data.standard_3_y;
+    msg.infantry4_x = ground_robot_position_t_data.standard_4_x;
+    msg.infantry4_y = ground_robot_position_t_data.standard_4_y;
+
     if (robot_info_t_data.remain_HP == 0) {
         sentry_cmd_info_t_data.confirm_revive = 1;
     } else {

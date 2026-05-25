@@ -38,127 +38,134 @@ class BlackboardUpdater {
 
         // 初始化订阅者
         // 裁判系统订阅
-        refree_subscriber_ = node_->create_subscription<
-            serial_interfaces::msg::Refree>(
-            "refree_msg", 10,
-            [this](const serial_interfaces::msg::Refree::SharedPtr msg) {
-                std::lock_guard<std::mutex> lock(mutex_);
-                // 比赛信息
-                blackboard_->set("competition_type", msg->competition_type);
-                blackboard_->set("competition_stage", msg->competition_stage);
-                blackboard_->set("stage_time", msg->stage_time);
-                blackboard_->set("enemy_outpost_status", msg->dart_target);
-                blackboard_->set("small_energy_state", msg->small_energy_state);
-                blackboard_->set("big_energy_state", msg->big_energy_state);
+        refree_subscriber_ =
+            node_->create_subscription<serial_interfaces::msg::Refree>(
+                "refree_msg", 10,
+                [this](const serial_interfaces::msg::Refree::SharedPtr msg) {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    // 比赛信息
+                    blackboard_->set("competition_type", msg->competition_type);
+                    blackboard_->set("competition_stage",
+                                     msg->competition_stage);
+                    blackboard_->set("stage_time", msg->stage_time);
+                    blackboard_->set("enemy_outpost_status", msg->dart_target);
+                    blackboard_->set("small_energy_state",
+                                     msg->small_energy_state);
+                    blackboard_->set("big_energy_state", msg->big_energy_state);
 
-                // 根据预先知道的我方颜色对裁判系统消息区分敌我
-                if (is_red_team_) {
-                    // RCLCPP_INFO(node_->get_logger(), "RED");
-                    // 红方：我方血量
-                    blackboard_->set("friend_hero", msg->red_hero);
-                    blackboard_->set("friend_engineer", msg->red_engineer);
-                    blackboard_->set("friend_infantry3", msg->red_infantry3);
-                    blackboard_->set("friend_infantry4", msg->red_infantry4);
-                    blackboard_->set("friend_sentry", msg->red_sentry);
-                    blackboard_->set("friend_outpost", msg->red_outpost);
-                    blackboard_->set("friend_base", msg->red_base);
+                    // 己方血量同步（根据最新的自定义消息定义，已去除了敌我颜色判断）
+                    blackboard_->set("friend_hero", msg->friend_hero);
+                    blackboard_->set("friend_engineer", msg->friend_engineer);
+                    blackboard_->set("friend_infantry3", msg->friend_infantry3);
+                    blackboard_->set("friend_infantry4", msg->friend_infantry4);
+                    blackboard_->set("friend_sentry", msg->friend_sentry);
+                    blackboard_->set("friend_outpost", msg->friend_outpost);
+                    blackboard_->set("friend_base", msg->friend_base);
 
-                    // 蓝方：敌方血量
-                    blackboard_->set("enemy_hero", msg->blue_hero);
-                    blackboard_->set("enemy_engineer", msg->blue_engineer);
-                    blackboard_->set("enemy_infantry3", msg->blue_infantry3);
-                    blackboard_->set("enemy_infantry4", msg->blue_infantry4);
-                    blackboard_->set("enemy_sentry", msg->blue_sentry);
-                    blackboard_->set("enemy_outpost", msg->blue_outpost);
-                    blackboard_->set("enemy_base", msg->blue_base);
-                } else {
-                    // RCLCPP_INFO(node_->get_logger(), "BLUE");
-                    // 红方：敌方血量
-                    blackboard_->set("enemy_hero", msg->red_hero);
-                    blackboard_->set("enemy_engineer", msg->red_engineer);
-                    blackboard_->set("enemy_infantry3", msg->red_infantry3);
-                    blackboard_->set("enemy_infantry4", msg->red_infantry4);
-                    blackboard_->set("enemy_sentry", msg->red_sentry);
-                    blackboard_->set("enemy_outpost", msg->red_outpost);
-                    blackboard_->set("enemy_base", msg->red_base);
+                    // 敌方血量现在不处理
+                    // ...
 
-                    // 蓝方：我方血量
-                    blackboard_->set("friend_hero", msg->blue_hero);
-                    blackboard_->set("friend_engineer", msg->blue_engineer);
-                    blackboard_->set("friend_infantry3", msg->blue_infantry3);
-                    blackboard_->set("friend_infantry4", msg->blue_infantry4);
-                    blackboard_->set("friend_sentry", msg->blue_sentry);
-                    blackboard_->set("friend_outpost", msg->blue_outpost);
-                    blackboard_->set("friend_base", msg->blue_base);
-                }
+                    // 战场状态
+                    blackboard_->set("status_supply_non_overlap",
+                                     msg->status_supply_non_overlap);
+                    blackboard_->set("status_supply_overlap",
+                                     msg->status_supply_overlap);
+                    blackboard_->set("status_supply_occupied",
+                                     msg->status_supply_occupied);
+                    blackboard_->set("energy_activation",
+                                     msg->energy_activation);
+                    blackboard_->set("highland_status", msg->highland_status);
+                    blackboard_->set("trapezoid_status", msg->trapezoid_status);
+                    blackboard_->set("dart_hit_time", msg->dart_hit_time);
+                    blackboard_->set("dart_target", msg->dart_target);
+                    blackboard_->set("center_control", msg->center_control);
 
-                // 战场状态
-                blackboard_->set("status_supply_non_overlap",
-                                 msg->status_supply_non_overlap);
-                blackboard_->set("status_supply_overlap",
-                                 msg->status_supply_overlap);
-                blackboard_->set("status_supply_occupied",
-                                 msg->status_supply_occupied);
-                blackboard_->set("energy_activation", msg->energy_activation);
-                blackboard_->set("highland_status", msg->highland_status);
-                blackboard_->set("trapezoid_status", msg->trapezoid_status);
-                blackboard_->set("dart_hit_time", msg->dart_hit_time);
-                blackboard_->set("dart_target", msg->dart_target);
-                blackboard_->set("center_control", msg->center_control);
+                    // 本机状态
+                    blackboard_->set("robot_id", msg->robot_id);
+                    blackboard_->set("robot_level", msg->robot_level);
+                    blackboard_->set("current_hp", msg->current_hp);
+                    blackboard_->set("max_hp", msg->max_hp);
+                    blackboard_->set("cooling_rate", msg->cooling_rate);
+                    blackboard_->set("heat_limit", msg->heat_limit);
+                    blackboard_->set("chassis_heat_limit",
+                                     msg->chassis_heat_limit);
 
-                // 本机状态
-                blackboard_->set("robot_id", msg->robot_id);
-                blackboard_->set("robot_level", msg->robot_level);
-                blackboard_->set("current_hp", msg->current_hp);
-                blackboard_->set("max_hp", msg->max_hp);
-                blackboard_->set("cooling_rate", msg->cooling_rate);
-                blackboard_->set("heat_limit", msg->heat_limit);
-                blackboard_->set("chassis_heat_limit", msg->chassis_heat_limit);
+                    blackboard_->set("rune_available",
+                                     msg->energy_mechanism_available);
 
-                blackboard_->set("rune_available",
-                                 msg->energy_mechanism_available);
+                    // 位置信息
+                    blackboard_->set("position_x", msg->position_x);
+                    blackboard_->set("position_y", msg->position_y);
+                    blackboard_->set("orientation", msg->orientation);
+                    blackboard_->set("bullet_17mm", msg->bullet_17mm);
+                    blackboard_->set("bullet_42mm", msg->bullet_42mm);
+                    blackboard_->set("remaining_gold", msg->remaining_gold);
+                    blackboard_->set("projectile_allowance_fortress",
+                                     msg->projectile_allowance_fortress);
 
-                // 位置信息
-                blackboard_->set("position_x", msg->position_x);
-                blackboard_->set("position_y", msg->position_y);
-                blackboard_->set("orientation", msg->orientation);
-                blackboard_->set("bullet_17mm", msg->bullet_17mm);
-                blackboard_->set("bullet_42mm", msg->bullet_42mm);
-                blackboard_->set("remaining_gold", msg->remaining_gold);
-                blackboard_->set("projectile_allowance_fortress",
-                                 msg->projectile_allowance_fortress);
+                    // 队友位置
+                    auto transform_teammate = [&](float raw_x, float raw_y,
+                                                  float& out_x, float& out_y) {
+                        geometry_msgs::msg::Point p_in;
+                        p_in.x = raw_x;
+                        p_in.y = raw_y;
+                        p_in.z = 0.0;
+                        geometry_msgs::msg::Point p_out = p_in;
+                        try {
+                            geometry_msgs::msg::TransformStamped t =
+                                tf_buffer_->lookupTransform("map",
+                                                            "global_red_map",
+                                                            tf2::TimePointZero);
+                            tf2::doTransform(p_in, p_out, t);
+                        } catch (const tf2::TransformException& ex) {
+                            // ignore or log
+                        }
+                        out_x = p_out.x;
+                        out_y = p_out.y;
+                    };
 
-                // 队友位置
-                blackboard_->set("hero_x", msg->hero_x);
-                blackboard_->set("hero_y", msg->hero_y);
-                blackboard_->set("engineer_x", msg->engineer_x);
-                blackboard_->set("engineer_y", msg->engineer_y);
-                blackboard_->set("infantry3_x", msg->infantry3_x);
-                blackboard_->set("infantry3_y", msg->infantry3_y);
-                blackboard_->set("infantry4_x", msg->infantry4_x);
-                blackboard_->set("infantry4_y", msg->infantry4_y);
+                    float t_hero_x, t_hero_y, t_eng_x, t_eng_y, t_inf3_x,
+                        t_inf3_y, t_inf4_x, t_inf4_y;
+                    transform_teammate(msg->hero_x, msg->hero_y, t_hero_x,
+                                       t_hero_y);
+                    transform_teammate(msg->engineer_x, msg->engineer_y,
+                                       t_eng_x, t_eng_y);
+                    transform_teammate(msg->infantry3_x, msg->infantry3_y,
+                                       t_inf3_x, t_inf3_y);
+                    transform_teammate(msg->infantry4_x, msg->infantry4_y,
+                                       t_inf4_x, t_inf4_y);
 
-                // 哨兵状态
-                blackboard_->set("sentry_bullet_allowance",
-                                 msg->sentry_bullet_allowance);
-                blackboard_->set("sentry_remote_bullet_count",
-                                 msg->sentry_remote_bullet_count);
-                blackboard_->set("sentry_remote_hp_count",
-                                 msg->sentry_remote_hp_count);
-                blackboard_->set("sentry_confirm_revive",
-                                 msg->sentry_confirm_revive);
-                blackboard_->set("sentry_immediate_revive",
-                                 msg->sentry_immediate_revive);
-                blackboard_->set("sentry_revive_cost", msg->sentry_revive_cost);
+                    blackboard_->set("hero_x", t_hero_x);
+                    blackboard_->set("hero_y", t_hero_y);
+                    blackboard_->set("engineer_x", t_eng_x);
+                    blackboard_->set("engineer_y", t_eng_y);
+                    blackboard_->set("infantry3_x", t_inf3_x);
+                    blackboard_->set("infantry3_y", t_inf3_y);
+                    blackboard_->set("infantry4_x", t_inf4_x);
+                    blackboard_->set("infantry4_y", t_inf4_y);
 
-                // 附加状态
-                blackboard_->set("additional_status_bit0",
-                                 msg->additional_status_bit0);
-                blackboard_->set("additional_status_bits1_11",
-                                 msg->additional_status_bits1_11);
-                blackboard_->set("additional_status_bits12_15",
-                                 msg->additional_status_bits12_15);
-            });
+                    // 哨兵状态
+                    blackboard_->set("sentry_bullet_allowance",
+                                     msg->sentry_bullet_allowance);
+                    blackboard_->set("sentry_remote_bullet_count",
+                                     msg->sentry_remote_bullet_count);
+                    blackboard_->set("sentry_remote_hp_count",
+                                     msg->sentry_remote_hp_count);
+                    blackboard_->set("sentry_confirm_revive",
+                                     msg->sentry_confirm_revive);
+                    blackboard_->set("sentry_immediate_revive",
+                                     msg->sentry_immediate_revive);
+                    blackboard_->set("sentry_revive_cost",
+                                     msg->sentry_revive_cost);
+
+                    // 附加状态
+                    blackboard_->set("additional_status_bit0",
+                                     msg->additional_status_bit0);
+                    blackboard_->set("additional_status_bits1_11",
+                                     msg->additional_status_bits1_11);
+                    blackboard_->set("additional_status_bits12_15",
+                                     msg->additional_status_bits12_15);
+                });
         // 雷达站消息订阅
         radar_subscriber_ =
             node_->create_subscription<serial_interfaces::msg::Radar>(
