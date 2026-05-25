@@ -62,14 +62,14 @@ typedef struct {
 
 #pragma pack(push, 1)
 typedef struct {
-    uint16_t ally_1_robot_HP;
-    uint16_t ally_2_robot_HP;
-    uint16_t ally_3_robot_HP;
-    uint16_t ally_4_robot_HP;
-    uint16_t reserved;
-    uint16_t ally_7_robot_HP;
-    uint16_t ally_outpost_HP;
-    uint16_t ally_base_HP;
+    uint16_t ally_1_robot_HP : 2;
+    uint16_t ally_2_robot_HP : 2;
+    uint16_t ally_3_robot_HP : 2;
+    uint16_t ally_4_robot_HP : 2;
+    uint16_t reserved : 2;
+    uint16_t ally_7_robot_HP : 2;
+    uint16_t ally_outpost_HP : 2;
+    uint16_t ally_base_HP : 2;
 } game_robot_HP_t;  // 比赛机器人血量数据
 #pragma pack(pop)
 
