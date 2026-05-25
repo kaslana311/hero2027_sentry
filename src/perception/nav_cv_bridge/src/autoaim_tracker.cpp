@@ -1,4 +1,5 @@
 #include "nav_cv_bridge/autoaim_tracker.hpp"
+
 #include <memory>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -15,12 +16,17 @@ AutoaimTracker::AutoaimTracker(const rclcpp::NodeOptions& options)
     this->declare_parameter("timeout_sec", 1.0);
     this->declare_parameter("radar_switch_dist", 5.5);
     this->declare_parameter("autoaim_switch_dist", 4.5);
-    this->declare_parameter("color_map_file", "/home/dji/hero2026_-sentry/src/planning/map_server/map/map.png");
-    this->declare_parameter("yaml_file", "/home/dji/hero2026_-sentry/src/planning/map_server/map/map.yaml");
+    this->declare_parameter(
+        "color_map_file",
+        "/home/dji/hero2026_-sentry/src/planning/map_server/map/map.png");
+    this->declare_parameter(
+        "yaml_file",
+        "/home/dji/hero2026_-sentry/src/planning/map_server/map/map.yaml");
     std::string color_map_file, yaml_file;
     this->get_parameter("yaml_file", yaml_file);
     this->get_parameter("color_map_file", color_map_file);
-    color_map_model_= std::make_shared<colorMap::ColorMapModel>(color_map_file, yaml_file);
+    color_map_model_ =
+        std::make_shared<colorMap::ColorMapModel>(color_map_file, yaml_file);
     autoaim_switch_dist_ =
         this->get_parameter("autoaim_switch_dist").as_double();
     radar_switch_dist_ = this->get_parameter("radar_switch_dist").as_double();
@@ -88,12 +94,32 @@ void AutoaimTracker::radarCallback(
     rclcpp::Time now_stamp = msg->header.stamp;
 
     // Simulate radar map frame data
+    geometry_msgs::msg::TransformStamped global_to_map;
+    bool can_transform = true;
+    try {
+        global_to_map = tf_buffer_->lookupTransform(
+            "map", msg->header.frame_id, msg->header.stamp,
+            rclcpp::Duration::from_seconds(0.05));
+    } catch (tf2::TransformException& ex) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                             "Radar TF Error: %s", ex.what());
+        can_transform = false;
+    }
+
     for (const auto& target : msg->targets) {
         std::string t_id = target.id;
 
+        geometry_msgs::msg::Point p_global = target.position;
+        geometry_msgs::msg::Point p_map;
+        if (can_transform) {
+            tf2::doTransform(p_global, p_map, global_to_map);
+        } else {
+            p_map = p_global;  // Fallback if TF is unavailable
+        }
+
         targets_[t_id].id = t_id;
         targets_[t_id].last_radar_time = now_stamp;
-        targets_[t_id].radar_pos_map = target.position;
+        targets_[t_id].radar_pos_map = p_map;
     }
 }
 
@@ -195,19 +221,24 @@ void AutoaimTracker::timerCallback() {
             final_pos = state.autoaim_pos_map;
             g_target.position = final_pos;
         }
-        if(g_target.id=="2"&&color_map_model_){
-            std::cout<<"recieve_eginerr"<<std::endl;
-           unsigned int mx,my;
-           if(color_map_model_->World2ColorMap(g_target.position.x, g_target.position.y, mx, my)){
-           if(color_map_model_->GetColorMapInfo(mx,  my) == colorMap::RED) {
-                interfaces::msg::MaskID mask_msg;
-                mask_msg.mask_id .push_back(g_target.id); 
-                mask_id_pub_->publish(mask_msg);
-                RCLCPP_INFO(this->get_logger(), "目标 %s 位于豁免区域，发布 MaskID=1", g_target.id.c_str());
-            ++it;
-            continue;}
+        if (g_target.id == "2" && color_map_model_) {
+            std::cout << "recieve_eginerr" << std::endl;
+            unsigned int mx, my;
+            if (color_map_model_->World2ColorMap(g_target.position.x,
+                                                 g_target.position.y, mx, my)) {
+                if (color_map_model_->GetColorMapInfo(mx, my) ==
+                    colorMap::RED) {
+                    interfaces::msg::MaskID mask_msg;
+                    mask_msg.mask_id.push_back(g_target.id);
+                    mask_id_pub_->publish(mask_msg);
+                    RCLCPP_INFO(this->get_logger(),
+                                "目标 %s 位于豁免区域，发布 MaskID=1",
+                                g_target.id.c_str());
+                    ++it;
+                    continue;
+                }
+            }
         }
-    }
 
         out_msg->targets.push_back(g_target);
 

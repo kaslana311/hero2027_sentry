@@ -32,6 +32,13 @@ def generate_launch_description():
     arguments=['9.11', '-0.262', '1.0', '0.0', '0.0', '0', 'map', 'rune']
   )
 
+  static_tf_global_red_map_node = Node(
+    package='tf2_ros',
+    executable='static_transform_publisher',
+    name='static_tf_map_to_global_red_map',
+    arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0', 'map', 'global_red_map']
+  )
+
   relocalization_node = Node(
     package='relocalization',
     executable='relocalization_node',
@@ -54,5 +61,5 @@ def generate_launch_description():
           arguments=['-d', rviz_config_file],
           output='own_log')
   
-  return LaunchDescription([static_tf_outpost_node, static_tf_rune_node, relocalization_node,declare_rviz_config_file_cmd,start_rviz_cmd])
+  return LaunchDescription([static_tf_outpost_node, static_tf_rune_node, static_tf_global_red_map_node, relocalization_node,declare_rviz_config_file_cmd,start_rviz_cmd])
   # return LaunchDescription([odom_base_link_node]) 

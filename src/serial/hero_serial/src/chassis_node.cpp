@@ -96,7 +96,7 @@ void ChassisNode::OpponentPosition_Callback(void* data) {
 
     interfaces::msg::GlobalTargetArray msg;
     msg.header.stamp = this->now();
-    msg.header.frame_id = "map";
+    msg.header.frame_id = "global_red_map";
 
     // 辅助闭包函数，用于解析并压入数据（假设发送来的数据单位为 cm，需要除以 100
     // 转为 m） 如果实际单位是 mm，请将 100.0 改为 1000.0
@@ -133,10 +133,12 @@ void ChassisNode::Trigger_Callback(void* data) {
     Robot_command_map_t* cmd_data = static_cast<Robot_command_map_t*>(data);
 
     // 串口层仅负责转发，不做任何状态比对和判断
-    geometry_msgs::msg::Point point;
-    point.x = cmd_data->target_position_x;
-    point.y = cmd_data->target_position_y;
-    point.z = 0.0;
+    geometry_msgs::msg::PointStamped point;
+    point.header.stamp = this->now();
+    point.header.frame_id = "global_red_map";
+    point.point.x = cmd_data->target_position_x;
+    point.point.y = cmd_data->target_position_y;
+    point.point.z = 0.0;
 
     trigger_pub_->publish(point);
 }
@@ -188,7 +190,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     refree_pub_ = this->create_publisher<serial_interfaces::msg::Refree>(
         "refree_msg_back", 10);  // 使用默认组
     // 触发式消息发送
-    trigger_pub_ = this->create_publisher<geometry_msgs::msg::Point>(
+    trigger_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>(
         "trigger_msg", 10);  // 使用默认组
     // 轮式里程计速度发布器（用于 EKF 融合）
     // 注意：改用 Odometry 消息类型以包含协方差信息
@@ -505,6 +507,11 @@ void ChassisNode::RefreePubTimerCallback() {
 
     msg.robot_id = robot_info_t_data.robot_id;
     msg.current_hp = robot_info_t_data.remain_HP;
+    if (robot_info_t_data.remain_HP == 0) {
+        sentry_cmd_info_t_data.confirm_revive = 1;
+    } else {
+        sentry_cmd_info_t_data.confirm_revive = 0;
+    }
 
     msg.bullet_17mm = robot_info_t_data.shooter_cooling_rate;
     msg.energy_mechanism_available =

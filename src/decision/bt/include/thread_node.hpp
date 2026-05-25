@@ -1,3 +1,6 @@
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
 #include <atomic>
 #include <chrono>
 #include <interfaces/msg/target_switch.hpp>
@@ -7,6 +10,7 @@
 #include <serial_interfaces/msg/radar.hpp>
 #include <serial_interfaces/msg/refree.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <thread>
 
 #include "behavior_node.hpp"
@@ -27,6 +31,10 @@ class BlackboardUpdater {
           node_(node),
           running_(false),
           is_red_team_(is_red_team) {
+        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
+        tf_listener_ =
+            std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
         // 初始化订阅者
         // 裁判系统订阅
         refree_subscriber_ = node_->create_subscription<
@@ -156,44 +164,75 @@ class BlackboardUpdater {
                 "radar_msg", 10,
                 [this](const serial_interfaces::msg::Radar::SharedPtr msg) {
                     std::lock_guard<std::mutex> lock(mutex_);
+
+                    geometry_msgs::msg::Point p_map = msg->robot_1_position;
+                    try {
+                        geometry_msgs::msg::TransformStamped t =
+                            tf_buffer_->lookupTransform("map", "global_red_map",
+                                                        tf2::TimePointZero);
+                        tf2::doTransform(msg->robot_1_position, p_map, t);
+                    } catch (const tf2::TransformException& ex) {
+                        RCLCPP_WARN_THROTTLE(
+                            node_->get_logger(), *node_->get_clock(), 1000,
+                            "Could not transform radar_msg: %s", ex.what());
+                    }
+
                     // 更新敌方坐标信息到黑板
-                    blackboard_->set("robot_1_x", msg->robot_1_position.x);
-                    blackboard_->set("robot_1_y", msg->robot_1_position.y);
+                    blackboard_->set("robot_1_x", p_map.x);
+                    blackboard_->set("robot_1_y", p_map.y);
 
                     RCLCPP_DEBUG(node_->get_logger(),
-                                 "黑板雷达数据更新: 敌方位置=(%f, %f)",
-                                 msg->robot_1_position.x,
-                                 msg->robot_1_position.y);
+                                 "黑板雷达数据更新: 敌方位置=(%f, %f)", p_map.x,
+                                 p_map.y);
                 });
         // 触发式消息订阅
         trigger_subscriber_ =
-            node_->create_subscription<geometry_msgs::msg::Point>(
+            node_->create_subscription<geometry_msgs::msg::PointStamped>(
                 "trigger_msg", 10,
-                [this](const geometry_msgs::msg::Point::SharedPtr msg) {
+                [this](const geometry_msgs::msg::PointStamped::SharedPtr msg) {
                     std::lock_guard<std::mutex> lock(mutex_);
 
-                    // 记录上一帧数据，用于比较是否有新触发
-                    static double last_trigger_x = 0.0;
-                    static double last_trigger_y = 0.0;
+                    // 记录上一帧的原始数据，用于比较是否有新触发
+                    static double last_raw_trigger_x = 0.0;
+                    static double last_raw_trigger_y = 0.0;
 
-                    // 仅当坐标均不为0（视为有效坐标），且与上一帧不一致时才被判定为新的触发式消息
-                    if ((msg->x != 0.0 || msg->y != 0.0) &&
-                        (msg->x != last_trigger_x ||
-                         msg->y != last_trigger_y)) {
+                    // 仅当原始坐标均不为0（视为有效坐标），且与上一帧原始坐标不一致时才被判定为新的触发式消息
+                    if ((msg->point.x != 0.0 || msg->point.y != 0.0) &&
+                        (msg->point.x != last_raw_trigger_x ||
+                         msg->point.y != last_raw_trigger_y)) {
+                        // Transform to map frame
+                        geometry_msgs::msg::Point p_map = msg->point;
+                        try {
+                            geometry_msgs::msg::TransformStamped t =
+                                tf_buffer_->lookupTransform(
+                                    "map",
+                                    msg->header.frame_id.empty()
+                                        ? "global_red_map"
+                                        : msg->header.frame_id,
+                                    tf2::TimePointZero);
+                            tf2::doTransform(msg->point, p_map, t);
+                        } catch (const tf2::TransformException& ex) {
+                            RCLCPP_WARN_THROTTLE(
+                                node_->get_logger(), *node_->get_clock(), 1000,
+                                "Could not transform trigger_msg: %s",
+                                ex.what());
+                        }
+
                         // 更新触发点到黑板
-                        blackboard_->set("trigger_point_x", msg->x);
-                        blackboard_->set("trigger_point_y", msg->y);
+                        blackboard_->set("trigger_point_x", p_map.x);
+                        blackboard_->set("trigger_point_y", p_map.y);
 
                         // 黑板上的标志位 trigger_flag 置 1 证明有触发式消息
                         blackboard_->set("trigger_flag", 1);
 
-                        last_trigger_x = msg->x;
-                        last_trigger_y = msg->y;
+                        // 更新上一帧原始数据
+                        last_raw_trigger_x = msg->point.x;
+                        last_raw_trigger_y = msg->point.y;
 
                         RCLCPP_INFO(node_->get_logger(),
                                     "产生新触发式消息，更新黑板触发点: (%.3f, "
                                     "%.3f), flag=1",
-                                    msg->x, msg->y);
+                                    p_map.x, p_map.y);
                     }
                 });
 
@@ -244,6 +283,9 @@ class BlackboardUpdater {
     // 判断本局比赛红方还是蓝方
     // true：红方 false：蓝方
     bool is_red_team_ = true;
+
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 };
 /**
  * @brief 血量变化率监测独立线程
