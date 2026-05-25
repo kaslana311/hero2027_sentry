@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <geometry_msgs/msg/detail/point_stamped__struct.hpp>
 #include <interfaces/msg/target_switch.hpp>
 #include <interfaces/msg/target_switchs.hpp>
 #include <memory>
@@ -277,7 +278,7 @@ class BlackboardUpdater {
         refree_subscriber_;
     rclcpp::Subscription<serial_interfaces::msg::Radar>::SharedPtr
         radar_subscriber_;
-    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr
+    rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr
         trigger_subscriber_;
 
     // 判断本局比赛红方还是蓝方
