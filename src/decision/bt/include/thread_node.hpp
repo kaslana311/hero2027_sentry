@@ -1,18 +1,22 @@
+#include <behaviortree_cpp/blackboard.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <geometry_msgs/msg/detail/point_stamped__struct.hpp>
 #include <interfaces/msg/target_switch.hpp>
 #include <interfaces/msg/target_switchs.hpp>
 #include <memory>
 #include <random>
+#include <rclcpp/logging.hpp>
 #include <serial_interfaces/msg/radar.hpp>
 #include <serial_interfaces/msg/refree.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <thread>
+#include <vector>
 
 #include "behavior_node.hpp"
 #include "cruiser_node.hpp"
@@ -633,4 +637,97 @@ class sentry_attack_watcher {
 
     State current_state_;  // 当前状态
     int counter_;          // 状态3的计时器
+};
+
+#include <array>
+#include <vector>
+#include <utility>
+#include <color_info_map.hpp>
+/**
+ * @brief 位置判定独立线程
+ */
+class AdjustPositions {
+   public:
+     AdjustPositions(Blackboard::Ptr blackboard, rclcpp::Node::SharedPtr node)
+        : blackboard_(blackboard), node_(node), running_(false) {
+        // 1. 改为一维数组 std::vector<int64_t>
+        node ->declare_parameter("color_map_yaml_path", "/home/z/Downloads/read/contour_mapfast_lio_latest_map_contour.yaml");
+        node ->declare_parameter("color_map_path", "/home/z/Downloads/read/contour_mapfast_lio_latest_map_contour.pgm");
+        std::string color_map_yaml_path;
+        std::string color_map_path;
+        node->get_parameter("color_map_yaml_path", color_map_yaml_path);
+        node->get_parameter("color_map_path", color_map_path);
+        
+        color_map_model_ = std::make_shared<colorMap::ColorMapModel>(color_map_path, color_map_yaml_path);
+           
+        RCLCPP_INFO(node_->get_logger(), "位置判定器已创建");
+    }
+
+    // 启动判定线程
+    void start() {
+        running_ = true;
+        update_thread_ = std::thread(&AdjustPositions::update_loop, this);
+        RCLCPP_INFO(node_->get_logger(), "位置判定线程已启动");
+    }
+
+    // 停止判定线程
+    void stop() {
+        running_ = false;
+        if (update_thread_.joinable()) {
+            update_thread_.join();
+        }
+        RCLCPP_INFO(node_->get_logger(), "位置判定线程已停止");
+    }
+
+   private:
+    // 判定函数，具体逻辑由用户实现
+    uint8_t evaluatePosition(double x, double y) {
+        unsigned mx,my;
+       if( !color_map_model_->World2ColorMap(x,y,mx,my)) return 0;
+       return  color_map_model_->GetColorMapInfo(mx,my);
+        
+    }
+
+    // 判定循环，在独立线程中运行
+    void update_loop() {
+        rclcpp::Rate rate(10);  // 10Hz更新频率 (可根据需要调整)
+
+        while (running_ && rclcpp::ok()) {
+            // 初始化长度为6的状态数组
+            int res_infantry3=0;
+            int res_infantry4=0;
+      
+
+            // 3. 判断 Infantry3
+            double infantry3_x = 0, infantry3_y = 0;
+            if(blackboard_->get("infantry3_x", infantry3_x) && blackboard_->get("infantry3_y", infantry3_y)){
+                res_infantry3 = evaluatePosition(infantry3_x, infantry3_y);
+                if(res_infantry3 == 1) {
+                    blackboard_->set("infantry3_event_triggered", true);
+                } else {
+                    blackboard_->set("infantry3_event_triggered", false);
+                }
+            }
+
+            // 4. 判断 Infantry4
+            double infantry4_x = 0, infantry4_y = 0;
+            if(blackboard_->get("infantry4_x", infantry4_x) && blackboard_->get("infantry4_y", infantry4_y)){
+                res_infantry4 = evaluatePosition(infantry4_x, infantry4_y);
+                if(res_infantry4 == 1) {
+                    blackboard_->set("infantry4_event_triggered", true);
+                } else {
+                    blackboard_->set("infantry4_event_triggered", false);
+                }
+            }
+
+            // 将拼装好的最终数组写回黑板
+
+            rate.sleep();
+        }
+    }
+    Blackboard::Ptr blackboard_;
+    rclcpp::Node::SharedPtr node_;
+    std::atomic<bool> running_;
+    std::thread update_thread_;
+    std::shared_ptr<colorMap::ColorMapModel> color_map_model_;
 };

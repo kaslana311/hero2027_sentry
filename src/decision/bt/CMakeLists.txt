@@ -3,7 +3,6 @@ project(bt)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # find dependencies
 find_package(ament_cmake REQUIRED)
@@ -21,7 +20,8 @@ find_package(interfaces REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
-
+find_package(OpenCV REQUIRED)
+find_package(yaml-cpp REQUIRED  )
 include_directories(
   include
   /home/dji/projects/hero2025_sentinel_ws/src/serial/boost_asio/include
@@ -37,7 +37,10 @@ add_executable(refree_pub
 
 add_executable(radar_pub
   src/radar_pub_test.cpp)
+target_link_libraries(decision_node
+${YAML_CPP_LIBRARIES}
 
+)
 
 ament_target_dependencies(decision_node
   rclcpp
@@ -52,6 +55,7 @@ ament_target_dependencies(decision_node
   nav_msgs
   visualization_msgs
   tf2_ros
+  OpenCV
 )
 ament_target_dependencies(refree_pub
   rclcpp
