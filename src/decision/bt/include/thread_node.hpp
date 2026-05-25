@@ -57,6 +57,8 @@ class BlackboardUpdater {
                                      msg->small_energy_state);
                     blackboard_->set("big_energy_state", msg->big_energy_state);
 
+                    blackboard_->set("rune_available",msg->energy_mechanism_available);
+
                     // 己方血量同步（根据最新的自定义消息定义，已去除了敌我颜色判断）
                     blackboard_->set("friend_hero", msg->friend_hero);
                     blackboard_->set("friend_engineer", msg->friend_engineer);
@@ -93,9 +95,6 @@ class BlackboardUpdater {
                     blackboard_->set("heat_limit", msg->heat_limit);
                     blackboard_->set("chassis_heat_limit",
                                      msg->chassis_heat_limit);
-
-                    blackboard_->set("rune_available",
-                                     msg->energy_mechanism_available);
 
                     // 位置信息
                     blackboard_->set("position_x", msg->position_x);

@@ -49,21 +49,21 @@ int main(int argc, char** argv) {
 
     blackboard->set<int>("rune_available", 1);
 
-    blackboard->set("friend_hero", 400);
-    blackboard->set("friend_engineer", 400);
-    blackboard->set("friend_infantry3", 400);
-    blackboard->set("friend_infantry4", 400);
-    blackboard->set("friend_sentry", 400);
-    blackboard->set("friend_outpost", 400);
-    blackboard->set("friend_base", 400);
+    blackboard->set<int>("friend_hero", 400);
+    blackboard->set<int>("friend_engineer", 400);
+    blackboard->set<int>("friend_infantry3", 400);
+    blackboard->set<int>("friend_infantry4", 400);
+    blackboard->set<int>("friend_sentry", 400);
+    blackboard->set<int>("friend_outpost", 1500);
+    blackboard->set<int>("friend_base", 5000);
 
-    blackboard->set("enemy_hero", 400);
-    blackboard->set("enemy_engineer", 400);
-    blackboard->set("enemy_infantry3", 400);
-    blackboard->set("enemy_infantry4", 400);
-    blackboard->set("enemy_sentry", 400);
-    blackboard->set("enemy_outpost", 400);
-    blackboard->set("enemy_base", 400);
+    blackboard->set<int>("enemy_hero", 400);
+    blackboard->set<int>("enemy_engineer", 400);
+    blackboard->set<int>("enemy_infantry3", 400);
+    blackboard->set<int>("enemy_infantry4", 400);
+    blackboard->set<int>("enemy_sentry", 400);
+    blackboard->set<int>("enemy_outpost", 1500);
+    blackboard->set<int>("enemy_base", 5000);
 
     blackboard->set<int>("robot_id", 0);
     blackboard->set<int>("bullet_17mm", 0);
@@ -77,6 +77,15 @@ int main(int argc, char** argv) {
     blackboard->set<int>("trigger_flag", 0);
     blackboard->set<double>("x_offset", 0.0);
     blackboard->set<double>("y_offset", 0.0);
+
+    blackboard->set<float>("hero_x", 0.0);
+    blackboard->set<float>("hero_y", 0.0);
+    blackboard->set<float>("engineer_x", 0.0);
+    blackboard->set<float>("engineer_y", 0.0);
+    blackboard->set<float>("infantry3_x", 0.0);
+    blackboard->set<float>("infantry3_y", 0.0);
+    blackboard->set<float>("infantry4_x", 0.0);
+    blackboard->set<float>("infantry4_y", 0.0);
 
     blackboard->set("can_attack_sentry", true);
 
