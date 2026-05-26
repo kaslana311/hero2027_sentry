@@ -6,7 +6,7 @@
       init_yaw: 0.0
       init_pitch: 0.0
       init_roll: 0.0
-      init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      init_pose: [4.065, 7.50, 0.0, 0.0, 0.0, 0.0]
       pcd_path: "src/common/point_cloud_files/filtered_pcd/fast_lio_latest_map.pcd"
       cloud_topic: "/livox/cloud_scans"
       # 添加角度约束参数S
@@ -37,8 +37,8 @@
       resolution: 0.01
       use_precomputed_contour_map: true
       contour_map_pgm_path: "/home/dji/hero2026_-sentry/src/planning/map_server/contour_map/fast_lio_latest_map_contour.pgm"
-      contour_map_origin_x: -7.38124
-      contour_map_origin_y: -9.0111
+      contour_map_origin_x: -0.575
+      contour_map_origin_y: -0.525
       match_tolerance_cells: 1
       search_x_bounds: 0.20
       search_y_bounds: 0.20

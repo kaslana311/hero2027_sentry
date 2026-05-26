@@ -8,8 +8,8 @@ set::set( QWidget* parent)
     : QDialog(parent), ui(new Ui::set) {
     ui->setupUi(this);
 
-    ui->x_lineEdit->setText(QString::number(0.000, 'f', 3));
-    ui->y_lineEdit->setText(QString::number(0.000, 'f', 3));
+    ui->x_lineEdit->setText(QString::number(4.065, 'f', 3));
+    ui->y_lineEdit->setText(QString::number(7.5, 'f', 3));
     ui->z_lineEdit->setText(QString::number(0.000, 'f', 3));
     ui->roll_lineEdit->setText(QString::number(0.000, 'f', 3));
     ui->pitch_lineEdit->setText(QString::number(0.000, 'f', 3));
