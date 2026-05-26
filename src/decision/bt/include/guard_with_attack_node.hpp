@@ -294,81 +294,85 @@ class GuardWithAttackNode : public StatefulActionNode {
      */
     bool computeAttackPoint(double self_x, double self_y, double enemy_x,
                             double enemy_y, double& out_x, double& out_y) {
-        const double circumference = 2.0 * M_PI * engage_distance_;
-        const double vehicle_dim = 0.3;
-        const int num_candidates = std::max(
-            8, static_cast<int>(std::ceil(circumference / vehicle_dim)));
-
-        // 以自身到敌人的角度为起始角（优先搜索靠近自己的方向）
-        double base_angle = std::atan2(self_y - enemy_y, self_x - enemy_x);
-
-        struct Candidate {
-            double x, y, dist_to_self;
-        };
-        std::vector<Candidate> candidates;
-        candidates.reserve(num_candidates);
-
-        for (int i = 0; i < num_candidates; ++i) {
-            double angle = base_angle + 2.0 * M_PI * i / num_candidates;
-            double cx = enemy_x + engage_distance_ * std::cos(angle);
-            double cy = enemy_y + engage_distance_ * std::sin(angle);
-            double dist = std::hypot(cx - self_x, cy - self_y);
-            candidates.push_back({cx, cy, dist});
-        }
-
-        // 按距离自身由近到远排序
-        std::sort(candidates.begin(), candidates.end(),
-                  [](const Candidate& a, const Candidate& b) {
-                      return a.dist_to_self < b.dist_to_self;
-                  });
-
-        // 获取 costmap 快照
+        // 获取 costmap 快照，只需在循环外读取一次
         nav_msgs::msg::OccupancyGrid::SharedPtr costmap;
         {
             std::lock_guard<std::mutex> lock(costmap_mutex_);
             costmap = latest_costmap_;
         }
 
-        // 可视化
-        visualization_msgs::msg::MarkerArray markers;
+        // 以自身到敌人的角度为起始角（优先搜索靠近自己的方向）
+        double base_angle = std::atan2(self_y - enemy_y, self_x - enemy_x);
+        const double vehicle_dim = 0.3;
 
-        for (size_t i = 0; i < candidates.size(); ++i) {
-            double cx = candidates[i].x;
-            double cy = candidates[i].y;
+        // 水波纹向外扩张搜索：最多扩大8次，每次增加 0.4m
+        const int max_steps = 8;
+        const double radius_step = 0.4;
 
-            // 检查 move_radius 约束
-            double dist_to_origin =
-                std::hypot(cx - guard_origin_x_, cy - guard_origin_y_);
+        for (int step = 0; step < max_steps; ++step) {
+            double current_radius = engage_distance_ + step * radius_step;
+            const double circumference = 2.0 * M_PI * current_radius;
+            const int num_candidates = std::max(
+                8, static_cast<int>(std::ceil(circumference / vehicle_dim)));
 
-            if (dist_to_origin > move_radius_) {
-                // 超出活动半径 → 截断到 move_radius 圆周上
-                double dir_x = cx - guard_origin_x_;
-                double dir_y = cy - guard_origin_y_;
-                double norm = std::hypot(dir_x, dir_y);
-                if (norm > 1e-6) {
-                    cx = guard_origin_x_ + (dir_x / norm) * move_radius_;
-                    cy = guard_origin_y_ + (dir_y / norm) * move_radius_;
-                } else {
+            struct Candidate {
+                double x, y, dist_to_self;
+            };
+            std::vector<Candidate> candidates;
+            candidates.reserve(num_candidates);
+
+            for (int i = 0; i < num_candidates; ++i) {
+                double angle = base_angle + 2.0 * M_PI * i / num_candidates;
+                double cx = enemy_x + current_radius * std::cos(angle);
+                double cy = enemy_y + current_radius * std::sin(angle);
+                double dist = std::hypot(cx - self_x, cy - self_y);
+                candidates.push_back({cx, cy, dist});
+            }
+
+            // 在当前圆周上，按距离自身由近到远排序，优先选移动代价最小的点
+            std::sort(candidates.begin(), candidates.end(),
+                      [](const Candidate& a, const Candidate& b) {
+                          return a.dist_to_self < b.dist_to_self;
+                      });
+
+            for (size_t i = 0; i < candidates.size(); ++i) {
+                double cx = candidates[i].x;
+                double cy = candidates[i].y;
+
+                // 检查 move_radius 约束
+                double dist_to_origin =
+                    std::hypot(cx - guard_origin_x_, cy - guard_origin_y_);
+
+                if (dist_to_origin > move_radius_) {
+                    // 超出活动半径 → 截断到 move_radius 圆周上
+                    double dir_x = cx - guard_origin_x_;
+                    double dir_y = cy - guard_origin_y_;
+                    double norm = std::hypot(dir_x, dir_y);
+                    if (norm > 1e-6) {
+                        cx = guard_origin_x_ + (dir_x / norm) * move_radius_;
+                        cy = guard_origin_y_ + (dir_y / norm) * move_radius_;
+                    } else {
+                        continue;
+                    }
+                }
+
+                // 检查 costmap 可行性
+                if (costmap && !isCostmapFree(costmap, cx, cy)) {
                     continue;
                 }
+
+                // 找到可行点
+                out_x = cx;
+                out_y = cy;
+
+                // 发布可视化
+                publishVisualization(enemy_x, enemy_y, out_x, out_y);
+
+                return true;
             }
-
-            // 检查 costmap 可行性
-            if (costmap && !isCostmapFree(costmap, cx, cy)) {
-                continue;
-            }
-
-            // 找到可行点
-            out_x = cx;
-            out_y = cy;
-
-            // 发布可视化
-            publishVisualization(enemy_x, enemy_y, out_x, out_y);
-
-            return true;
         }
 
-        return false;  // 无可行候选点
+        return false;  // 所有圈无可行候选点
     }
 
     /**
