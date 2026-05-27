@@ -71,50 +71,81 @@ class DoubleCheckValueNode : public ConditionNode {
    public:
     DoubleCheckValueNode(const std::string& name, const NodeConfig& config)
         : ConditionNode(name, config) {
-        // 从端口获取比较运算符，默认使用等于
-        if (!getInput("operator", compare_operator_)) {
-            compare_operator_ = "eq";
-        }
+        // 构造时不改变黑板变量（交由黑板持久化）
     }
 
     static PortsList providedPorts() {
-        return {InputPort<double>("value", "要检查的整数值"),
-                InputPort<double>("expected", "期望的整数值"),
-                InputPort<std::string>("operator",
-                                       "比较运算符: eq, ne, gt, lt, ge, le")};
+        return {InputPort<int>("value", "如果使用此值，作为输入进行比对"),
+                InputPort<int>("trigger_value", "触发激活此行为的阈值"),
+                InputPort<std::string>(
+                    "trigger_operator",
+                    "触发激活逻辑操作符 (eq, gt, lt, ge, le, 等)"),
+                InputPort<int>("exit_value", "退出脱离此行为的阈值"),
+                InputPort<std::string>("exit_operator", "退出脱离逻辑操作符"),
+                InputPort<std::string>("flag_name",
+                                       "用于标志已经触发了本阶段的黑板变量名"),
+                InputPort<std::string>("blackboard_key",
+                                       "直接检查黑板上该值的选项(可选)")};
     }
 
     NodeStatus tick() override {
-        // 获取输入值
-        double value;
-        double expected;
-
-        if (!getInput("value", value) || !getInput("expected", expected)) {
-            std::cout << "检查错误: 缺少输入值" << std::endl;
+        int val;
+        std::string blackboard_key;
+        if (getInput("blackboard_key", blackboard_key) &&
+            !blackboard_key.empty()) {
+            if (!config().blackboard->get(blackboard_key, val)) {
+                return NodeStatus::FAILURE;
+            }
+        } else if (!getInput("value", val)) {
             return NodeStatus::FAILURE;
         }
 
-        // 执行比较操作
-        bool result = compareValues(value, expected);
-        return result ? NodeStatus::SUCCESS : NodeStatus::FAILURE;
+        int trigger_val, exit_val;
+        std::string trigger_op_str, exit_op_str, flag_name;
+
+        if (!getInput("trigger_value", trigger_val) ||
+            !getInput("exit_value", exit_val) ||
+            !getInput("trigger_operator", trigger_op_str) ||
+            !getInput("exit_operator", exit_op_str) ||
+            !getInput("flag_name", flag_name)) {
+            return NodeStatus::FAILURE;
+        }
+
+        auto compare = [](int val, int expected, const std::string& op) {
+            if (op == "eq") return val == expected;
+            if (op == "gt") return val > expected;
+            if (op == "lt") return val < expected;
+            if (op == "ge") return val >= expected;
+            if (op == "le") return val <= expected;
+            if (op == "ne") return val != expected;
+            return false;
+        };
+
+        // 从黑板拉取历史触发记录：如果没有则设为 0
+        int is_triggered = 0;
+        config().blackboard->get(flag_name, is_triggered);
+
+        if (is_triggered == 0) {
+            // == 尚未触发该阶段事件，监听是否达到触发阈门 ==
+            if (compare(val, trigger_val, trigger_op_str)) {
+                // 已满足触发条件！开启急救/状态保持，并设置上锁标志位
+                config().blackboard->set(flag_name, 1);
+                return NodeStatus::SUCCESS;
+            }
+            // 未满足触发条件，保持不阻挡其他Fallback分支
+            return NodeStatus::FAILURE;
+        } else {
+            // == 当前处于已触发激活的状态，必须紧盯着退出条件是否达标 ==
+            if (compare(val, exit_val, exit_op_str)) {
+                // 已满足打断条件：脱离危险/本阶段结束，降下标志位并放权
+                config().blackboard->set(flag_name, 0);
+                return NodeStatus::FAILURE;
+            }
+            // 还没从状态熬出头（比如血量才充到 250，还没大于 300 ！）
+            // 那么返回SUCCESS以拦截Fallback树继续往下探！保持主导权
+            return NodeStatus::SUCCESS;
+        }
     }
-
-   private:
-    bool compareValues(double value, double expected) {
-        std::cout << "执行比较操作 [" << value << " " << compare_operator_
-                  << " " << expected << "]" << std::endl;
-
-        if (compare_operator_ == "eq") return value == expected;
-        if (compare_operator_ == "ne") return value != expected;
-        if (compare_operator_ == "gt") return value > expected;
-        if (compare_operator_ == "lt") return value < expected;
-        if (compare_operator_ == "ge") return value >= expected;
-        if (compare_operator_ == "le") return value <= expected;
-
-        throw RuntimeError("不支持的运算符: " + compare_operator_);
-    }
-
-    std::string compare_operator_;
 };
 
 // 打印日志节点

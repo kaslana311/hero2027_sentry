@@ -95,6 +95,8 @@ int main(int argc, char** argv) {
     blackboard->set<int>("big_rune_flag_2", 0);
     blackboard->set<int>("big_rune_flag_3", 0);
 
+    blackboard->set<int>("is_recovering", 0);
+
     // 独立线程创建并启动黑板更新器
     auto blackboard_updater =
         std::make_shared<BlackboardUpdater>(blackboard, node, is_red_team);
@@ -108,9 +110,9 @@ int main(int argc, char** argv) {
     auto gimbal_serial_node =
         std::make_shared<GimbalSerialNode>(node, blackboard);
     gimbal_serial_node->start();  // 启动线程
-    
-    // auto position_adjuster = std::make_shared<AdjustPositions>(blackboard, node);
-    // position_adjuster->start();  // 启动位置判定线程
+
+    // auto position_adjuster = std::make_shared<AdjustPositions>(blackboard,
+    // node); position_adjuster->start();  // 启动位置判定线程
     // 启动敌方哨兵血量监控进程
     // auto sentry_watcher = std::make_shared<sentry_attack_watcher>(blackboard,
     // node); sentry_watcher->start();
