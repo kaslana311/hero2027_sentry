@@ -300,22 +300,34 @@ void ChassisNode::HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg) {
 
         // 创建独立线程处理危险模式
         std::thread danger_thread([this]() {
-            // 立即生成第一个随机转速
-            ctrl_info_t_data.w = spin_speed_distribution_(random_engine_);
-            RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%f",
-                        ctrl_info_t_data.w);
+            // 立即生成第一个随机转速，修改期望值target_w_
+            target_w_.store(
+                static_cast<float>(spin_speed_distribution_(random_engine_)));
+            if (!is_rune_attacking_.load()) {
+                ctrl_info_t_data.w = target_w_.load();
+            }
+            RCLCPP_INFO(this->get_logger(), "底盘转速随机期望调整为：%f",
+                        target_w_.load());
 
             // 运行6秒，每1.5秒更新一次转速
             for (int i = 0; i < 4; ++i) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-                ctrl_info_t_data.w = spin_speed_distribution_(random_engine_);
-                RCLCPP_INFO(this->get_logger(), "底盘转速随机调整为：%f",
-                            ctrl_info_t_data.w);
+                target_w_.store(static_cast<float>(
+                    spin_speed_distribution_(random_engine_)));
+                if (!is_rune_attacking_.load()) {
+                    ctrl_info_t_data.w = target_w_.load();
+                }
+                RCLCPP_INFO(this->get_logger(), "底盘转速随机期望调整为：%f",
+                            target_w_.load());
             }
 
-            // 恢复战时常规转速
-            ctrl_info_t_data.w = 2400;
-            RCLCPP_INFO(this->get_logger(), "危险模式结束，恢复战时常规转速");
+            // 恢复战时常规转速到期望值
+            target_w_.store(2400.0f);
+            if (!is_rune_attacking_.load()) {
+                ctrl_info_t_data.w = target_w_.load();
+            }
+            RCLCPP_INFO(this->get_logger(),
+                        "危险模式结束，恢复战时常规转速期望");
 
             // 重置危险模式标志
             is_danger_mode_.store(false);
@@ -331,12 +343,20 @@ void ChassisNode::RuneActivateCallback(
     const std_msgs::msg::Bool::SharedPtr msg) {
     if (msg->data) {
         sentry_cmd_info_t_data.energy_mechanism_activate = 1;
+        // 打符时屏蔽小陀螺：记录打符状态，并将当前底盘物理转速置 0
+        is_rune_attacking_.store(true);
+        ctrl_info_t_data.w = 0.0f;
     } else {
         sentry_cmd_info_t_data.energy_mechanism_activate = 0;
+        // 打符结束：取消屏蔽状态，恢复后台期望的转速
+        is_rune_attacking_.store(false);
+        ctrl_info_t_data.w = target_w_.load();
     }
     RCLCPP_INFO(this->get_logger(),
-                "能量机关串口指令更新: energy_mechanism_activate = %d",
-                sentry_cmd_info_t_data.energy_mechanism_activate);
+                "能量机关串口指令更新: energy_mechanism_activate = %d, "
+                "当前设定小陀螺速度 = %f",
+                sentry_cmd_info_t_data.energy_mechanism_activate,
+                ctrl_info_t_data.w);
 }
 
 void ChassisNode::ReachCallback(const std_msgs::msg::Bool::SharedPtr msg) {

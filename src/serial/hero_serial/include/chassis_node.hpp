@@ -106,6 +106,10 @@ class ChassisNode : public rclcpp::Node {
     std::atomic<bool>
         is_danger_mode_;  // 是否处于危险模式（使用原子变量避免竞争）
 
+    // 能量机关打符状态标记，以及目标转速状态管理
+    std::atomic<bool> is_rune_attacking_{false};
+    std::atomic<float> target_w_{1200.0f};  // 默认小陀螺转速（原1200）
+
     // 随机数生成器
     std::mt19937 random_engine_;
     std::uniform_int_distribution<int> spin_speed_distribution_;
