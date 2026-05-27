@@ -63,12 +63,17 @@ LidarMergeNode::LidarMergeNode(const std::string & name) : Node(name)
     r22 = T_lidar1_to_lidar2_(2, 2); 
     tz = T_lidar1_to_lidar2_(2, 3);
   cloud_pub_ = this->create_publisher<livox_ros_driver2::msg::CustomMsg>("/livox/fused_cloud", 10);
+  #ifdef TWO_LIDARS
   lidar1_sub_.subscribe(this, lidar1_topic);
   lidar2_sub_.subscribe(this, lidar2_topic);
   sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(
     SyncPolicy(5), lidar1_sub_, lidar2_sub_);
   sync_->registerCallback(std::bind(
     &LidarMergeNode::Sync_lidarCallback, this, std::placeholders::_1, std::placeholders::_2));
+  #else
+  lidar_sub_ = this->create_subscription<livox_ros_driver2::msg::CustomMsg>(
+    lidar1_topic, 10, std::bind(&LidarMergeNode::lidarCallback, this, std::placeholders::_1));
+  #endif
 }
 // ...existing code...
 
@@ -79,7 +84,7 @@ bool LidarMergeNode::isBlind(const livox_ros_driver2::msg::CustomPoint & pt) {
   double distance = std::sqrt((pt.x - ori_x) * (pt.x - ori_x) + (pt.y - ori_y) * (pt.y - ori_y) + (pt.z - ori_z) * (pt.z - ori_z));
  return distance < blind;
 } 
-   
+#ifdef TWO_LIDARS
 void LidarMergeNode::Sync_lidarCallback(
   const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg1,
   const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg2)
@@ -227,6 +232,32 @@ void LidarMergeNode::Sync_lidarCallback(
     std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count() / 1000.0;
   std::cout << " -- [ INFO] Map updated in " << time_consuming << " ms." << std::endl;
 }
+#else
+void LidarMergeNode::lidarCallback(const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr & msg)
+{
+  auto start_time = std::chrono::steady_clock::now();
+  //tbb 并行计算msg1的坐标变换
+  auto fused_msg = std::make_unique<livox_ros_driver2::msg::CustomMsg>(); 
+  fused_msg->header = msg->header;
+  fused_msg->timebase = msg->timebase;
+  fused_msg->lidar_id = msg->lidar_id;
+  const size_t len = msg->points.size();
+  fused_msg->points.resize(len);
+  tbb::parallel_for(tbb::blocked_range<size_t>(0, len), [&](const tbb::blocked_range<size_t> & r) {
+    for (size_t i = r.begin(); i != r.end(); ++i) {
+      livox_ros_driver2::msg::CustomPoint pt = msg->points[i];
+      if (isBlind(pt)) continue; // 如果点在盲区内，则直接丢弃，继续比较下一点
+      const double px = pt.x, py = pt.y, pz = pt.z;
+      pt.x = static_cast<float>(r00 * px + r01 * py + r02 * pz + tx);
+      pt.y = static_cast<float>(r10 * px + r11 * py + r12 * pz + ty);
+      pt.z = static_cast<float>(r20 * px + r21 * py + r22 * pz + tz);
+      fused_msg->points[i] = pt;
+    }
+  });
+   fused_msg->point_num = len;
+  PublishPointCloud(std::move(fused_msg));
+}
+#endif
 // ...existing code...
 void LidarMergeNode::PublishPointCloud(livox_ros_driver2::msg::CustomMsg::UniquePtr msg1)
 {
