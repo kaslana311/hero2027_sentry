@@ -188,7 +188,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
 
     // 发布裁判系统信息给决策节点
     refree_pub_ = this->create_publisher<serial_interfaces::msg::Refree>(
-        "refree_msg_back", 10);  // 使用默认组
+        "refree_msg", 10);  // 使用默认组
     // 触发式消息发送
     trigger_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>(
         "trigger_msg", 10);  // 使用默认组

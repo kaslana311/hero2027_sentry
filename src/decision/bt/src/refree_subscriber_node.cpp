@@ -107,9 +107,9 @@ int main(int argc, char** argv) {
     hp_watcher->start();
 
     // 创建并启动独立自瞄状态广播节点
-    auto gimbal_serial_node =
-        std::make_shared<GimbalSerialNode>(node, blackboard);
-    gimbal_serial_node->start();  // 启动线程
+    // auto gimbal_serial_node =
+    //     std::make_shared<GimbalSerialNode>(node, blackboard);
+    // gimbal_serial_node->start();  // 启动线程
 
     // auto position_adjuster = std::make_shared<AdjustPositions>(blackboard,
     // node); position_adjuster->start();  // 启动位置判定线程
