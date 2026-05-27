@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
         std::make_shared<GimbalSerialNode>(node, blackboard);
     gimbal_serial_node->start();  // 启动线程
     
-    auto position_adjuster = std::make_shared<AdjustPositions>(blackboard, node);
+    // auto position_adjuster = std::make_shared<AdjustPositions>(blackboard, node);
     // position_adjuster->start();  // 启动位置判定线程
     // 启动敌方哨兵血量监控进程
     // auto sentry_watcher = std::make_shared<sentry_attack_watcher>(blackboard,
