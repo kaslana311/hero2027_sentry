@@ -44,7 +44,7 @@
                 </ReactiveSequence>
                 <ReactiveSequence>
                     <LogMessage message="等待血量或弹丸恢复"/>
-                    <Guardian guard_duration="10.0"/>
+                    <Guardian guard_duration="5.0"/>
                 </ReactiveSequence>
             </Sequence>
         </ReactiveSequence>
@@ -175,13 +175,15 @@
         <ReactiveSequence>
             <CheckValue value="{enemy_outpost_status}" expected="0" operator="eq"/>
             <CheckValue value="{stage_time}" expected="390" operator="gt"/>
-            <ReactiveSequence>
-                <Nav x="11.6" y="12.6" />
-            </ReactiveSequence>
-            <ReactiveSequence>
-                <PublishNavOutput target_tf_name="outpost" mode="1"/>
-                <Guardian guard_duration="20.0"/>
-            </ReactiveSequence>
+            <Sequence>
+                <ReactiveSequence>
+                    <Nav x="11.6" y="12.6" />
+                </ReactiveSequence>
+                <ReactiveSequence>
+                    <PublishNavOutput target_tf_name="outpost" mode="1"/>
+                    <Guardian guard_duration="5.0"/>
+                </ReactiveSequence>
+            </Sequence>
         </ReactiveSequence>
     </BehaviorTree>
 
@@ -241,23 +243,25 @@
     </BehaviorTree>
 
     <BehaviorTree ID="Stage5_GameOver">
-        <Sequence>
-            <CheckValue value="{competition_stage}" expected="5" operator="eq"/>
-            <LogMessage message="阶段(5)：比赛结束。开始重置标志位..."/>
-            <ClearFlagNode flag_name="small_rune_flag_1" expected_value="0"/>
-            <ClearFlagNode flag_name="small_rune_flag_2" expected_value="0"/>
-            <ClearFlagNode flag_name="big_rune_flag_1" expected_value="0"/>
-            <ClearFlagNode flag_name="big_rune_flag_2" expected_value="0"/>
-            <ClearFlagNode flag_name="big_rune_flag_3" expected_value="0"/>
-            <ClearFlagNode flag_name="trigger_flag" expected_value="0"/>
+        <ReactiveSequence>
+            <CheckValue value="{competition_stage}" expected="4" operator="ne"/>
+            <LogMessage message="非阶段4，导航纠偏，防止打滑..."/>
             <!-- 安全打断回家 -->
-            <ReactiveSequence>
-                <Nav x="4.0" y="7.94" />
-            </ReactiveSequence>
-            <ReactiveSequence>
-                <Guardian guard_duration="10.0"/>
-            </ReactiveSequence>
-        </Sequence>
+            <Sequence>
+                <ClearFlagNode flag_name="small_rune_flag_1" expected_value="0"/>
+                <ClearFlagNode flag_name="small_rune_flag_2" expected_value="0"/>
+                <ClearFlagNode flag_name="big_rune_flag_1" expected_value="0"/>
+                <ClearFlagNode flag_name="big_rune_flag_2" expected_value="0"/>
+                <ClearFlagNode flag_name="big_rune_flag_3" expected_value="0"/>
+                <ClearFlagNode flag_name="trigger_flag" expected_value="0"/>
+                <ReactiveSequence>
+                    <Nav x="4.0" y="7.94" />
+                </ReactiveSequence>
+                <ReactiveSequence>
+                    <Guardian guard_duration="4.0"/>
+                </ReactiveSequence>
+            </Sequence>
+        </ReactiveSequence>
     </BehaviorTree>
 
     <!-- Description of Node Models (used by Groot) -->
