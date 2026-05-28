@@ -245,9 +245,9 @@
     <BehaviorTree ID="Stage5_GameOver">
         <ReactiveSequence>
             <CheckValue value="{competition_stage}" expected="4" operator="ne"/>
-            <LogMessage message="非阶段4，导航纠偏，防止打滑..."/>
             <!-- 安全打断回家 -->
             <Sequence>
+                <LogMessage message="非阶段4，导航纠偏，防止打滑..."/>
                 <ClearFlagNode flag_name="small_rune_flag_1" expected_value="0"/>
                 <ClearFlagNode flag_name="small_rune_flag_2" expected_value="0"/>
                 <ClearFlagNode flag_name="big_rune_flag_1" expected_value="0"/>
@@ -255,7 +255,7 @@
                 <ClearFlagNode flag_name="big_rune_flag_3" expected_value="0"/>
                 <ClearFlagNode flag_name="trigger_flag" expected_value="0"/>
                 <ReactiveSequence>
-                    <Nav x="4.0" y="7.94" />
+                    <Nav x="3.9" y="7.5" />
                 </ReactiveSequence>
                 <ReactiveSequence>
                     <Guardian guard_duration="4.0"/>
