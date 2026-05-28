@@ -78,5 +78,8 @@ DECISION_LOG="$LOG_DIR/decision.log"
 gnome-terminal --tab --title="decision" -- bash -c \
 "script -q -f \"$DECISION_LOG\" -c 'ros2 launch bt decision_launch.py'; exec bash"
 
+gnome-terminal --tab --title="ros_bags" -- bash -c \
+"bash record.sh; exec bash"
+
 echo "所有节点已启动，系统初始化完成！"
 echo "完整日志目录: $LOG_DIR"

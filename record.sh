@@ -9,12 +9,12 @@
 NS="" 
 
 # 2. 定义相对话题名（不要以 / 开头）
-RELATIVE_TOPICS=" aft_mapped_to_init"
+RELATIVE_TOPICS="  refree_msg trigger_msg tracker/radar autoaim_tracker/global_targets_marker"
 
 # 3. 存储路径配置
 BAG_PATH_BASE="$HOME/ros_bags"
 BAG_NAME="esdf_session_$(date +%Y%m%d_%H%M%S)"
-
+cd /home/dji/hero2026_-sentry
 # --- 自动处理话题拼接 ---
 # 遍历相对话题，自动加上命名空间前缀，形成绝对路径
 FULL_TOPICS=""
@@ -33,6 +33,7 @@ echo "最终话题列表: $FULL_TOPICS"
 echo "存储位置: $BAG_PATH_BASE/$BAG_NAME"
 echo "========================================"
 source /opt/ros/humble/setup.bash
+source install/setup.bash
 # --- 执行录制 ---
 # 使用 -o 指定输出目录
 # 使用 -s mcap 推荐格式（确保你安装了 ros-humble-rosbag2-storage-mcap）
