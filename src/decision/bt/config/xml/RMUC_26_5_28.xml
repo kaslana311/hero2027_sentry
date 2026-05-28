@@ -21,7 +21,7 @@
             <CheckValue value="{stage_time}" expected="0" operator="gt"/>
             <ReactiveFallback>
                 <!-- 优先级1（最高）：生存撤退（低血量/低弹丸） -->
-                <!-- 此处通过检查黑板 "is_recovering" 标志来解决血量 > 100 就立刻退出加血逻辑的问题 -->
+                <!-- 此处通过检查黑板 "is_recovering" 标志来解决血量 > 200 就立刻退出加血逻辑的问题 -->
                 <SubTree ID="DangerRetreat" _autoremap="true"/>
 
                 <!-- 优先级2：高血量/充足弹丸战术分配 -->
@@ -33,7 +33,7 @@
     <BehaviorTree ID="DangerRetreat">
         <ReactiveSequence>
             <Fallback>
-                <DoubleCheckValue value="{current_hp}" trigger_value="100" trigger_operator="le" exit_value="300" exit_operator="gt" flag_name="is_recovering" blackboard_key="current_hp" />
+                <DoubleCheckValue value="{current_hp}" trigger_value="200" trigger_operator="le" exit_value="350" exit_operator="gt" flag_name="is_recovering" blackboard_key="current_hp" />
                 <CheckValue value="{bullet_17mm}" expected="20" operator="le"/>
             </Fallback>
             <!-- 如果上方通过，证明当前正处于危险急救或者仍在恢复阶段 -->
@@ -52,7 +52,7 @@
 
     <BehaviorTree ID="HealthTactics">
         <Sequence>
-            <CheckValue value="{current_hp}" expected="100" operator="gt"/>
+            <CheckValue value="{current_hp}" expected="200" operator="gt"/>
             <CheckValue value="{bullet_17mm}" expected="20" operator="gt"/>
             <LogMessage message="血量健康，前往占点区"/>
 
@@ -128,7 +128,7 @@
                 <Sequence>
                     <CheckValue value="{big_rune_flag_1}" expected="0" operator="eq"/>
                     <CheckValue value="{stage_time}" expected="240" operator="le"/>
-                    <CheckValue value="{stage_time}" expected="150" operator="gt"/>
+                    <CheckValue value="{stage_time}" expected="165" operator="gt"/>
                     <LogMessage message="尝试激活第一次大能量机关"/>
                     <ReactiveSequence>
                         <Nav x="10.6" y="11.2" />
@@ -142,7 +142,7 @@
                 <!-- 大能量机关 2 -->
                 <Sequence>
                     <CheckValue value="{big_rune_flag_2}" expected="0" operator="eq"/>
-                    <CheckValue value="{stage_time}" expected="150" operator="le"/>
+                    <CheckValue value="{stage_time}" expected="165" operator="le"/>
                     <CheckValue value="{stage_time}" expected="90" operator="gt"/>
                     <LogMessage message="尝试激活第二次大能量机关"/>
                     <ReactiveSequence>
@@ -174,7 +174,7 @@
     <BehaviorTree ID="DefenseOutpost">
         <ReactiveSequence>
             <CheckValue value="{enemy_outpost_status}" expected="0" operator="eq"/>
-            <CheckValue value="{stage_time}" expected="390" operator="gt"/>
+            <CheckValue value="{stage_time}" expected="330" operator="gt"/>
             <Sequence>
                 <ReactiveSequence>
                     <Nav x="11.6" y="12.6" />
@@ -189,55 +189,32 @@
 
     <BehaviorTree ID="CruiseTask">
         <Sequence>
-            <!-- <CheckValue value="{enemy_outpost_status}" expected="0" operator="gt"/> -->
             <Fallback>
-                <!-- 巡航点0 -->
-                <Sequence>
-                    <CheckValue value="{cruise_state}" expected="0" operator="eq"/>
-                    <ReactiveSequence>
-                        <Nav x="9.1" y="4.56" />
-                    </ReactiveSequence>
-                    <ReactiveSequence>
-                        <GuardWithAttack guard_duration="20.0" move_radius="7.0" engage_distance="2.0" occ_threshold="50" nav_update_interval="1.0" sense_radius="9.0"/>
-                    </ReactiveSequence>
-                    <CruiserStateManager cruise_state_in="{cruise_state}" cruise_state_out="{cruise_state}" total_points="{global_total_points}" />
-                </Sequence>
+                <!-- 巡航点0：保护英雄 -->
+                <ReactiveSequence>
+                    <CheckValue value="{stage_time}" expected="60" operator="gt"/>
+                    <Sequence>
+                        <ReactiveSequence>
+                            <Nav x="9.1" y="4.56" />
+                        </ReactiveSequence>
+                        <ReactiveSequence>
+                            <GuardWithAttack guard_duration="120.0" move_radius="8.0" engage_distance="2.0" occ_threshold="50" nav_update_interval="1.0" sense_radius="10.0"/>
+                        </ReactiveSequence>
+                    </Sequence>
+                </ReactiveSequence>
 
-                <!-- 巡航点1 -->
-                <Sequence>
-                    <CheckValue value="{cruise_state}" expected="1" operator="eq"/>
-                    <ReactiveSequence>
-                        <Nav x="9.33" y="10.8" />
-                    </ReactiveSequence>
-                    <ReactiveSequence>
-                        <GuardWithAttack guard_duration="20.0" move_radius="7.0" engage_distance="2.0" occ_threshold="50" nav_update_interval="1.0" sense_radius="9.0"/>
-                    </ReactiveSequence>
-                    <CruiserStateManager cruise_state_in="{cruise_state}" cruise_state_out="{cruise_state}" total_points="{global_total_points}" />
-                </Sequence>
-
-                <!-- 巡航点2 -->
-                <Sequence>
-                    <CheckValue value="{cruise_state}" expected="2" operator="eq"/>
-                    <ReactiveSequence>
-                        <Nav x="7.5" y="12.8" />
-                    </ReactiveSequence>
-                    <ReactiveSequence>
-                        <GuardWithAttack guard_duration="20.0" move_radius="7.0" engage_distance="2.0" occ_threshold="50" nav_update_interval="1.0" sense_radius="9.0"/>
-                    </ReactiveSequence>
-                    <CruiserStateManager cruise_state_in="{cruise_state}" cruise_state_out="{cruise_state}" total_points="{global_total_points}" />
-                </Sequence>
-
-                <!-- 巡航点3 -->
-                <Sequence>
-                    <CheckValue value="{cruise_state}" expected="3" operator="eq"/>
-                    <ReactiveSequence>
-                        <Nav x="4.0" y="7.94" />
-                    </ReactiveSequence>
-                    <ReactiveSequence>
-                        <GuardWithAttack guard_duration="10.0" move_radius="7.0" engage_distance="2.0" occ_threshold="50" nav_update_interval="1.0" sense_radius="9.0"/>
-                    </ReactiveSequence>
-                    <CruiserStateManager cruise_state_in="{cruise_state}" cruise_state_out="{cruise_state}" total_points="{global_total_points}" />
-                </Sequence>
+                <!-- 巡航点1：保护堡垒 -->
+                <ReactiveSequence>
+                    <CheckValue value="{stage_time}" expected="60" operator="le"/>
+                    <Sequence>
+                        <ReactiveSequence>
+                            <Nav x="4.0" y="7.94" />
+                        </ReactiveSequence>
+                        <ReactiveSequence>
+                            <GuardWithAttack guard_duration="60.0" move_radius="8.0" engage_distance="2.0" occ_threshold="50" nav_update_interval="1.0" sense_radius="10.0"/>
+                        </ReactiveSequence>
+                    </Sequence>
+                </ReactiveSequence>
             </Fallback>
         </Sequence>
     </BehaviorTree>
