@@ -22,6 +22,7 @@ find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(yaml-cpp REQUIRED  )
+find_package(map_msgs REQUIRED  )
 include_directories(
   include
   /home/dji/projects/hero2025_sentinel_ws/src/serial/boost_asio/include
@@ -56,6 +57,7 @@ ament_target_dependencies(decision_node
   visualization_msgs
   tf2_ros
   OpenCV
+  map_msgs
 )
 ament_target_dependencies(refree_pub
   rclcpp

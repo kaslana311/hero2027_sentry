@@ -106,15 +106,25 @@ RelocalizationNode::RelocalizationNode(QObject* parent)
             RCLCPP_ERROR(this->get_logger(), "Failed to load contour PGM");
         }
     }
+    // ////////////////////////
+       if (!qt_control.load()) {
+        publishTransform();
+        registration_success_ = true;
+                map_cloud_msg_.header.stamp = this->now();
+        pub_map_cloud_->publish(map_cloud_msg_);
+    }
 
-    sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        topic_string, 1,
-        std::bind(&RelocalizationNode::SaveCurScanCallback, this,
-                  std::placeholders::_1));
+    reloc_res relocResult;
+    relocResult.isOk = true;
+    emit alignResultSignal(relocResult);
+    // sub_scan_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+    //     topic_string, 1,
+    //     std::bind(&RelocalizationNode::SaveCurScanCallback, this,
+    //               std::placeholders::_1));
 
-    timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(100),
-        std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
+    // timer_ = this->create_wall_timer(
+    //     std::chrono::milliseconds(100),
+    //     std::bind(&RelocalizationNode::GlobalLocalizationTimerCallback, this));
 }
 
 bool RelocalizationNode::InitGlobalMap(std::string map_path) {
@@ -268,95 +278,95 @@ void RelocalizationNode::SaveCurScanCallback(
 }
 
 void RelocalizationNode::GlobalLocalizationTimerCallback() {
-    if (registration_success_) return;
-    if (!has_global_map_) return;
-    {
-        std::lock_guard<std::mutex> lock(mtx);
-        if (!has_scan_) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                                 "Accumulating lidar scan, wait...");
-            return;
-        }
-        *cloud_to_process = *accumulated_cloud_;
+    // if (registration_success_) return;
+    // if (!has_global_map_) return;
+    // {
+    //     std::lock_guard<std::mutex> lock(mtx);
+    //     if (!has_scan_) {
+    //         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+    //                              "Accumulating lidar scan, wait...");
+    //         return;
+    //     }
+    //     *cloud_to_process = *accumulated_cloud_;
 
-        // 数据切走以后立刻重置累加状态以接收下一轮新数据
-        scan_count = 0;
-        has_scan_ = false;
-        accumulated_cloud_->clear();
-    }
+    //     // 数据切走以后立刻重置累加状态以接收下一轮新数据
+    //     scan_count = 0;
+    //     has_scan_ = false;
+    //     accumulated_cloud_->clear();
+    // }
 
-    rclcpp::Time begin_time = this->now();
+    // rclcpp::Time begin_time = this->now();
 
-    // 根据 Sensor 高度截断扫描轮廓
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(
-        new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud(cloud_to_process);
-    pass.setFilterFieldName("z");
-    pass.setFilterLimits(scan_z_min_, scan_z_max_);
-    pass.filter(*cloud_filtered);
+    // // 根据 Sensor 高度截断扫描轮廓
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(
+    //     new pcl::PointCloud<pcl::PointXYZ>);
+    // pcl::PassThrough<pcl::PointXYZ> pass;
+    // pass.setInputCloud(cloud_to_process);
+    // pass.setFilterFieldName("z");
+    // pass.setFilterLimits(scan_z_min_, scan_z_max_);
+    // pass.filter(*cloud_filtered);
 
-    scan_2d_points_.clear();
-    for (const auto& pt : cloud_filtered->points) {
-        scan_2d_points_.emplace_back(pt.x, pt.y);
-    }
+    // scan_2d_points_.clear();
+    // for (const auto& pt : cloud_filtered->points) {
+    //     scan_2d_points_.emplace_back(pt.x, pt.y);
+    // }
 
-    if (scan_2d_points_.empty()) {
-        RCLCPP_WARN(this->get_logger(),
-                    "No scan points retained after Z-filter [%f, %f]!",
-                    scan_z_min_, scan_z_max_);
-        scan_count = 0;
-        has_scan_ = false;
-        accumulated_cloud_->clear();
-        return;
-    }
+    // if (scan_2d_points_.empty()) {
+    //     RCLCPP_WARN(this->get_logger(),
+    //                 "No scan points retained after Z-filter [%f, %f]!",
+    //                 scan_z_min_, scan_z_max_);
+    //     scan_count = 0;
+    //     has_scan_ = false;
+    //     accumulated_cloud_->clear();
+    //     return;
+    // }
 
-    // 核心匹配算法
-    Eigen::Matrix4d best_T = CorrelativeMatch();
-    rclcpp::Time end_time = this->now();
-    RCLCPP_INFO(this->get_logger(),
-                "Correlative Matching Done! Time cost: %f ms",
-                (end_time - begin_time).seconds() * 1000.0);
+    // // 核心匹配算法
+    // Eigen::Matrix4d best_T = CorrelativeMatch();
+    // rclcpp::Time end_time = this->now();
+    // RCLCPP_INFO(this->get_logger(),
+    //             "Correlative Matching Done! Time cost: %f ms",
+    //             (end_time - begin_time).seconds() * 1000.0);
 
     // 回设配准参数并发布TF
-    result_t_.matrix() = best_T;
-    if (!qt_control.load()) {
-        publishTransform();
-        registration_success_ = true;
+    // result_t_.matrix() = best_T;
+    // if (!qt_control.load()) {
+    //     publishTransform();
+    //     registration_success_ = true;
 
         // --- 可视化: 将最后匹配出来的扫描点标为蓝色 ---
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_scan(
-            new pcl::PointCloud<pcl::PointXYZRGB>);
-        for (const auto& pt2 : scan_2d_points_) {
-            // 注意: 这里为了核对是否贴合，我们将点本身变换到匹配好的 map
-            // 坐标系下发布
-            Eigen::Matrix4d T = best_T;
-            double final_x = T(0, 0) * pt2.x() + T(0, 1) * pt2.y() + T(0, 3);
-            double final_y = T(1, 0) * pt2.x() + T(1, 1) * pt2.y() + T(1, 3);
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_scan(
+        //     new pcl::PointCloud<pcl::PointXYZRGB>);
+        // for (const auto& pt2 : scan_2d_points_) {
+        //     // 注意: 这里为了核对是否贴合，我们将点本身变换到匹配好的 map
+        //     // 坐标系下发布
+        //     Eigen::Matrix4d T = best_T;
+        //     double final_x = T(0, 0) * pt2.x() + T(0, 1) * pt2.y() + T(0, 3);
+        //     double final_y = T(1, 0) * pt2.x() + T(1, 1) * pt2.y() + T(1, 3);
 
-            pcl::PointXYZRGB p;
-            p.x = final_x;
-            p.y = final_y;
-            p.z = 0.0;
-            p.r = 0;
-            p.g = 150;
-            p.b = 255;  // 扫描线浅蓝色
-            colored_scan->points.push_back(p);
-        }
-        sensor_msgs::msg::PointCloud2 out_msg;
-        pcl::toROSMsg(*colored_scan, out_msg);
-        out_msg.header.frame_id = "map";
-        out_msg.header.stamp = this->now();
-        pub_scan_2d_->publish(out_msg);
+        //     pcl::PointXYZRGB p;
+        //     p.x = final_x;
+        //     p.y = final_y;
+        //     p.z = 0.0;
+        //     p.r = 0;
+        //     p.g = 150;
+        //     p.b = 255;  // 扫描线浅蓝色
+        //     colored_scan->points.push_back(p);
+        // }
+        // sensor_msgs::msg::PointCloud2 out_msg;
+        // pcl::toROSMsg(*colored_scan, out_msg);
+        // out_msg.header.frame_id = "map";
+        // out_msg.header.stamp = this->now();
+        // pub_scan_2d_->publish(out_msg);
 
         // 刷新发布一次红色地图框以便于与蓝色点云对比
-        map_cloud_msg_.header.stamp = this->now();
-        pub_map_cloud_->publish(map_cloud_msg_);
-    }
+    //     map_cloud_msg_.header.stamp = this->now();
+        // pub_map_cloud_->publish(map_cloud_msg_);
+    // }
 
-    reloc_res relocResult;
-    relocResult.isOk = true;
-    emit alignResultSignal(relocResult);
+    // reloc_res relocResult;
+    // relocResult.isOk = true;
+    // emit alignResultSignal(relocResult);
 }
 
 namespace {

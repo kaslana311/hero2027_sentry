@@ -195,10 +195,10 @@
                     <CheckValue value="{stage_time}" expected="60" operator="gt"/>
                     <Sequence>
                         <ReactiveSequence>
-                            <Nav x="9.1" y="4.56" />
+                            <Nav x="8.72" y="10.9" />
                         </ReactiveSequence>
                         <ReactiveSequence>
-                            <GuardWithAttack guard_duration="120.0" move_radius="8.0" engage_distance="2.0" occ_threshold="50" nav_update_interval="1.0" sense_radius="10.0"/>
+                            <GuardWithAttack guard_duration="120.0" move_radius="8.0" engage_distance="2.0" occ_threshold="20" nav_update_interval="1.0" sense_radius="10.0"/>
                         </ReactiveSequence>
                     </Sequence>
                 </ReactiveSequence>
@@ -211,7 +211,7 @@
                             <Nav x="4.0" y="7.94" />
                         </ReactiveSequence>
                         <ReactiveSequence>
-                            <GuardWithAttack guard_duration="60.0" move_radius="8.0" engage_distance="2.0" occ_threshold="50" nav_update_interval="1.0" sense_radius="10.0"/>
+                            <GuardWithAttack guard_duration="60.0" move_radius="8.0" engage_distance="2.0" occ_threshold="20" nav_update_interval="1.0" sense_radius="10.0"/>
                         </ReactiveSequence>
                     </Sequence>
                 </ReactiveSequence>

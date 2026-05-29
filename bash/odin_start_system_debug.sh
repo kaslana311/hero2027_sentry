@@ -74,13 +74,16 @@ gnome-terminal --tab --title="rviz" -- bash -c \
 "ros2 launch hero2025_nav_bringup rviz_launch.py 2>&1 | tee \"$LOG_DIR/rviz.log\"; exec bash"
 
 sleep 10
-启动决策节点（特殊日志处理）
+# 启动决策节点（特殊日志处理）
 DECISION_LOG="$LOG_DIR/decision.log"
 gnome-terminal --tab --title="decision" -- bash -c \
 "script -q -f \"$DECISION_LOG\" -c 'ros2 launch bt decision_launch.py'; exec bash"
 
 gnome-terminal --tab --title="foxglove" -- bash -c \
 "ros2 run foxglove_bridge foxglove_bridge 2>&1 ; exec bash"
+
+gnome-terminal --tab --title="ros_bags" -- bash -c \
+"bash record.sh; exec bash"
 
 echo "所有节点已启动，系统初始化完成！"
 echo "完整日志目录: $LOG_DIR"

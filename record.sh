@@ -9,7 +9,7 @@
 NS="" 
 
 # 2. 定义相对话题名（不要以 / 开头）
-RELATIVE_TOPICS="  refree_msg trigger_msg tracker/radar autoaim_tracker/global_targets_marker"
+RELATIVE_TOPICS="  refree_msg trigger_msg tracker/radar autoaim_tracker/global_targets_marker global_targets"
 
 # 3. 存储路径配置
 BAG_PATH_BASE="$HOME/ros_bags"

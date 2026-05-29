@@ -30,6 +30,7 @@
 #include "interfaces/msg/global_target_array.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
+#include "map_msgs/msg/occupancy_grid_update.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
@@ -86,6 +87,7 @@ class GuardWithAttackNode : public StatefulActionNode {
         // 读取话题名（构造时读取一次，避免每次 tick 解析）
         std::string tracker_topic = "/global_targets";
         std::string costmap_topic = "/global_costmap/costmap";
+        std::string costmap_update_topic = "/global_costmap/costmap_updates";
 
         // 创建独立 callback group（不阻塞主线程）
         cb_group_ = node_->create_callback_group(
@@ -108,14 +110,47 @@ class GuardWithAttackNode : public StatefulActionNode {
                 },
                 sub_opts);
 
-        // 订阅 OccupancyGrid costmap
+        // 订阅 OccupancyGrid costmap (由于设置了 transient_local QoS，可以收到历史最后一帧)
+        rclcpp::SubscriptionOptions costmap_sub_opts;
+        costmap_sub_opts.callback_group = cb_group_;
+        costmap_sub_opts.ignore_local_publications = false;
+
         costmap_sub_ = node_->create_subscription<nav_msgs::msg::OccupancyGrid>(
-            costmap_topic, rclcpp::SensorDataQoS(),
+            costmap_topic, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local(),
             [this](const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
                 std::lock_guard<std::mutex> lock(costmap_mutex_);
                 latest_costmap_ = msg;
+                RCLCPP_INFO(node_->get_logger(), "GuardWithAttack: 收到全量 costmap");
             },
-            sub_opts);
+            costmap_sub_opts);
+
+        // 订阅 Costmap Update (增量更新)
+        costmap_update_sub_ = node_->create_subscription<map_msgs::msg::OccupancyGridUpdate>(
+            costmap_update_topic, rclcpp::SensorDataQoS(),
+            [this](const map_msgs::msg::OccupancyGridUpdate::SharedPtr msg) {
+                std::lock_guard<std::mutex> lock(costmap_mutex_);
+                if (!latest_costmap_) {
+                    return; // 还没收到全量地图，忽略增量
+                }
+                
+                // 校验更新边界是否合法
+                if (msg->x < 0 || msg->y < 0 || 
+                    msg->x + msg->width > latest_costmap_->info.width ||
+                    msg->y + msg->height > latest_costmap_->info.height) {
+                    RCLCPP_WARN(node_->get_logger(), "GuardWithAttack: Costmap update 边界越界，忽略");
+                    return;
+                }
+
+                // 将增量数据拷贝到全量地图中
+                size_t src_idx = 0;
+                for (size_t y = 0; y < msg->height; ++y) {
+                    size_t dst_idx = (msg->y + y) * latest_costmap_->info.width + msg->x;
+                    for (size_t x = 0; x < msg->width; ++x) {
+                        latest_costmap_->data[dst_idx + x] = msg->data[src_idx++];
+                    }
+                }
+            },
+            costmap_sub_opts);
 
         // 可视化发布器
         marker_pub_ =
@@ -148,7 +183,7 @@ class GuardWithAttackNode : public StatefulActionNode {
                               "以初始位置为中心的最大活动半径（米）"),
             InputPort<double>("engage_distance", 2.5,
                               "与敌人应保持的交战距离（米）"),
-            InputPort<int>("occ_threshold", 50, "OccupancyGrid cost 可行阈值"),
+            InputPort<int>("occ_threshold", 20, "OccupancyGrid cost 可行阈值"),
             InputPort<double>("nav_update_interval", 2.0,
                               "导航目标最小更新间隔（秒）"),
             InputPort<std::string>("tracker_topic", "/global_targets",
@@ -301,6 +336,13 @@ class GuardWithAttackNode : public StatefulActionNode {
             costmap = latest_costmap_;
         }
 
+        if (!costmap) {
+            RCLCPP_WARN_THROTTLE(
+                node_->get_logger(), *node_->get_clock(), 2000,
+                "GuardWithAttack: 尚未收到 costmap, 无法评估追击点");
+            return false;
+        }
+
         // 以自身到敌人的角度为起始角（优先搜索靠近自己的方向）
         double base_angle = std::atan2(self_y - enemy_y, self_x - enemy_x);
         const double vehicle_dim = 0.3;
@@ -357,7 +399,7 @@ class GuardWithAttackNode : public StatefulActionNode {
                 }
 
                 // 检查 costmap 可行性
-                if (costmap && !isCostmapFree(costmap, cx, cy)) {
+                if (!isCostmapFree(costmap, cx, cy)) {
                     continue;
                 }
 
@@ -396,12 +438,15 @@ class GuardWithAttackNode : public StatefulActionNode {
             costmap = latest_costmap_;
         }
 
+        if (!costmap) {
+            return false;
+        }
+
         // 从远到近搜索（先尝试尽可能接近敌人的位置）
-        double max_advance =
-            std::min(dist - 0.5, move_radius_);  // 不要撞上敌人
+        double max_advance = std::max(0.0, dist - 0.5);  // 不要撞上敌人
         const double step = 0.2;
 
-        for (double d = max_advance; d > 0; d -= step) {
+        for (double d = max_advance; d >= 0; d -= step) {
             double cx = self_x + dir_x * d;
             double cy = self_y + dir_y * d;
 
@@ -411,7 +456,7 @@ class GuardWithAttackNode : public StatefulActionNode {
             if (dist_to_origin > move_radius_) continue;
 
             // 检查 costmap
-            if (costmap && !isCostmapFree(costmap, cx, cy)) continue;
+            if (!isCostmapFree(costmap, cx, cy)) continue;
 
             out_x = cx;
             out_y = cy;
@@ -693,6 +738,7 @@ class GuardWithAttackNode : public StatefulActionNode {
 
     // Costmap 订阅
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub_;
+    rclcpp::Subscription<map_msgs::msg::OccupancyGridUpdate>::SharedPtr costmap_update_sub_;
     std::mutex costmap_mutex_;
     nav_msgs::msg::OccupancyGrid::SharedPtr latest_costmap_;
 
@@ -710,7 +756,7 @@ class GuardWithAttackNode : public StatefulActionNode {
     double sense_radius_{10.0};
     double move_radius_{3.0};
     double engage_distance_{2.5};
-    int occ_threshold_{50};
+    int occ_threshold_{20};
     double nav_update_interval_{2.0};
 
     // 运行时状态
