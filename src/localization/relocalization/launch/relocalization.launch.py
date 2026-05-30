@@ -29,7 +29,6 @@ def generate_launch_description():
     package='tf2_ros',
     executable='static_transform_publisher',
     name='static_tf_map_to_rune',
-    # arguments=['9.11', '-0.262', '1.0', '0.0', '0.0', '0', 'map', 'rune']
     arguments=['14.0', '7.50', '2.15', '0.0', '0.0', '0', 'map', 'rune']
   )
 
@@ -37,8 +36,8 @@ def generate_launch_description():
     package='tf2_ros',
     executable='static_transform_publisher',
     name='static_tf_map_to_global_red_map',
-    # arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0', 'map', 'global_red_map'] #我们是红方
-    arguments=['28.0', '15.0', '0.0', '3.1415906', '0.0', '0.0', 'map', 'global_red_map'] #我们是蓝方
+    arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0', 'map', 'global_red_map'] #我们是红方
+    # arguments=['28.0', '15.0', '0.0', '3.1415906', '0.0', '0.0', 'map', 'global_red_map'] #我们是蓝方
   )
 
   relocalization_node = Node(
