@@ -3,7 +3,7 @@
     common:
       img_topic: "/image"
       lid_topic: "/livox/fused_cloud"
-      imu_topic: "/livox/imu_192_168_1_126"
+      imu_topic: "/livox/imu_192_168_1_153"
       img_en: 0
       lidar_en: 1
       ros_driver_bug_fix: false

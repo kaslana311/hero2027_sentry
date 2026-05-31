@@ -30,7 +30,7 @@ wait_for_topic() {
 
 # zenoh 网线通信桥接
 gnome-terminal --tab --title="zenoh_bridge" -- bash -c \
-"ros2 run zenoh_bridge_dds zenoh_bridge_dds -d 1 -e tcp/192.168.123.20:7447 -a '.*/tracker/autoaim\$|.*/carrot_pose\$' 2>&1 | tee \"$LOG_DIR/zenoh_bridge.log\"; exec bash"
+"zenoh-bridge-ros2dds -d 1 -e tcp/192.168.123.20:7447 -c bash/zenoh_bridge.json5 2>&1 | tee \"$LOG_DIR/zenoh_bridge.log\"; exec bash"
 
 # 启动底盘节点
 gnome-terminal --tab --title="chassis" -- bash -c \
@@ -75,11 +75,14 @@ gnome-terminal --tab --title="map" -- bash -c \
 gnome-terminal --tab --title="rviz" -- bash -c \
 "ros2 launch hero2025_nav_bringup rviz_launch.py 2>&1 | tee \"$LOG_DIR/rviz.log\"; exec bash"
 
-# sleep 10
+sleep 10
 # 启动决策节点（特殊日志处理）
-# DECISION_LOG="$LOG_DIR/decision.log"
-# gnome-terminal --tab --title="decision" -- bash -c \
-# "script -q -f \"$DECISION_LOG\" -c 'ros2 launch bt decision_launch.py'; exec bash"
+DECISION_LOG="$LOG_DIR/decision.log"
+gnome-terminal --tab --title="decision" -- bash -c \
+"script -q -f \"$DECISION_LOG\" -c 'ros2 launch bt decision_launch.py'; exec bash"
+
+gnome-terminal --tab --title="ros_bags" -- bash -c \
+"bash record.sh; exec bash"
 
 echo "所有节点已启动，系统初始化完成！"
 echo "完整日志目录: $LOG_DIR"

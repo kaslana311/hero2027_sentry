@@ -523,6 +523,18 @@ void ChassisNode::RefreePubTimerCallback() {
 
     msg.competition_type = game_info_t_data.game_type;
     msg.competition_stage = game_info_t_data.game_progress;
+    //前三个阶段不进行小陀罗
+        if(msg.competition_stage<4){
+        ctrl_info_t_data.w=0;
+        last_game_stage=0;
+        target_w_.store(1200.0f);
+    }
+    //第一次进入第四个阶段，回到原本初始状态的小陀罗
+    if(msg.competition_stage==4&& last_game_stage==0){
+        ctrl_info_t_data.w=target_w_.load(); 
+        last_game_stage=1;
+           }
+    
     msg.stage_time = game_info_t_data.stage_remain_time;
     msg.dart_target = game_info_t_data.dart_target;
     msg.small_energy_state = game_info_t_data.small_energy_state;

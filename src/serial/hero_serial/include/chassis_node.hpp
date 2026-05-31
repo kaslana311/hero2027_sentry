@@ -2,11 +2,13 @@
 #pragma once
 #include <drv_CRC.h>
 #include <drv_cmd_com.h>
+#include <sys/types.h>
 #include <visual_data.h>
 
 #include <atomic>
 #include <bitset>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -101,7 +103,7 @@ class ChassisNode : public rclcpp::Node {
     int save_interval_ms_ = 5000;                // 保存间隔(毫秒)，默认5秒
     std::string save_path_ = "./referee_data/";  // 保存数据的文件夹路径
     std::atomic<bool> is_guarding{true};
-
+    uint8_t last_game_stage=0;
     // 修改：移除 spin_speed_ 和其互斥锁
     std::atomic<bool>
         is_danger_mode_;  // 是否处于危险模式（使用原子变量避免竞争）
