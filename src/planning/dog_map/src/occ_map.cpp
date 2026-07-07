@@ -133,31 +133,31 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
                 int dzf_i= (max_z_occ_index - min_z_occ_index);
                 double dzf = dzf_i * resolution_z;
                 if (dzf < higher_than_ground_threshold_) continue;  //地面过滤
-                int occ_count=0;
-                for(int i=min_z_occ_index;i<max_z_occ_index;i++){
-                        if(IsOccupied(idx,idy,i))
-                             occ_count++;   
-                        }
-                double rate =1.0*occ_count/dzf_i;
-                // if(rate<0.5 &&dzf<0.12) continue;
-                if (dzf < 0.12 &&
-                    (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
-                    continue;  //过高过滤
-                // 计算最大空洞大小
-                int max_hole_size = 0;
-                int curr_hole_size = 0;
-                for (int zi = max_z_occ_index - 1; zi >= min_z_occ_index;
-                     zi--) {
-                    if (!IsOccupied(idx, idy, zi)) {
-                        curr_hole_size++;
-                    } else {
-                        if (curr_hole_size > max_hole_size) {
-                            max_hole_size = curr_hole_size;
-                        }
-                        curr_hole_size = 0;
-                    }
-                }
-                if (max_hole_size * resolution_z > 0.15) continue;
+                // int occ_count=0;
+                // for(int i=min_z_occ_index;i<max_z_occ_index;i++){
+                //         if(IsOccupied(idx,idy,i))
+                //              occ_count++;   
+                //         }
+                // double rate =1.0*occ_count/dzf_i;
+                // // if(rate<0.5 &&dzf<0.12) continue;
+                // if (dzf < 0.12 &&
+                //     (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
+                //     continue;  //过高过滤
+                // // 计算最大空洞大小
+                // int max_hole_size = 0;
+                // int curr_hole_size = 0;
+                // for (int zi = max_z_occ_index - 1; zi >= min_z_occ_index;
+                //      zi--) {
+                //     if (!IsOccupied(idx, idy, zi)) {
+                //         curr_hole_size++;
+                //     } else {
+                //         if (curr_hole_size > max_hole_size) {
+                //             max_hole_size = curr_hole_size;
+                //         }
+                //         curr_hole_size = 0;
+                //     }
+                // }
+                // if (max_hole_size * resolution_z > 0.15) continue;
                 iterators[i].second = true;  // 标记为符合要求
             }
         });
@@ -236,7 +236,7 @@ void OccMap::PassFilter(pcl::PointCloud<HEROPointXYZK>::Ptr cloud_in,
     pcl::PassThrough<HEROPointXYZK> pass;
     pass.setInputCloud(cloud_in);
     pass.setFilterFieldName("z");
-    pass.setFilterLimits(0.03, higher_than_car_threshold_ + 0.3);
+    pass.setFilterLimits(0.0, higher_than_car_threshold_ + 0.3);
     pass.filter(*cloud_in);
     
     double min_x = pose.first[0] - half_map_size_;

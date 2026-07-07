@@ -1,11 +1,11 @@
 #!/bin/bash
 gnome-terminal --tab --title="delete" -- bash -c \
 "bash /home/dji/hero2026_-sentry/bash/kill_all_ros2_nodes.sh; bash "
-sleep 2
+sleep 5
 # 设置必要的环境变量
 export DISPLAY=:0
 export XAUTHORITY=/home/dji/.Xauthority
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+# export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 source /opt/ros/humble/setup.bash
 source /home/dji/hero2026_-sentry/install/setup.bash
 # 创建日志目录
@@ -47,14 +47,20 @@ gnome-terminal --tab --title="start_lidar_merge" -- bash -c \
 "ros2 launch lidar_merge lidar_merge.launch.py 2>&1 | tee \"$LOG_DIR/lidar.log\" ; exec bash"
 # 等待雷达初始化完成
 wait_for_topic "/livox/imu" 60
+sleep 3
 
-gnome-terminal --tab --title="fast_livo" -- bash -c \
-"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch fast_livo mapping_avia.launch.py; bash"
+# gnome-terminal --tab --title="fast_livo" -- bash -c \
+# "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch fast_livo mapping_avia.launch.py; bash"
+gnome-terminal --tab --title="point_lio" -- bash -c \
+"source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch point_lio point_lio.launch.py; bash"
 
-wait_for_topic "/aft_mapped_to_init" 60
+# wait_for_topic "/aft_mapped_to_init" 60
+sleep 1
 
 gnome-terminal --tab --title="ekf_fusion" -- bash -c \
 "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch tf_manager fusion_launch.py; bash"
+
+sleep 1
 
 # 启动重定位节点
 gnome-terminal --tab --title="relocalization" -- bash -c \
@@ -75,7 +81,7 @@ gnome-terminal --tab --title="map" -- bash -c \
 gnome-terminal --tab --title="rviz" -- bash -c \
 "ros2 launch hero2025_nav_bringup rviz_launch.py 2>&1 | tee \"$LOG_DIR/rviz.log\"; exec bash"
 
-sleep 10
+sleep 7
 # 启动决策节点（特殊日志处理）
 DECISION_LOG="$LOG_DIR/decision.log"
 gnome-terminal --tab --title="decision" -- bash -c \

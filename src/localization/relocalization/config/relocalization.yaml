@@ -6,7 +6,8 @@
       init_yaw: 0.0
       init_pitch: 0.0
       init_roll: 0.0
-      init_pose: [4.065, 7.50, 0.0, 0.0, 0.0, 0.0]
+      init_pose: [3.942573, 7.302592, 0.0, 0.0, 0.0, -1.570796]
+        # init_pose: [4.065, 7.50, 0.0, 0.0, 0.0, 0.0]
       pcd_path: "src/common/point_cloud_files/filtered_pcd/fast_lio_latest_map.pcd"
       cloud_topic: "/livox/cloud_scans"
       # 添加角度约束参数S

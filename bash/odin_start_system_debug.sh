@@ -58,11 +58,11 @@ sleep 5  # 适当调整时间或使用话题检测
 
 # 启动重定位节点
 gnome-terminal --tab --title="relocalization" -- bash -c \
-"ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\" ; exec bash"
+"ros2 launch relocalization relocalization_odin.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\" ; exec bash"
 
 # 启动导航规划节点
 gnome-terminal --tab --title="plan" -- bash -c \
-"ros2 launch hero2025_nav_bringup navigation_launch.py 2>&1 | tee \"$LOG_DIR/navigation.log\" ; exec bash"
+"ros2 launch hero2025_nav_bringup navigation_launch_odin.py 2>&1 | tee \"$LOG_DIR/navigation.log\" ; exec bash"
 
 # 启动地图服务器
 gnome-terminal --tab --title="map" -- bash -c \
