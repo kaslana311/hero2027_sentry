@@ -238,7 +238,7 @@ void LIVMapper::initializeSubscribersAndPublishers(
     pubLaserCloudMap =
         nh->create_publisher<sensor_msgs::msg::PointCloud2>("/Laser_map", 100);
     pubOdomAftMapped = nh->create_publisher<nav_msgs::msg::Odometry>(
-        "/aft_mapped_to_init", 10);
+        "/odometry/filtered", 10);
     pubPath = nh->create_publisher<nav_msgs::msg::Path>("/path", 10);
     plane_pub = nh->create_publisher<visualization_msgs::msg::Marker>(
         "/planner_normal", 1);
@@ -262,6 +262,7 @@ void LIVMapper::initializeSubscribersAndPublishers(
     voxelmap_manager->voxel_map_pub_ =
         nh->create_publisher<visualization_msgs::msg::MarkerArray>("/planes",
                                                                    10000);
+    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(nh);
 }
 
 void LIVMapper::handleFirstFrame() {
@@ -1554,36 +1555,19 @@ odomAftMapped.pose.pose.orientation.w = q_base_in_odom.w();
 pubOdomAftMapped->publish(odomAftMapped);
 
 
-// =================================================================================
-
-
-    // odomAftMapped.header.frame_id = "odom";
-    // odomAftMapped.child_frame_id = "lidar_link";
-    // odomAftMapped.header.stamp =
-    //     nh_->now();  //.ros::Time()fromSec(last_timestamp_lidar);
-    // set_posestamp(odomAftMapped.pose.pose);
-
-    // static tf2_ros::TransformBroadcaster br(*nh_);
-    // tf2::Transform transform;
-    // tf2::Quaternion q;
-    // transform.setOrigin(
-    //     tf2::Vector3(_state.pos_end(0), _state.pos_end(1),
-    //     _state.pos_end(2)));
-    // q.setW(geoQuat.w);
-    // q.setX(geoQuat.x);
-    // q.setY(geoQuat.y);
-    // q.setZ(geoQuat.z);
-    // transform.setRotation(q);
-    // geometry_msgs::msg::TransformStamped t;
-    // t.header.stamp = odomAftMapped.header.stamp;
-    // t.header.frame_id = "odom";
-    // t.child_frame_id = "lidar_link";
-    // tf2::toMsg(transform, t.transform);
-    // br.sendTransform(t);
-
-    // // br.sendTransform(tf2::toMsg(transform, odomAftMapped.header.stamp,
-    // // "odom", "lidar_link"));
-    // pubOdomAftMapped->publish(odomAftMapped);
+// ==========  发布 odom -> base_link 的 TF  ==========
+geometry_msgs::msg::TransformStamped transform;
+transform.header.stamp = odomAftMapped.header.stamp;
+transform.header.frame_id = "odom";
+transform.child_frame_id = "base_link";
+transform.transform.translation.x = pos_base_in_odom.x();
+transform.transform.translation.y = pos_base_in_odom.y();
+transform.transform.translation.z = pos_base_in_odom.z();
+transform.transform.rotation.x = q_base_in_odom.x();
+transform.transform.rotation.y = q_base_in_odom.y();
+transform.transform.rotation.z = q_base_in_odom.z();
+transform.transform.rotation.w = q_base_in_odom.w();
+tf_broadcaster_->sendTransform(transform);
 }
 
 void LIVMapper::publish_mavros(

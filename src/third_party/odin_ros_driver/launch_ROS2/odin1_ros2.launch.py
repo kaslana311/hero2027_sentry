@@ -87,7 +87,7 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_tf_base_to_odin1',
-        arguments=['0.188', '0', '0', '0', '0', '0', 'base_link', 'odin1_base_link']
+        arguments=['0.184685', '-0.009704', '0', '0', '0', '0', 'base_link', 'odin1_base_link']
     )
 
     # Odom to TF node for high frequency base_link transform

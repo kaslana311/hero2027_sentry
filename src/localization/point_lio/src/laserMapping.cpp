@@ -290,28 +290,87 @@ void set_posestamp(T& out) {
 void publish_odometry(const rclcpp::Publisher<
                           nav_msgs::msg::Odometry>::SharedPtr& pubOdomAftMapped,
                       std::shared_ptr<tf2_ros::TransformBroadcaster>& tf_br) {
+    // 100Hz 节流: publish_odometry_without_downsample 模式下限制发布频率
+    if (publish_odometry_without_downsample) {
+        static double last_odom_pub_time = -1.0;
+        if (time_current - last_odom_pub_time < 0.01 && last_odom_pub_time > 0) {
+            return;
+        }
+        last_odom_pub_time = time_current;
+    }
+
+    // 获取 lidar_link 在 odom 下的位姿
+    static bool is_first_kf = true;
+    Eigen::Vector3d pos_lidar;
+    Eigen::Quaterniond q_lidar;
+    if (!use_imu_as_input) {
+        if (is_first_kf) {
+            kf_output.x_.pos(0) = init_pose[0];
+            kf_output.x_.pos(1) = init_pose[1];
+            kf_output.x_.pos(2) = init_pose[2];
+            is_first_kf = false;
+        }
+        pos_lidar = kf_output.x_.pos;
+        q_lidar = Eigen::Quaterniond(kf_output.x_.rot);
+    } else {
+        pos_lidar = kf_input.x_.pos;
+        q_lidar = Eigen::Quaterniond(kf_input.x_.rot);
+    }
+    Eigen::Matrix3d rot_lidar = q_lidar.toRotationMatrix();
+
+    // base_link → lidar_link 的静态变换 (与 FAST-LIVO2 保持一致)
+    // base_link → joint_link: 绕Z轴-90°, 绕Y轴angle_y
+    // joint_link → lidar_link: 平移 (0.062208, -0.207112, 0.0)
+    static const double angle_y = 0.614120;
+    static const Eigen::Matrix3d R_joint_base =
+        (Eigen::AngleAxisd(-M_PI_2, Eigen::Vector3d::UnitZ()) *
+         Eigen::AngleAxisd(angle_y, Eigen::Vector3d::UnitY()))
+            .toRotationMatrix();
+    static const Eigen::Vector3d t_joint_base(0.0, 0.0, 0.0);
+    static const Eigen::Matrix3d R_lidar_joint = Eigen::Matrix3d::Identity();
+    static const Eigen::Vector3d t_lidar_joint(0.062208, -0.207112, 0.0);
+    static const Eigen::Matrix3d R_lidar_base =
+        R_lidar_joint * R_joint_base;
+    static const Eigen::Vector3d t_lidar_base =
+        R_lidar_joint * t_joint_base + t_lidar_joint;
+    static const Eigen::Matrix3d R_base_lidar = R_lidar_base.transpose();
+    static const Eigen::Vector3d t_base_lidar = -R_base_lidar * t_lidar_base;
+
+    // 将 lidar 位姿转换到 base_link 位姿
+    Eigen::Matrix3d rot_base = rot_lidar * R_base_lidar;
+    Eigen::Vector3d pos_base = rot_lidar * t_base_lidar + pos_lidar;
+    Eigen::Quaterniond q_base(rot_base);
+
+    // 填充 Odometry 消息
     odomAftMapped.header.frame_id = "odom";
-    odomAftMapped.child_frame_id = "lidar_link";
+    odomAftMapped.child_frame_id = "base_link";
     if (publish_odometry_without_downsample) {
         odomAftMapped.header.stamp = get_ros_time(time_current);
     } else {
         odomAftMapped.header.stamp = get_ros_time(lidar_end_time);
     }
-    set_posestamp(odomAftMapped.pose.pose);
+    odomAftMapped.pose.pose.position.x = pos_base.x();
+    odomAftMapped.pose.pose.position.y = pos_base.y();
+    odomAftMapped.pose.pose.position.z = pos_base.z();
+    odomAftMapped.pose.pose.orientation.x = q_base.x();
+    odomAftMapped.pose.pose.orientation.y = q_base.y();
+    odomAftMapped.pose.pose.orientation.z = q_base.z();
+    odomAftMapped.pose.pose.orientation.w = q_base.w();
 
     pubOdomAftMapped->publish(odomAftMapped);
 
+    // 发布 odom -> base_link 的 TF
     if (tf_send_en) {
         geometry_msgs::msg::TransformStamped transform;
         transform.header.frame_id = "odom";
-        transform.child_frame_id = "lidar_link";
-        transform.transform.translation.x = odomAftMapped.pose.pose.position.x;
-        transform.transform.translation.y = odomAftMapped.pose.pose.position.y;
-        transform.transform.translation.z = odomAftMapped.pose.pose.position.z;
-        transform.transform.rotation.w = odomAftMapped.pose.pose.orientation.w;
-        transform.transform.rotation.x = odomAftMapped.pose.pose.orientation.x;
-        transform.transform.rotation.y = odomAftMapped.pose.pose.orientation.y;
-        transform.transform.rotation.z = odomAftMapped.pose.pose.orientation.z;
+        transform.child_frame_id = "base_link";
+        transform.transform.translation.x = pos_base.x();
+        transform.transform.translation.y = pos_base.y();
+        transform.transform.translation.z = pos_base.z();
+        transform.transform.rotation.w = q_base.w();
+        transform.transform.rotation.x = q_base.x();
+        transform.transform.rotation.y = q_base.y();
+        transform.transform.rotation.z = q_base.z();
         transform.header.stamp = odomAftMapped.header.stamp;
         tf_br->sendTransform(transform);
     }
@@ -429,7 +488,7 @@ int main(int argc, char** argv) {
         nh->create_publisher<sensor_msgs::msg::PointCloud2>("Laser_map", 20);
     // 修改话题名称
     auto pub_odom_aft_mapped =
-        nh->create_publisher<nav_msgs::msg::Odometry>("Odometry", 20);
+        nh->create_publisher<nav_msgs::msg::Odometry>("/odometry/filtered", 20);
     auto pub_path = nh->create_publisher<nav_msgs::msg::Path>("path", 20);
     auto tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(nh);
 

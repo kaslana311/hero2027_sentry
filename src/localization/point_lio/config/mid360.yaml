@@ -14,8 +14,8 @@
         global_map_pub_skip: 5                              # 全局地图发布间隔（每隔N次迭代发布一次）
 
         common:
-            lid_topic: "livox/lidar"
-            imu_topic: "livox/imu"
+            lid_topic: "/livox/fused_cloud"
+            imu_topic: "/livox/imu_192_168_1_153"
             con_frame: False                                # True: if you need to combine several LiDAR frames into one
             con_frame_num: 1                                # the number of frames combined
             cut_frame: False                                # True: if you need to cut one LiDAR frame into several subframes
@@ -60,7 +60,7 @@
                           0.0, 1.0, 0.0,
                           0.0, 0.0, 1.0]
         odometry:
-            publish_odometry_without_downsample: False
+            publish_odometry_without_downsample: True
 
         publish:
             path_en: True                                   # False: close the path output

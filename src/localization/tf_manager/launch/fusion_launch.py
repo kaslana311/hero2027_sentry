@@ -48,5 +48,5 @@ def generate_launch_description():
         # static_tf_imu_node,
         # static_tf_lidar_node,
         static_tf_joint_node,
-        ekf_node
+        # ekf_node
     ])

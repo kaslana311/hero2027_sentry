@@ -177,6 +177,7 @@ public:
   image_transport::Publisher pubImage;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr mavros_pose_publisher;
   rclcpp::TimerBase::SharedPtr imu_prop_timer;
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
   int frame_num = 0;
   double aver_time_consu = 0;
