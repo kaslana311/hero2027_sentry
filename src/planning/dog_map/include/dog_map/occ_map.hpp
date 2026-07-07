@@ -14,7 +14,7 @@
 #include <vector>
 #include <pcl/filters/crop_box.h>
 #include "dog_map/eigen_alias.hpp"
-#include "dog_map/static_fix_map.hpp"
+// #include "dog_map/static_fix_map.hpp"
 using namespace analy_utils;
 const float crop_min_x = -0.5f;
 const float crop_min_y = -0.5f;
@@ -59,9 +59,9 @@ class OccMap {
     }
     void racyHandle(const Vec3i& start_idx, const std::vector<Vec3i>& obs_list);
     void UpdateStaticMap(int idx, int idy);
-    static_fix_map::StaticFixMap* GetStaticFixMap() {
-        return static_fix_map_.get();
-    }
+    // static_fix_map::StaticFixMap* GetStaticFixMap() {
+    //     return static_fix_map_.get();
+    // }
     bool IsStaticMapPoint(const Vec2i& idx);
     bool IsStaticMapPoint(int index);
     void TimeGoON();
@@ -155,7 +155,7 @@ class OccMap {
     int fake_layer_z;
     long long update_frame = 0;
     std::vector<double> cloud_at_map_origin;
-    std::shared_ptr<static_fix_map::StaticFixMap> static_fix_map_;
+    // std::shared_ptr<static_fix_map::StaticFixMap> static_fix_map_;
     std::atomic<bool>* pub_map_ptr_;
     std::vector<int> static_indexs;       //静态地图占据点索引
     std::map<int, long long> time_list_;  //索引+未观测到的累计帧数

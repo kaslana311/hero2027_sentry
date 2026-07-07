@@ -36,13 +36,13 @@ OccMap::OccMap(double heighter_than_ground_threshold,
         InitMap(map_img);
     }
 /*************fix map init */
-#ifdef FIX_MAP
-    static_fix_map_ = std::make_shared<static_fix_map::StaticFixMap>();
-    static_fix_map_->InitPtr(std::make_shared<cv::Mat>(grid_map_), occ_map,
-                             layer_z, fake_layer_z);
-    static_fix_map_->SetMapInfo(cloud_at_map_origin[0], cloud_at_map_origin[1],
-                                0.0, resolution);
-#endif
+// #ifdef FIX_MAP
+//     static_fix_map_ = std::make_shared<static_fix_map::StaticFixMap>();
+//     static_fix_map_->InitPtr(std::make_shared<cv::Mat>(grid_map_), occ_map,
+//                              layer_z, fake_layer_z);
+//     static_fix_map_->SetMapInfo(cloud_at_map_origin[0], cloud_at_map_origin[1],
+//                                 0.0, resolution);
+// #endif
     /*************888888888888888 */
     std::cout << " -- [DOG_MAP] OccMap initialized." << std::endl;
     std::cout << "[DOG_MAP] path " << pgm_path << std::endl;
@@ -177,9 +177,9 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
             pt.intensity = pt.z;  // Set intensity to 1.0 (or any other value)
             pub_pc.points.push_back(pt);
 
-#ifdef FIX_MAP
-            UpdateStaticMap(idx, idy);
-#endif
+// #ifdef FIX_MAP
+//             UpdateStaticMap(idx, idy);
+// #endif
         }
 
     }

@@ -47,9 +47,9 @@ class DogMapNode : public rclcpp::Node {
         rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cost_pc_pub;
         rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
             ground_pc_pub;
-#ifdef FIX_MAP
-        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr fix_pc_pub;
-#endif
+// #ifdef FIX_MAP
+//         rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr fix_pc_pub;
+// #endif
     } cost_pub_;
     struct RobotState {
         Vec3f p, v, a, j;
@@ -258,26 +258,26 @@ class DogMapNode : public rclcpp::Node {
             cost_pub_.cost_pc_pub->publish(std::move(msg));
         }
        
-#ifdef FIX_MAP
-      static   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in_fix=
-            std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
-        cloud_in_fix->clear();
-        cloud_in_fix->swap(occ_pc);
-        pcl::PointCloud<pcl::PointXYZ>::Ptr fix_pc =
-            std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
-        occ_map_->GetStaticFixMap()->AdjustAndFixByRacying2d(
-            temp_pose.first[0], temp_pose.first[1], cloud_in_fix, fix_pc);
-        /************* */
-        if (!fix_pc->empty()) {
-            auto fix_msg = sensor_msgs::msg::PointCloud2();
-            pcl::toROSMsg(*fix_pc, fix_msg);
-            fix_msg.header.frame_id = "map";
-            fix_msg.header.stamp = this->get_clock()->now();
-            cost_pub_.fix_pc_pub->publish(fix_msg);
-        } else {
-            std::cout << " -- [DOG INFO] No fix point to publish." << std::endl;
-        }
-#endif
+// #ifdef FIX_MAP
+//       static   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in_fix=
+//             std::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+//         cloud_in_fix->clear();
+//         cloud_in_fix->swap(occ_pc);
+//         pcl::PointCloud<pcl::PointXYZ>::Ptr fix_pc =
+//             std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+//         occ_map_->GetStaticFixMap()->AdjustAndFixByRacying2d(
+//             temp_pose.first[0], temp_pose.first[1], cloud_in_fix, fix_pc);
+//         /************* */
+//         if (!fix_pc->empty()) {
+//             auto fix_msg = sensor_msgs::msg::PointCloud2();
+//             pcl::toROSMsg(*fix_pc, fix_msg);
+//             fix_msg.header.frame_id = "map";
+//             fix_msg.header.stamp = this->get_clock()->now();
+//             cost_pub_.fix_pc_pub->publish(fix_msg);
+//         } else {
+//             std::cout << " -- [DOG INFO] No fix point to publish." << std::endl;
+//         }
+// #endif
         /************* */
         auto end_time = std::chrono::steady_clock::now();
         double time_consuming =
@@ -349,10 +349,19 @@ class DogMapNode : public rclcpp::Node {
         cost_pub_.ground_pc_pub =
             this->create_publisher<sensor_msgs::msg::PointCloud2>(
                 "rog_map/ground", qos);
-#ifdef FIX_MAP
-        cost_pub_.fix_pc_pub =
-            this->create_publisher<sensor_msgs::msg::PointCloud2>("rog_map/fix",
-                                                                  qos);
+// #ifdef FIX_MAP
+//         cost_pub_.fix_pc_pub =
+//             this->create_publisher<sensor_msgs::msg::PointCloud2>("rog_map/fix",
+//                                                                   qos);
+// #endif
+#ifdef ODIN_WIDTH_LIDAR
+ std::cout << " -- [DOG_MAP] Using ODIN lidar, enable point cloud "
+                     "synchronization and outlier removal."
+                  << std::endl;
+#else 
+        std::cout << " -- [DOG_MAP] Using MID360 lidar, no point cloud "
+                     "synchronization and outlier removal."
+                  << std::endl;
 #endif
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ =

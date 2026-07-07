@@ -8,10 +8,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # set(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_BUILD_TYPE "Release")
 add_compile_options(-O3)
-add_compile_definitions(TBB_DO)
-# add_compile_definitions(DEBUG)
-# add_compile_definitions(FIX_MAP)
-add_compile_definitions(ODIN_WIDTH_LIDAR)
+# add_compile_definitions(TBB_DO)
+# # add_compile_definitions(DEBUG)
+# # add_compile_definitions(FIX_MAP)
+# add_compile_definitions(ODIN_WIDTH_LIDAR)
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -34,17 +34,35 @@ set (SOURCE_FILES
   src/static_fix_map.cpp
   src/point_cloud_define.cpp
 )
+# ########### 使用odin1和双雷达的方案
 add_executable(dog_map_node ${SOURCE_FILES})
 
-
-
+target_compile_definitions(dog_map_node PRIVATE 
+  TBB_DO 
+  ODIN_WIDTH_LIDAR
+)
 ament_target_dependencies(dog_map_node rclcpp PCL tf2_ros nav_msgs sensor_msgs pcl_conversions pcl_ros OpenCV )
 target_link_libraries(dog_map_node
 TBB::tbb
   yaml-cpp
 )
+####################
+# ########### 使用双雷达的方案
+add_executable(dog_map_node_lidars ${SOURCE_FILES})
+
+target_compile_definitions(dog_map_node_lidars PRIVATE 
+  TBB_DO 
+)
+ament_target_dependencies(dog_map_node_lidars rclcpp PCL tf2_ros nav_msgs sensor_msgs pcl_conversions pcl_ros OpenCV )
+target_link_libraries(dog_map_node_lidars
+TBB::tbb
+  yaml-cpp
+)
+####################
+
 install(TARGETS
   dog_map_node
+  dog_map_node_lidars
   DESTINATION lib/${PROJECT_NAME}
 )
 if(BUILD_TESTING)
