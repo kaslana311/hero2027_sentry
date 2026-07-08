@@ -122,7 +122,7 @@ def generate_launch_description():
     )
     
     dog_map_node=Node(
-        package="dog_map_odin",
+        package="dog_map",
         executable="dog_map_node",
         name="dog_map_node",
         output="screen",

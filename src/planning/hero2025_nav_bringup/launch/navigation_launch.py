@@ -123,7 +123,7 @@ def generate_launch_description():
     
     dog_map_node=Node(
         package="dog_map",
-        executable="dog_map_node",
+        executable="dog_map_node_lidars",
         name="dog_map_node",
         output="screen",
         respawn=use_respawn,
