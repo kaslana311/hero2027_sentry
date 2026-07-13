@@ -35,48 +35,48 @@ gnome-terminal --tab --title="odin" -- bash -c \
 
 # 启动雷达节点
 gnome-terminal --tab --title="start_lidar" -- bash -c \
-"ros2 launch livox_ros_driver2 msg_mixed_launch.py 2>&1 | tee \"$LOG_DIR/lidar.log\" ; exec bash"
+"stdbuf -oL -eL ros2 launch livox_ros_driver2 msg_mixed_launch.py 2>&1 | stdbuf -oL -eL tee >(rotatelogs -f  \"$LOG_DIR/lidar_%Y%m%d_%H%M%S.log\" 4M) ; exec bash"
 gnome-terminal --tab --title="start_lidar_merge" -- bash -c \
-"ros2 launch lidar_merge lidar_merge.launch.py 2>&1 | tee \"$LOG_DIR/lidar.log\" ; exec bash"
+"stdbuf -oL -eL ros2 launch lidar_merge lidar_merge.launch.py 2>&1 | stdbuf -oL -eL tee >(rotatelogs -f  \"$LOG_DIR/lidar_%Y%m%d_%H%M%S.log\" 4M) ; exec bash"
 # 等待雷达初始化完成
 wait_for_topic "/livox/imu" 60
 gnome-terminal --tab --title="fusion" -- bash -c "source /home/dji/hero2026_-sentry/install/setup.bash && ros2 launch hero_lidar_scan hero_lidar_scan.launch.py; bash"
 # zenoh 网线通信桥接
 gnome-terminal --tab --title="zenoh_bridge" -- bash -c \
-"ros2 run zenoh_bridge_dds zenoh_bridge_dds -d 1 -e tcp/192.168.123.20:7447 -a '.*/tracker/autoaim\$|.*/carrot_pose\$' 2>&1 | tee \"$LOG_DIR/zenoh_bridge.log\"; exec bash"
+"stdbuf -oL -eL ros2 run zenoh_bridge_dds zenoh_bridge_dds -d 1 -e tcp/192.168.123.20:7447 -a '.*/tracker/autoaim\$|.*/carrot_pose\$' 2>&1 | stdbuf -oL -eL tee >(rotatelogs -f  \"$LOG_DIR/zenoh_bridge_%Y%m%d_%H%M%S.log\" 4M); exec bash"
 
 # 启动底盘节点
 gnome-terminal --tab --title="chassis" -- bash -c \
-"ros2 launch hero_serial chassis_node.launch.py 2>&1 | tee  \"$LOG_DIR/chassis.log\" ; exec bash"
+"stdbuf -oL -eL ros2 launch hero_serial chassis_node.launch.py 2>&1 | stdbuf -oL -eL tee >(rotatelogs -f  \"$LOG_DIR/chassis_%Y%m%d_%H%M%S.log\" 4M) ; exec bash"
 
 # 启动云台节点
 gnome-terminal --tab --title="bridge" -- bash -c \
-"ros2 run nav_cv_bridge autoaim_tracker_node 2>&1 | tee \"$LOG_DIR/bridge.log\"; exec bash"
+"stdbuf -oL -eL ros2 run nav_cv_bridge autoaim_tracker_node 2>&1 | stdbuf -oL -eL tee >(rotatelogs -f  \"$LOG_DIR/bridge_%Y%m%d_%H%M%S.log\" 4M); exec bash"
 
 sleep 5  # 适当调整时间或使用话题检测
 
 # 启动重定位节点
 gnome-terminal --tab --title="relocalization" -- bash -c \
-"ros2 launch relocalization relocalization.launch.py 2>&1 | tee \"$LOG_DIR/relocalization.log\" ; exec bash"
+"stdbuf -oL -eL ros2 launch relocalization relocalization.launch.py 2>&1 | stdbuf -oL -eL tee >(rotatelogs -f  \"$LOG_DIR/relocalization_%Y%m%d_%H%M%S.log\" 4M) ; exec bash"
 
 # 启动导航规划节点
 gnome-terminal --tab --title="plan" -- bash -c \
-"ros2 launch hero2025_nav_bringup navigation_launch.py 2>&1 | tee \"$LOG_DIR/navigation.log\" ; exec bash"
+"stdbuf -oL -eL ros2 launch hero2025_nav_bringup navigation_launch.py 2>&1 | stdbuf -oL -eL tee >(rotatelogs -f  \"$LOG_DIR/navigation_%Y%m%d_%H%M%S.log\" 4M) ; exec bash"
 
 # 启动地图服务器
 gnome-terminal --tab --title="map" -- bash -c \
 " export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/home/dji/hero2026_-sentry/src/third_party/acados/lib;
-     ros2 launch map_server map_server.launch.py 2>&1 | tee \"$LOG_DIR/map_server.log\" ; exec bash"
+     ros2 launch map_server map_server.launch.py 2>&1 | stdbuf -oL -eL tee >(rotatelogs -f  \"$LOG_DIR/map_server_%Y%m%d_%H%M%S.log\" 4M) ; exec bash"
 
 # 启动RViz可视化
 gnome-terminal --tab --title="rviz" -- bash -c \
-"ros2 launch hero2025_nav_bringup rviz_launch.py 2>&1 | tee \"$LOG_DIR/rviz.log\"; exec bash"
+"stdbuf -oL -eL ros2 launch hero2025_nav_bringup rviz_launch.py 2>&1 | stdbuf -oL -eL tee >(rotatelogs -f  \"$LOG_DIR/rviz_%Y%m%d_%H%M%S.log\" 4M); exec bash"
 
 sleep 10
-启动决策节点（特殊日志处理）
+# 启动决策节点（特殊日志处理）
 DECISION_LOG="$LOG_DIR/decision.log"
 gnome-terminal --tab --title="decision" -- bash -c \
-"script -q -f \"$DECISION_LOG\" -c 'ros2 launch bt decision_launch.py'; exec bash"
+"stdbuf -oL -eL ros2 launch bt decision_launch.py 2>&1 | stdbuf -oL -eL tee >(rotatelogs -f  \"$LOG_DIR/decision_%Y%m%d_%H%M%S.log\" 4M); exec bash"
 
 gnome-terminal --tab --title="ros_bags" -- bash -c \
 "bash record.sh; exec bash"
