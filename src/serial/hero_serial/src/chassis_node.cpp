@@ -215,7 +215,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     );
     pitch_roll_angle_subscription_ =
         this->create_subscription<nav_msgs::msg::Odometry>(
-            "/odometry", 10,
+            "/odometry/filtered", 10,
             std::bind(&ChassisNode::PitchRollAngleCallback, this,
                       std::placeholders::_1)
             // 不指定回调组，使用默认组
