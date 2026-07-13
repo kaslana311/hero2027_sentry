@@ -213,7 +213,13 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
         std::bind(&ChassisNode::HpDangerCallback, this, std::placeholders::_1)
         // 不指定回调组，使用默认组
     );
-
+    pitch_roll_angle_subscription_ =
+        this->create_subscription<nav_msgs::msg::Odometry>(
+            "/odometry", 10,
+            std::bind(&ChassisNode::PitchRollAngleCallback, this,
+                      std::placeholders::_1)
+            // 不指定回调组，使用默认组
+        );
     // 订阅能量机关激活控制消息
     rune_activate_subscription_ =
         this->create_subscription<std_msgs::msg::Bool>(
@@ -243,8 +249,8 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     random_engine_ = std::mt19937(std::random_device()());
     spin_speed_distribution_ = std::uniform_int_distribution<int>(3600, 4800);
 
-    // 初始化转速参数
-    is_danger_mode_ = false;
+    // 初始化仲裁器默认值 (正常战斗期望转速，比赛阶段切换时会修改)
+    spin_speed_arbiter_.setDefault(PRI_DEFAULT, target_w_);
 
     // 注册串口
     Attach_Receive_callback(CMD_ID_ROBOT_INFO, sizeof(Robot_info_t),
@@ -291,67 +297,101 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
 
 // 血量危险状态回调函数
 void ChassisNode::HpDangerCallback(const std_msgs::msg::Bool::SharedPtr msg) {
-    if (msg->data && !is_danger_mode_.load()) {
+    if (msg->data && !danger_mode_active_) {
         RCLCPP_WARN(this->get_logger(),
                     "收到血量危险信号，启动底盘高速随机转动模式！");
 
-        // 设置危险模式标志
-        is_danger_mode_.store(true);
+        danger_mode_active_ = true;
 
         // 创建独立线程处理危险模式
         std::thread danger_thread([this]() {
-            // 立即生成第一个随机转速，修改期望值target_w_
-            target_w_.store(
-                static_cast<float>(spin_speed_distribution_(random_engine_)));
-            if (!is_rune_attacking_.load()) {
-                ctrl_info_t_data.w = target_w_.load();
-            }
+            // 立即生成第一个随机转速并注册到仲裁器
+            float rand_w =
+                static_cast<float>(spin_speed_distribution_(random_engine_));
+            spin_speed_arbiter_.update(SRC_DANGER_MODE, PRI_DANGER_MODE, rand_w,
+                                       true);
             RCLCPP_INFO(this->get_logger(), "底盘转速随机期望调整为：%f",
-                        target_w_.load());
+                        rand_w);
 
             // 运行6秒，每1.5秒更新一次转速
             for (int i = 0; i < 4; ++i) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-                target_w_.store(static_cast<float>(
-                    spin_speed_distribution_(random_engine_)));
-                if (!is_rune_attacking_.load()) {
-                    ctrl_info_t_data.w = target_w_.load();
-                }
+                rand_w = static_cast<float>(
+                    spin_speed_distribution_(random_engine_));
+                spin_speed_arbiter_.update(SRC_DANGER_MODE, PRI_DANGER_MODE,
+                                           rand_w, true);
                 RCLCPP_INFO(this->get_logger(), "底盘转速随机期望调整为：%f",
-                            target_w_.load());
+                            rand_w);
             }
 
-            // 恢复战时常规转速到期望值
-            target_w_.store(2400.0f);
-            if (!is_rune_attacking_.load()) {
-                ctrl_info_t_data.w = target_w_.load();
-            }
-            RCLCPP_INFO(this->get_logger(),
-                        "危险模式结束，恢复战时常规转速期望");
-
-            // 重置危险模式标志
-            is_danger_mode_.store(false);
+            // 危险模式结束，将自己设为非激活，仲裁器自动回退到下一优先级
+            spin_speed_arbiter_.update(SRC_DANGER_MODE, PRI_DANGER_MODE, 0,
+                                       false);
+            RCLCPP_INFO(this->get_logger(), "危险模式结束，恢复仲裁器默认转速");
+            target_w_ = 2400.0f;  // 恢复正常战斗期望转速
+            danger_mode_active_ = false;
         });
 
         // 分离线程，让它在后台运行
         danger_thread.detach();
     }
 }
+void ChassisNode::PitchRollAngleCallback(
+    const nav_msgs::msg::Odometry::SharedPtr msg) {
+    // 帧计数器：每10帧里程计取1帧做z轴倾斜计算，避免高频数据抖动
+    odometry_frame_counter_++;
+    if (odometry_frame_counter_ < 10) {
+        return;  // 跳过本帧，等待累计到第10帧
+    }
+    odometry_frame_counter_ = 0;  // 重置计数器
 
+    //  提取四元数
+    double w = msg->pose.pose.orientation.w;
+    double x = msg->pose.pose.orientation.x;
+    double y = msg->pose.pose.orientation.y;
+    double z = msg->pose.pose.orientation.z;
+
+    // 从 Odometry 消息中提取 pitch 和 roll 角度
+    double roll =
+        std::atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
+
+    double sinp = 2.0 * (w * y - z * x);
+    if (sinp > 1.0)
+        sinp = 1.0;
+    else if (sinp < -1.0)
+        sinp = -1.0;
+    double pitch = std::asin(sinp);
+
+    // 将弧度转换为 0.1 度单位
+    double roll_0_1deg = roll * RAD_TO_0_1DEG;
+    double pitch_0_1deg = pitch * RAD_TO_0_1DEG;
+
+    // 滞回比较：z轴倾斜 >10° 关闭小陀螺，回落至 <5° 才恢复，
+    // 中间区间 (5°~10°) 保持上一状态，避免边界抖动
+    double max_tilt = std::max(std::abs(roll_0_1deg), std::abs(pitch_0_1deg));
+    if (!is_tilted_state_ && max_tilt > 100.0) {
+        // 倾斜超过10°，触发关闭小陀螺
+        is_tilted_state_ = true;
+    } else if (is_tilted_state_ && max_tilt < 50.0) {
+        // 倾斜回落至5°以下，恢复小陀螺
+        is_tilted_state_ = false;
+    }
+    // 中间区间 (5°~10°) 保持 is_tilted_state_ 不变
+
+    spin_speed_arbiter_.update(SRC_POSTURE_TILT, PRI_POSTURE_TILT, 0.0f,
+                               is_tilted_state_);
+}
 // 能量机关激活控制回调函数
 void ChassisNode::RuneActivateCallback(
     const std_msgs::msg::Bool::SharedPtr msg) {
     if (msg->data) {
         sentry_cmd_info_t_data.energy_mechanism_activate = 1;
-        // 打符时屏蔽小陀螺：记录打符状态，并将当前底盘物理转速置 0
-        is_rune_attacking_.store(true);
-        ctrl_info_t_data.w = 0.0f;
     } else {
         sentry_cmd_info_t_data.energy_mechanism_activate = 0;
-        // 打符结束：取消屏蔽状态，恢复后台期望的转速
-        is_rune_attacking_.store(false);
-        ctrl_info_t_data.w = target_w_.load();
     }
+    // 打符时关闭小陀螺，注册到仲裁器
+    spin_speed_arbiter_.update(SRC_RUNE_ATTACKING, PRI_RUNE_ATTACKING, 0.0f,
+                               msg->data);
     RCLCPP_INFO(this->get_logger(),
                 "能量机关串口指令更新: energy_mechanism_activate = %d, "
                 "当前设定小陀螺速度 = %f",
@@ -515,6 +555,9 @@ void ChassisNode::ReceiveThreadFunc() {
 }
 
 void ChassisNode::ChassisCmdTimerCallback() {
+    // 仲裁器统一评估：更新 DEFAULT 源为当前期望转速，然后取最高优先级激活源输出
+    spin_speed_arbiter_.update(SRC_DEFAULT, PRI_DEFAULT, target_w_, true);
+    ctrl_info_t_data.w = spin_speed_arbiter_.evaluate();
     Send_Cmd_Packet(serial_dev_, tx_buffer, sizeof(tx_buffer), 0);
 }
 
@@ -523,18 +566,19 @@ void ChassisNode::RefreePubTimerCallback() {
 
     msg.competition_type = game_info_t_data.game_type;
     msg.competition_stage = game_info_t_data.game_progress;
-    //前三个阶段不进行小陀罗
-        if(msg.competition_stage<4){
-        ctrl_info_t_data.w=0;
-        last_game_stage=0;
-        target_w_.store(1200.0f);
+    //前三个阶段不进行小陀螺
+    if (msg.competition_stage < 4) {
+        spin_speed_arbiter_.update(SRC_GAME_STAGE, PRI_GAME_STAGE, 0.0f, true);
+        last_game_stage = 0;
+        // target_w_ = 1200.0f;
     }
-    //第一次进入第四个阶段，回到原本初始状态的小陀罗
-    if(msg.competition_stage==4&& last_game_stage==0){
-        ctrl_info_t_data.w=target_w_.load(); 
-        last_game_stage=1;
-           }
-    
+    //第一次进入第四个阶段，恢复小陀螺
+    if (msg.competition_stage == 4 && last_game_stage == 0) {
+        spin_speed_arbiter_.update(SRC_GAME_STAGE, PRI_GAME_STAGE, 0.0f, false);
+        last_game_stage = 1;
+        // target_w_ = 2400.0f;
+    }
+
     msg.stage_time = game_info_t_data.stage_remain_time;
     msg.dart_target = game_info_t_data.dart_target;
     msg.small_energy_state = game_info_t_data.small_energy_state;

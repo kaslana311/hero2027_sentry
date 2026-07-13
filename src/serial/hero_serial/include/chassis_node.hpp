@@ -13,6 +13,7 @@
 #include <fstream>
 #include <functional>
 #include <iomanip>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <random>
@@ -21,6 +22,7 @@
 #include <std_msgs/msg/detail/bool__struct.hpp>
 #include <string>
 #include <thread>
+#include <unordered_map>
 
 #include "boost_asio.hpp"
 #include "geometry_msgs/msg/point.hpp"
@@ -39,6 +41,57 @@ enum class RobotPosture : uint8_t {
     ATTACK = 1,   // 进攻姿态
     DEFENSE = 2,  // 防御姿态
     MOVE = 3      // 移动姿态
+};
+
+// ==================== 通用优先级仲裁框架 ====================
+// 多源命令仲裁：多个影响源通过统一接口注册期望输出，
+// 仲裁器按优先级选择激活中的最高优先级源输出。
+// 模板参数 T: 仲裁的输出类型 (float, uint8_t, ...)
+
+template <typename T>
+class PriorityArbiterBase {
+   public:
+    virtual void update(int source_id, int priority, T value, bool active) = 0;
+    virtual T evaluate() const = 0;
+    virtual void setDefault(int priority, T value) = 0;
+    virtual ~PriorityArbiterBase() = default;
+};
+
+template <typename T>
+class PriorityArbiter : public PriorityArbiterBase<T> {
+   public:
+    void update(int source_id, int priority, T value, bool active) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        commands_[source_id] = {priority, value, active};
+    }
+
+    T evaluate() const override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        int best_priority = std::numeric_limits<int>::max();
+        T best_value = default_.value;
+        for (const auto& [id, cmd] : commands_) {
+            if (cmd.active && cmd.priority < best_priority) {
+                best_priority = cmd.priority;
+                best_value = cmd.value;
+            }
+        }
+        return best_value;
+    }
+
+    void setDefault(int priority, T value) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        default_ = {priority, value, true};
+    }
+
+   private:
+    struct Command {
+        int priority;
+        T value;
+        bool active;
+    };
+    std::unordered_map<int, Command> commands_;
+    Command default_{std::numeric_limits<int>::max(), T{}, true};
+    mutable std::mutex mutex_;
 };
 
 class ChassisNode : public rclcpp::Node {
@@ -72,6 +125,9 @@ class ChassisNode : public rclcpp::Node {
     // 血量危险状态订阅者
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
         hp_danger_subscription_;
+    // pitch和roll角度订阅者
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr
+        pitch_roll_angle_subscription_;
     // 能量机关激活命令订阅者
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
         rune_activate_subscription_;
@@ -95,22 +151,45 @@ class ChassisNode : public rclcpp::Node {
     // serial_interfaces::msg::Robot robot_reach_;
     bool has_arrived_ = true;
     // 该部分是为了生成正弦小陀螺
-    rclcpp::Time start_time_;                    // 添加时间记录
-    double amplitude_ = 800;                     // 振幅 (度)
-    double frequency_ = 1;                       // 频率 (Hz)
-                                                 // 用于保存数据的相关变量
-    int save_counter_ = 0;                       // 计数器，累加至阈值时保存
-    int save_interval_ms_ = 5000;                // 保存间隔(毫秒)，默认5秒
+    rclcpp::Time start_time_;      // 添加时间记录
+    double amplitude_ = 800;       // 振幅 (度)
+    double frequency_ = 1;         // 频率 (Hz)
+                                   // 用于保存数据的相关变量
+    int save_counter_ = 0;         // 计数器，累加至阈值时保存
+    int save_interval_ms_ = 5000;  // 保存间隔(毫秒)，默认5秒
     std::string save_path_ = "./referee_data/";  // 保存数据的文件夹路径
     std::atomic<bool> is_guarding{true};
-    uint8_t last_game_stage=0;
-    // 修改：移除 spin_speed_ 和其互斥锁
-    std::atomic<bool>
-        is_danger_mode_;  // 是否处于危险模式（使用原子变量避免竞争）
+    uint8_t last_game_stage = 0;
 
-    // 能量机关打符状态标记，以及目标转速状态管理
-    std::atomic<bool> is_rune_attacking_{false};
-    std::atomic<float> target_w_{1200.0f};  // 默认小陀螺转速（原1200）
+    // ==================== 优先级仲裁器 ====================
+    // 小陀螺角速度多源仲裁：各影响源通过统一接口注册，仲裁器按优先级输出
+    PriorityArbiter<float> spin_speed_arbiter_;
+
+    // 各影响源的 source_id，用于向仲裁器注册
+    static constexpr int SRC_GAME_STAGE = 0;
+    static constexpr int SRC_RUNE_ATTACKING = 1;
+    static constexpr int SRC_POSTURE_TILT = 2;
+    static constexpr int SRC_DANGER_MODE = 3;
+    static constexpr int SRC_DEFAULT = 4;
+
+    // 对应优先级值 (越小优先级越高)
+    static constexpr int PRI_GAME_STAGE = 0;
+    static constexpr int PRI_RUNE_ATTACKING = 1;
+    static constexpr int PRI_POSTURE_TILT = 2;
+    static constexpr int PRI_DANGER_MODE = 3;
+    static constexpr int PRI_DEFAULT = 4;
+
+    // 危险模式线程防重入标志（仅由 HpDangerCallback 单线程访问，非 atomic）
+    bool danger_mode_active_{false};
+
+    // 倾斜滞回比较状态：记录当前是否处于倾斜关闭小陀螺的状态
+    bool is_tilted_state_{false};
+
+    // 里程计帧计数器：每10帧取1帧做z轴倾斜计算，避免高频抖动
+    int odometry_frame_counter_{0};
+
+    // 正常战斗期望转速（由比赛阶段等逻辑修改，作为 DEFAULT 源的基准值）
+    float target_w_{1200.0f};
 
     // 随机数生成器
     std::mt19937 random_engine_;
@@ -154,7 +233,7 @@ class ChassisNode : public rclcpp::Node {
     void ChassisCmdTimerCallback();
     // RefreeTimerCallback 已被 ReceiveThreadFunc 替代
     void RefreePubTimerCallback();
-
+    void PitchRollAngleCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
     void ReachCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void PrintRefereeData(const auto& referee_parser);
 
