@@ -38,9 +38,12 @@
 
 // 机器人姿态状态枚举
 enum class RobotPosture : uint8_t {
-    ATTACK = 1,   // 进攻姿态
-    DEFENSE = 2,  // 防御姿态
-    MOVE = 3      // 移动姿态
+    ATTACK = 1,             // 进攻姿态
+    DEFENSE = 2,            // 防御姿态
+    MOVE = 3,               // 移动姿态
+    ATTACK_STRENGTHEN = 4,  // 进攻强化姿态
+    DEFENSE_STRENGTHEN = 5, // 防御强化姿态
+    MOVE_STRENGTHEN = 6     // 移动强化姿态
 };
 
 // ==================== 通用优先级仲裁框架 ====================
@@ -148,6 +151,15 @@ class ChassisNode : public rclcpp::Node {
     // 机器人姿态状态机
     RobotPosture current_posture_ = RobotPosture::MOVE;  // 默认移动姿态
 
+    // ==================== 强化姿态相关 ====================
+    // 强化姿态持续 7s，作为普通姿态状态机的"叠加层"
+    // 强化激活时，sentry_status 反映强化姿态，current_posture_ 继续跟踪普通状态机
+    bool is_enhanced_active_{false};
+    RobotPosture enhanced_posture_{RobotPosture::MOVE};
+    rclcpp::Time enhanced_start_time_;
+    rclcpp::Time last_command_time_;
+    static constexpr double ENHANCED_DURATION_SEC = 7.0;
+
     // serial_interfaces::msg::Robot robot_reach_;
     bool has_arrived_ = true;
     // 该部分是为了生成正弦小陀螺
@@ -204,16 +216,17 @@ class ChassisNode : public rclcpp::Node {
 
     Game_info_t game_info_t_data = {0, 0, 0, 0, 0, 0};
     Event_data_t event_data_t_data = {0};
-    Robot_info_t robot_info_t_data = {0, 0, 0, 0, 0, 0, 0};
+    Robot_info_t robot_info_t_data = {0, 0, 0, 0, 0, 0, 0, 0.0};
     Robot_position_t robot_position_t_data = {0, 0, 0};
     Bullet_remaining_t bullet_remaining_t_data = {0, 0, 0, 0};
     Ground_robot_position_t ground_robot_position_t_data = {0, 0, 0, 0,
                                                             0, 0, 0, 0};
     // Sentry_info_t sentry_info_t_data = {0, 0};
-    ext_sentry_info_t ext_sentry_info_data = {0, 0, 0, 0, 0, 0,
-                                              0, 0, 0, 0, 1, 0};
-    game_robot_HP_t game_robot_HP_data = {400, 400, 400,  400,
-                                          0,   400, 1500, 5000};
+    ext_sentry_info_t ext_sentry_info_data = {0, 0, 0, 0, 0, 0, 0,
+                                              0, 0, 0, 1, 0, 
+                                              0, 0, 0, 0, 0, 0, 0, 0};
+    Game_robot_survivors_t game_robot_HP_data = {400, 400, 400,  400,
+                                          0,   400, 1500, 5000, 1500, 5000};
     Robot_command_map_t robot_command_map_data = {0, 0, 0, 0, 0};
     Robot_command_map_t last_robot_command_map_data = {0, 0, 0, 0, 0};
     Robot_wheel_odometry_t robot_wheel_odometry_data = {0.0, 0.0};

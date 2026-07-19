@@ -132,7 +132,7 @@ void ChassisNode::Trigger_Callback(void* data) {
     if (!data) return;
     Robot_command_map_t* cmd_data = static_cast<Robot_command_map_t*>(data);
 
-    // 串口层仅负责转发，不做任何状态比对和判断
+    // 串口层转发坐标点到决策节点（无论是否去重，每次收到都转发位置）
     geometry_msgs::msg::PointStamped point;
     point.header.stamp = this->now();
     point.header.frame_id = "global_red_map";
@@ -141,6 +141,68 @@ void ChassisNode::Trigger_Callback(void* data) {
     point.point.z = 0.0;
 
     trigger_pub_->publish(point);
+
+    // ===================== 强化姿态键盘指令处理 =====================
+    // 协议特性 (0x0303)：选手触发 1 次 → 100ms 间隔额外发送 4 次 (共5次 burst)
+    //   → 此后以 1Hz 持续定频发送最近一次的包，直到下一次选手触发
+    // 去重策略：比对 (x, y, keyboard) 是否与上次处理的一致
+    //   - 一致            → 重传包，跳过键盘解析
+    //   - 不一致          → 新指令，立即处理
+
+    bool data_changed =
+        cmd_data->target_position_x !=
+        last_robot_command_map_data.target_position_x ||
+        cmd_data->target_position_y !=
+        last_robot_command_map_data.target_position_y ||
+        cmd_data->commd_keyboard != last_robot_command_map_data.commd_keyboard;
+
+    if (!data_changed) {
+        // 与上次数据完全一致 → 重传包，跳过键盘解析
+        return;
+    }
+
+    // --- 以下为新指令处理 ---
+    // 更新去重基准
+    last_robot_command_map_data = *cmd_data;
+    last_command_time_ = this->now();
+
+    // 解析键盘指令
+    char key = static_cast<char>(cmd_data->commd_keyboard);
+    switch (key) {
+        case 'z':  // 强化进攻
+            RCLCPP_INFO(this->get_logger(),
+                        "收到强化进攻指令 (key='z'), 持续 %.0fs",
+                        ENHANCED_DURATION_SEC);
+            enhanced_posture_ = RobotPosture::ATTACK_STRENGTHEN;
+            is_enhanced_active_ = true;
+            enhanced_start_time_ = this->now();
+            sentry_cmd_info_t_data.sentry_status =
+                static_cast<uint8_t>(RobotPosture::ATTACK_STRENGTHEN);
+            break;
+        case 'x':  // 强化防御
+            RCLCPP_INFO(this->get_logger(),
+                        "收到强化防御指令 (key='x'), 持续 %.0fs",
+                        ENHANCED_DURATION_SEC);
+            enhanced_posture_ = RobotPosture::DEFENSE_STRENGTHEN;
+            is_enhanced_active_ = true;
+            enhanced_start_time_ = this->now();
+            sentry_cmd_info_t_data.sentry_status =
+                static_cast<uint8_t>(RobotPosture::DEFENSE_STRENGTHEN);
+            break;
+        case 'c':  // 强化移动
+            RCLCPP_INFO(this->get_logger(),
+                        "收到强化移动指令 (key='c'), 持续 %.0fs",
+                        ENHANCED_DURATION_SEC);
+            enhanced_posture_ = RobotPosture::MOVE_STRENGTHEN;
+            is_enhanced_active_ = true;
+            enhanced_start_time_ = this->now();
+            sentry_cmd_info_t_data.sentry_status =
+                static_cast<uint8_t>(RobotPosture::MOVE_STRENGTHEN);
+            break;
+        default:
+            // 无键盘按键或非强化键，不做强化姿态切换
+            break;
+    }
 }
 
 ChassisNode ::ChassisNode() : Node("chassis_node") {
@@ -261,7 +323,7 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
                             (void*)&bullet_remaining_t_data,
                             Callback_func_data1);
     Attach_Receive_callback(CMD_ID_GAME_ROBOT_survivors,
-                            sizeof(game_robot_HP_t), (void*)&game_robot_HP_data,
+                            sizeof(Game_robot_survivors_t), (void*)&game_robot_HP_data,
                             Callback_func_data1);
     Attach_Receive_callback(
         CMD_ID_Robot_wheel_odometry, sizeof(Robot_wheel_odometry_t),
@@ -451,10 +513,15 @@ void ChassisNode::AimingCallback(
 void ChassisNode::SetPosture(RobotPosture posture) {
     if (current_posture_ != posture) {
         current_posture_ = posture;
-        sentry_cmd_info_t_data.sentry_status =
-            static_cast<uint8_t>(current_posture_);
-        RCLCPP_DEBUG(this->get_logger(), "姿态切换至: %d",
-                     static_cast<int>(current_posture_));
+        // 强化姿态激活时，普通状态机继续在后台更新 current_posture_，
+        // 但不覆盖 sentry_status（sentry_status 应保持为强化姿态值）
+        if (!is_enhanced_active_) {
+            sentry_cmd_info_t_data.sentry_status =
+                static_cast<uint8_t>(current_posture_);
+        }
+        RCLCPP_DEBUG(this->get_logger(), "姿态切换至: %d (强化:%s)",
+                     static_cast<int>(current_posture_),
+                     is_enhanced_active_ ? "是" : "否");
     }
 }
 
@@ -555,6 +622,20 @@ void ChassisNode::ReceiveThreadFunc() {
 }
 
 void ChassisNode::ChassisCmdTimerCallback() {
+    // ===================== 强化姿态到期检查 =====================
+    if (is_enhanced_active_) {
+        double elapsed = (this->now() - enhanced_start_time_).seconds();
+        if (elapsed >= ENHANCED_DURATION_SEC) {
+            // 强化姿态到期，恢复到普通状态机的当前姿态
+            is_enhanced_active_ = false;
+            sentry_cmd_info_t_data.sentry_status =
+                static_cast<uint8_t>(current_posture_);
+            RCLCPP_INFO(this->get_logger(),
+                        "强化姿态到期 (%.1fs)，恢复至普通姿态: %d",
+                        elapsed, static_cast<int>(current_posture_));
+        }
+    }
+
     // 仲裁器统一评估：更新 DEFAULT 源为当前期望转速，然后取最高优先级激活源输出
     spin_speed_arbiter_.update(SRC_DEFAULT, PRI_DEFAULT, target_w_, true);
     ctrl_info_t_data.w = spin_speed_arbiter_.evaluate();
@@ -587,7 +668,7 @@ void ChassisNode::RefreePubTimerCallback() {
     msg.robot_id = robot_info_t_data.robot_id;
     msg.current_hp = robot_info_t_data.remain_HP;
 
-    // 己方血量
+    // 己方血量+敌方建筑血量
     msg.friend_hero = game_robot_HP_data.ally_1_robot_HP;
     msg.friend_engineer = game_robot_HP_data.ally_2_robot_HP;
     msg.friend_infantry3 = game_robot_HP_data.ally_3_robot_HP;
@@ -595,6 +676,8 @@ void ChassisNode::RefreePubTimerCallback() {
     msg.friend_sentry = game_robot_HP_data.ally_7_robot_HP;
     msg.friend_outpost = game_robot_HP_data.ally_outpost_HP;
     msg.friend_base = game_robot_HP_data.ally_base_HP;
+    msg.enemy_outpost_HP = game_robot_HP_data.enemy_outpost_HP;
+    msg.enemy_base_HP = game_robot_HP_data.enemy_base_HP;
 
     // 队友位置 (基于 global_red_map)
     msg.hero_x = ground_robot_position_t_data.hero_x;
@@ -612,33 +695,13 @@ void ChassisNode::RefreePubTimerCallback() {
         sentry_cmd_info_t_data.confirm_revive = 0;
     }
 
+    // 对剩余弹丸量进行转接
     msg.bullet_17mm = robot_info_t_data.shooter_cooling_rate;
     msg.energy_mechanism_available =
         ext_sentry_info_data.sentry_info_2.energy_mechanism_available;
     // msg.projectile_allowance_fortress =
     //     bullet_remaining_t_data.projectile_allowance_fortress;
     refree_pub_->publish(msg);
-
-    // if ((robot_command_map_data.target_position_x !=
-    //          last_robot_command_map_data.target_position_x ||
-    //      robot_command_map_data.target_position_y !=
-    //          last_robot_command_map_data.target_position_y) &&
-    //     (robot_command_map_data.target_position_x != 0.0 &&
-    //      robot_command_map_data.target_position_y != 0.0)) {
-    //     geometry_msgs::msg::Point point;
-    //     point.x = robot_command_map_data.target_position_x;
-    //     point.y = robot_command_map_data.target_position_y;
-    //     point.z = 0.0;
-
-    //     last_robot_command_map_data.target_position_x =
-    //         robot_command_map_data.target_position_x;
-    //     last_robot_command_map_data.target_position_y =
-    //         robot_command_map_data.target_position_y;
-
-    //     trigger_pub_->publish(point);
-
-    //     std::cout << "收到触发消息！" << std::endl;
-    // }
 }
 
 int main(int argc, char* argv[]) {

@@ -30,11 +30,11 @@ typedef struct {
     uint32_t
         exchange_health_request_count : 4;  // 17-20bit,
                                             // 远程兑换血量的请求次数，从0开始递增，每次变化只能是1
-    uint32_t sentry_status : 2;  // 21-22bit, 哨兵当前姿态
+    uint32_t sentry_status : 3;                 // 21-23bit, 哨兵当前姿态
     uint32_t
-        energy_mechanism_activate : 1;  // 23bit,
+        energy_mechanism_activate : 1;  // 24bit,
                                         // 是否激活能量机关，0为默认，1表示激活
-    uint32_t reserved : 8;              // 24-31bit, 保留位，当前未使用
+    uint32_t reserved : 7;              // 25-31bit, 保留位，当前未使用
 } sentry_cmd_info_t;
 #pragma pack(pop)
 
@@ -62,15 +62,17 @@ typedef struct {
 
 #pragma pack(push, 1)
 typedef struct {
-    uint16_t ally_1_robot_HP : 2;
-    uint16_t ally_2_robot_HP : 2;
-    uint16_t ally_3_robot_HP : 2;
-    uint16_t ally_4_robot_HP : 2;
-    uint16_t reserved : 2;
-    uint16_t ally_7_robot_HP : 2;
-    uint16_t ally_outpost_HP : 2;
-    uint16_t ally_base_HP : 2;
-} game_robot_HP_t;  // 比赛机器人血量数据
+    uint16_t ally_1_robot_HP; //己方 1 号英雄机器人血量，若该机器人未上场或者被罚下，则血量为 0
+    uint16_t ally_2_robot_HP; //己方 2 号工程机器人血量
+    uint16_t ally_3_robot_HP; //己方 3 号步兵机器人血量
+    uint16_t ally_4_robot_HP; //己方 4 号步兵机器人血量
+    int16_t damage_difference;//己方全队总伤与对方总伤之差
+    uint16_t ally_7_robot_HP; //己方 7 号哨兵机器人血量
+    uint16_t ally_outpost_HP; //己方前哨站血量
+    uint16_t ally_base_HP;    //己方基地血量
+    uint16_t enemy_outpost_HP;//对方前哨站血量
+    uint16_t enemy_base_HP;   //对方基地血量
+} Game_robot_survivors_t;  // 比赛机器人血量数据
 #pragma pack(pop)
 
 #pragma pack(push, 1)
@@ -89,6 +91,7 @@ typedef struct {
     uint16_t shooter_cooling_rate;   // 机器人枪口每秒冷却值
     uint16_t shooter_cooling_limit;  // 机器人枪口热量上限
     uint16_t chassis_power_limit;    // 机器人底盘功率上限
+    float bullet_speed_limit;       // 机器人射击初速度上限
 } Robot_info_t;                      // 机器人状态数据
 #pragma pack(pop)
 
@@ -160,14 +163,28 @@ typedef struct {
     uint16_t exchange_17mm_amount : 11;       // bit1~11, 17mm 兑换数
     uint16_t sentry_posture : 2;              // bit12~13, 姿态
     uint16_t energy_mechanism_available : 1;  // bit14, 能量机关可激活
-    uint16_t reserved : 1;                    // bit15, 保留
+    uint16_t sentry_strengthen : 1;      // bit15, 是否处于强化姿态
 } sentry_info_2_t;
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+typedef struct {
+    uint8_t sentry_attack_weaken_duration : 8;       // bit 0~7, 哨兵进攻姿态弱化前剩余可持续时长（秒）
+    uint8_t sentry_defense_weaken_duration : 8;      // bit 8~15, 哨兵防御姿态弱化前剩余可持续时长（秒）
+    uint8_t sentry_move_weaken_duration : 8;         // bit 16~23, 哨兵移动姿态弱化前剩余可持续时长（秒）
+    uint8_t reserved_0 : 8;                          // bit 24~31, 保留位
+    uint8_t sentry_attack_strengthen_duration : 8;   // bit 32~39, 哨兵强化进攻姿态剩余可持续时长（秒）
+    uint8_t sentry_defense_strengthen_duration : 8;  // bit 40~47, 哨兵强化防御姿态剩余可持续时长（秒）
+    uint8_t sentry_move_strengthen_duration : 8;     // bit 48~55, 哨兵强化移动姿态剩余可持续时长（秒）
+    uint8_t reserved_1 : 8;                          // bit 56~63, 保留位
+} sentry_info_3_t;
 #pragma pack(pop)
 
 #pragma pack(push, 1)
 typedef struct {
     sentry_info_t sentry_info;
     sentry_info_2_t sentry_info_2;
+    sentry_info_3_t sentry_info_3;
 } ext_sentry_info_t;
 #pragma pack(pop)
 

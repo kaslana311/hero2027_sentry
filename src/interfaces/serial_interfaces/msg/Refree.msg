@@ -15,6 +15,9 @@ uint16 friend_sentry
 uint16 friend_outpost
 uint16 friend_base
 
+uint16 enemy_outpost_HP;
+uint16 enemy_base_HP;   
+
 # 战场状态
 bool status_supply_non_overlap
 bool status_supply_overlap
