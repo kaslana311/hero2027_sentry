@@ -676,8 +676,8 @@ void ChassisNode::RefreePubTimerCallback() {
     msg.friend_sentry = game_robot_HP_data.ally_7_robot_HP;
     msg.friend_outpost = game_robot_HP_data.ally_outpost_HP;
     msg.friend_base = game_robot_HP_data.ally_base_HP;
-    msg.enemy_outpost_HP = game_robot_HP_data.enemy_outpost_HP;
-    msg.enemy_base_HP = game_robot_HP_data.enemy_base_HP;
+    msg.enemy_outpost_hp = game_robot_HP_data.enemy_outpost_HP;
+    msg.enemy_base_hp = game_robot_HP_data.enemy_base_HP;
 
     // 队友位置 (基于 global_red_map)
     msg.hero_x = ground_robot_position_t_data.hero_x;
