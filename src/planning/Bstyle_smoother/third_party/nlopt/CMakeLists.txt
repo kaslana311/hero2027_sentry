@@ -19,7 +19,6 @@ if (NOT DEFINED CMAKE_BUILD_TYPE)
 endif ()
 
 project (nlopt)
-set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/install")
 #==============================================================================
 # version
 set (NLOPT_MAJOR_VERSION "2")
@@ -76,7 +75,7 @@ foreach (p LIB BIN INCLUDE DATA CMAKE)
 endforeach ()
 
 
-set (CMAKE_INSTALL_RPATH ${INSTALL_LIB_DIR})
+set (CMAKE_INSTALL_RPATH "$ORIGIN")
 set (CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 if(POLICY CMP0042)
   # Set MACOSX_RPATH to ON

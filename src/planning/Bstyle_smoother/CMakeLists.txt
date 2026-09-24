@@ -4,14 +4,17 @@ project(Bstyle_smoother)
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
-set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlopt/install/lib/cmake/nlopt")
-message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
-set(NLOPT_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlopt/install/lib")
+set(NLOPT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlopt/install" CACHE PATH
+  "Path to the bundled NLopt installation")
+list(PREPEND CMAKE_PREFIX_PATH "${NLOPT_ROOT}/lib/cmake/nlopt")
+message(STATUS "NLopt root: ${NLOPT_ROOT}")
+set(NLOPT_LIB_DIR "${NLOPT_ROOT}/lib")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE "Release")
 add_compile_options(-O3)
-# 1. 允许在安装后保留 RPATH
-set(CMAKE_INSTALL_RPATH "${NLOPT_LIB_DIR}")
+# NLopt is installed beside this package's library below, so no source-tree
+# or temporary build path is needed at runtime.
+set(CMAKE_INSTALL_RPATH "$ORIGIN")
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -27,7 +30,7 @@ find_package(tf2_ros REQUIRED)
 find_package(NLopt REQUIRED)
 find_package(OpenCV REQUIRED)
 message(WARNING "NLopt_INCLUDE_DIRS: ${NLopt_INCLUDE_DIRS}")
-set (INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlopt/install/include")
+set(INCLUDE_DIR "${NLOPT_ROOT}/include")
 # Include directories
 include_directories(
   include
@@ -59,7 +62,6 @@ ament_target_dependencies(${PROJECT_NAME}
   tf2_ros
   OpenCV
 )
-set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlopt/install/lib")
 target_link_libraries(${PROJECT_NAME}
   NLopt::nlopt
 )
@@ -69,6 +71,10 @@ install(TARGETS ${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
+)
+install(DIRECTORY "${NLOPT_LIB_DIR}/"
+  DESTINATION lib
+  FILES_MATCHING PATTERN "libnlopt.so*"
 )
 # Export plugin
 pluginlib_export_plugin_description_file(nav2_core plugins.xml)

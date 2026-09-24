@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.8)
 project(align_cloud)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_BUILD_TYPE "Release")
 add_compile_options(-O3)
@@ -31,7 +30,6 @@ target_link_libraries(align_cloud_node
   Eigen3::Eigen
 ) 
 
-install (TARGETS align_cloud_node
-  DESTINATION .
+install(TARGETS align_cloud_node
+  RUNTIME DESTINATION bin
 )
-
