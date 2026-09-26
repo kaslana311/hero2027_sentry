@@ -43,6 +43,8 @@ namespace pb_nav2_behaviors
 class BackUpFreeSpace : public nav2_behaviors::DriveOnHeading<nav2_msgs::action::BackUp>
 {
 public:
+  using Base = nav2_behaviors::DriveOnHeading<nav2_msgs::action::BackUp>;
+
   BackUpFreeSpace() = default;
 
   void onConfigure() override;
@@ -52,6 +54,9 @@ public:
   nav2_behaviors::Status onCycleUpdate() override;
 
 protected:
+  nav2_behaviors::Status startReverseFallback(
+    const std::shared_ptr<const BackUpAction::Goal> & command, const std::string & reason);
+
   // Service client for obtaining the local costmap
   rclcpp::Client<nav2_msgs::srv::GetCostmap>::SharedPtr costmap_client_;
 
@@ -64,6 +69,7 @@ protected:
 
   // Timestamp when the escape motion started (for smooth ramp-up)
   rclcpp::Time start_time_;
+  bool reverse_fallback_active_{false};
 
   // ---------- Parameters ----------
   std::string service_name_;

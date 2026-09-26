@@ -45,6 +45,15 @@ def _make_sim_params(
     bt_navigator.pop("default_server_timfeout", None)
     bt_navigator["default_server_timeout"] = 100
 
+    # In simulation a raised 3-D mesh edge can stop the chassis even though
+    # the 2-D costmap still considers the cell traversable. Detect that case
+    # promptly, while accepting slow but real progress through narrow gaps.
+    progress_checker = params["controller_server"]["ros__parameters"][
+        "progress_checker"
+    ]
+    progress_checker["required_movement_radius"] = 0.10
+    progress_checker["movement_time_allowance"] = 5.0
+
     smoother = params["smoother_server"]["ros__parameters"].get("minco_smoother", {})
     if "odom_topic" in smoother:
         smoother["odom_topic"] = "odometry/filtered"

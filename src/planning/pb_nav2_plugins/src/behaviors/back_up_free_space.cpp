@@ -26,6 +26,8 @@ namespace pb_nav2_behaviors
 
 void BackUpFreeSpace::onConfigure()
 {
+  Base::onConfigure();
+
   auto node = node_.lock();
   if (!node) {
     throw std::runtime_error{"Failed to lock node"};
@@ -48,7 +50,33 @@ void BackUpFreeSpace::onConfigure()
   costmap_client_ = node->create_client<nav2_msgs::srv::GetCostmap>(service_name_);
 }
 
-void BackUpFreeSpace::onCleanup() { costmap_client_.reset(); }
+void BackUpFreeSpace::onCleanup()
+{
+  Base::onCleanup();
+  costmap_client_.reset();
+  reverse_fallback_active_ = false;
+}
+
+nav2_behaviors::Status BackUpFreeSpace::startReverseFallback(
+  const std::shared_ptr<const BackUpAction::Goal> & command, const std::string & reason)
+{
+  auto reverse_command = std::make_shared<BackUpAction::Goal>(*command);
+  reverse_command->target.x = -std::fabs(command->target.x);
+  reverse_command->target.y = 0.0;
+  reverse_command->target.z = 0.0;
+  reverse_command->speed = -std::fabs(command->speed);
+
+  RCLCPP_WARN(
+    logger_, "BackUpFreeSpace: %s; using collision-checked reverse fallback (%.2f m at %.2f m/s)",
+    reason.c_str(), std::fabs(reverse_command->target.x), std::fabs(reverse_command->speed));
+
+  reverse_fallback_active_ = true;
+  const auto status = Base::onRun(reverse_command);
+  if (status != nav2_behaviors::Status::SUCCEEDED) {
+    reverse_fallback_active_ = false;
+  }
+  return status;
+}
 
 // ---------------------------------------------------------------------------
 // onRun – compute escape direction from the ESDF gradient
@@ -57,6 +85,8 @@ void BackUpFreeSpace::onCleanup() { costmap_client_.reset(); }
 nav2_behaviors::Status BackUpFreeSpace::onRun(
   const std::shared_ptr<const BackUpAction::Goal> command)
 {
+  reverse_fallback_active_ = false;
+
   // ---- 1. Wait for the GetCostmap service ----
   while (!costmap_client_->wait_for_service(std::chrono::seconds(1))) {
     if (!rclcpp::ok()) {
@@ -98,10 +128,7 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
 
   // ---- 4. Check if the robot is already in free space ----
   if (esdf_.isInside(rx, ry) && esdf_.getDistance(rx, ry) >= safe_distance_threshold_) {
-    RCLCPP_INFO(
-      logger_, "Robot is already in free space (d=%.3f m). Nothing to do.",
-      esdf_.getDistance(rx, ry));
-    return nav2_behaviors::Status::SUCCEEDED;
+    return startReverseFallback(command, "costmap reports free space despite a recovery request");
   }
 
   // ---- 5. Compute escape direction from the ESDF gradient ----
@@ -110,8 +137,7 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
 
   const double grad_norm = std::hypot(gx, gy);
   if (grad_norm < 1e-6) {
-    RCLCPP_WARN(logger_, "ESDF gradient is near zero – cannot determine escape direction.");
-    return nav2_behaviors::Status::FAILED;
+    return startReverseFallback(command, "ESDF gradient is near zero");
   }
 
   escape_dir_x_ = gx / grad_norm;
@@ -136,6 +162,10 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
 
 nav2_behaviors::Status BackUpFreeSpace::onCycleUpdate()
 {
+  if (reverse_fallback_active_) {
+    return Base::onCycleUpdate();
+  }
+
   // ---- 1. Timeout check ----
   rclcpp::Duration time_remaining = end_time_ - clock_->now();
   if (time_remaining.seconds() < 0.0 && command_time_allowance_.seconds() > 0.0) {

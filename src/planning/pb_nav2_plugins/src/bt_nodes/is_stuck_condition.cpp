@@ -14,6 +14,7 @@
 
 #include "pb_nav2_plugins/bt_nodes/is_stuck_condition.hpp"
 
+#include <cmath>
 #include <string>
 
 #include "geometry_msgs/msg/transform_stamped.hpp"
@@ -36,9 +37,18 @@ IsStuckCondition::IsStuckCondition(
 
   // Read BT port values
   std::string costmap_topic;
+  std::string cmd_vel_topic;
+  std::string odom_topic;
   getInput("costmap_topic", costmap_topic);
   getInput("check_interval", check_interval_);
   getInput("consecutive_hits", consecutive_hits_);
+  getInput("cmd_vel_topic", cmd_vel_topic);
+  getInput("odom_topic", odom_topic);
+  getInput("command_speed_threshold", command_speed_threshold_);
+  getInput("stall_displacement_threshold", stall_displacement_threshold_);
+  getInput("stall_duration", stall_duration_);
+  getInput("data_timeout", data_timeout_);
+  getInput("latch_timeout", latch_timeout_);
 
   // Set up a dedicated callback group so the subscription callback runs on
   // its own executor thread – identical pattern to Nav2's IsBatteryLow and
@@ -53,13 +63,20 @@ IsStuckCondition::IsStuckCondition(
   costmap_sub_ = node_->create_subscription<nav2_msgs::msg::Costmap>(
     costmap_topic, rclcpp::SensorDataQoS(),
     std::bind(&IsStuckCondition::costmapCallback, this, std::placeholders::_1), sub_options);
+  cmd_vel_sub_ = node_->create_subscription<geometry_msgs::msg::Twist>(
+    cmd_vel_topic, rclcpp::QoS(10),
+    std::bind(&IsStuckCondition::cmdVelCallback, this, std::placeholders::_1), sub_options);
+  odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(
+    odom_topic, rclcpp::SensorDataQoS(),
+    std::bind(&IsStuckCondition::odometryCallback, this, std::placeholders::_1), sub_options);
 
   // Spin the callback group executor in a background thread
   callback_group_executor_thread_ = std::thread([this]() { callback_group_executor_.spin(); });
 
   RCLCPP_INFO(
-    node_->get_logger(), "IsStuckCondition: listening on '%s', interval=%.2fs, hits=%d",
-    costmap_topic.c_str(), check_interval_, consecutive_hits_);
+    node_->get_logger(), "IsStuckCondition: costmap='%s', cmd='%s', odom='%s', stall=%.2fs/%.3fm",
+    costmap_topic.c_str(), cmd_vel_topic.c_str(), odom_topic.c_str(), stall_duration_,
+    stall_displacement_threshold_);
 }
 
 IsStuckCondition::~IsStuckCondition()
@@ -80,17 +97,105 @@ void IsStuckCondition::costmapCallback(nav2_msgs::msg::Costmap::SharedPtr msg)
   latest_costmap_ = msg;
 }
 
+void IsStuckCondition::cmdVelCallback(geometry_msgs::msg::Twist::SharedPtr msg)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  latest_command_speed_ = std::hypot(msg->linear.x, msg->linear.y);
+  latest_cmd_vel_time_ = node_->get_clock()->now();
+  have_cmd_vel_ = true;
+  updateMotionStallLocked(latest_cmd_vel_time_);
+}
+
+void IsStuckCondition::odometryCallback(nav_msgs::msg::Odometry::SharedPtr msg)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  latest_odom_x_ = msg->pose.pose.position.x;
+  latest_odom_y_ = msg->pose.pose.position.y;
+  latest_odom_time_ = node_->get_clock()->now();
+  have_odom_ = true;
+  updateMotionStallLocked(latest_odom_time_);
+}
+
+void IsStuckCondition::resetMotionWindowLocked() { motion_window_active_ = false; }
+
+void IsStuckCondition::updateMotionStallLocked(const rclcpp::Time & now)
+{
+  if (!have_cmd_vel_ || !have_odom_ || motion_stall_latched_) {
+    return;
+  }
+
+  const double cmd_age = (now - latest_cmd_vel_time_).seconds();
+  const double odom_age = (now - latest_odom_time_).seconds();
+  if (
+    cmd_age < 0.0 || odom_age < 0.0 || cmd_age > data_timeout_ || odom_age > data_timeout_ ||
+    latest_command_speed_ < command_speed_threshold_) {
+    resetMotionWindowLocked();
+    return;
+  }
+
+  if (!motion_window_active_) {
+    motion_window_active_ = true;
+    motion_window_start_ = now;
+    motion_window_start_x_ = latest_odom_x_;
+    motion_window_start_y_ = latest_odom_y_;
+    return;
+  }
+
+  const double displacement =
+    std::hypot(latest_odom_x_ - motion_window_start_x_, latest_odom_y_ - motion_window_start_y_);
+  if (displacement >= stall_displacement_threshold_) {
+    motion_window_start_ = now;
+    motion_window_start_x_ = latest_odom_x_;
+    motion_window_start_y_ = latest_odom_y_;
+    return;
+  }
+
+  const double elapsed = (now - motion_window_start_).seconds();
+  if (elapsed >= stall_duration_) {
+    motion_stall_latched_ = true;
+    motion_stall_latched_time_ = now;
+    latched_stall_duration_ = elapsed;
+    latched_stall_displacement_ = displacement;
+    latched_command_speed_ = latest_command_speed_;
+    resetMotionWindowLocked();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // tick()
 // ---------------------------------------------------------------------------
 
 BT::NodeStatus IsStuckCondition::tick()
 {
-  // ---- 1. Grab the latest costmap snapshot ----
+  // ---- 1. Consume a recent physical-stall latch, if present ----
   nav2_msgs::msg::Costmap::SharedPtr costmap;
+  bool motion_stall = false;
+  double stall_elapsed = 0.0;
+  double stall_displacement = 0.0;
+  double stall_command_speed = 0.0;
+  const rclcpp::Time now = node_->get_clock()->now();
   {
     std::lock_guard<std::mutex> lock(mutex_);
     costmap = latest_costmap_;
+    if (motion_stall_latched_) {
+      const double latch_age = (now - motion_stall_latched_time_).seconds();
+      if (latch_age >= 0.0 && latch_age <= latch_timeout_) {
+        motion_stall = true;
+        stall_elapsed = latched_stall_duration_;
+        stall_displacement = latched_stall_displacement_;
+        stall_command_speed = latched_command_speed_;
+      }
+      motion_stall_latched_ = false;
+    }
+  }
+
+  if (motion_stall) {
+    RCLCPP_WARN(
+      node_->get_logger(),
+      "IsStuckCondition: commanded-motion stall confirmed "
+      "(cmd=%.3f m/s, displacement=%.3f m in %.2f s)",
+      stall_command_speed, stall_displacement, stall_elapsed);
+    return BT::NodeStatus::SUCCESS;
   }
 
   if (!costmap) {
@@ -141,8 +246,6 @@ BT::NodeStatus IsStuckCondition::tick()
   const bool is_in_obstacle = (cost >= 253);
 
   // ---- 5. Temporal filtering ----
-  const rclcpp::Time now = node_->get_clock()->now();
-
   if (!is_in_obstacle) {
     // Robot is NOT in an obstacle region – reset the counter
     hit_count_ = 0;

@@ -21,19 +21,22 @@
 #include <thread>
 
 #include "behaviortree_cpp_v3/condition_node.h"
+#include "geometry_msgs/msg/twist.hpp"
 #include "nav2_msgs/msg/costmap.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 namespace pb_nav2_plugins
 {
 
 /**
- * @brief BT condition node that checks whether the robot is stuck inside an
- *        obstacle region on the local costmap.
+ * @brief BT condition node that checks for either a physical motion stall or
+ *        an obstacle overlap on the local costmap.
  *
- * "Stuck" is defined as the robot's footprint centre having a costmap cost
- * >= 253 (INSCRIBED_INFLATED_OBSTACLE) for `consecutive_hits` consecutive
- * checks spaced at least `check_interval` seconds apart.
+ * A physical stall is latched when a translational command stays above
+ * `command_speed_threshold` for `stall_duration` while odometry displacement
+ * remains below `stall_displacement_threshold`. The original costmap-based
+ * test is retained as an independent second trigger.
  *
  * This filtering prevents momentary lidar noise or brief contact from
  * triggering a full escape recovery.
@@ -60,11 +63,30 @@ public:
         "check_interval", 0.2, "Minimum seconds between consecutive stuck checks"),
       BT::InputPort<int>(
         "consecutive_hits", 3, "Number of consecutive high-cost checks required to confirm stuck"),
+      BT::InputPort<std::string>(
+        "cmd_vel_topic", "cmd_vel_nav2_result", "Commanded velocity topic to monitor"),
+      BT::InputPort<std::string>(
+        "odom_topic", "odometry/filtered", "Odometry topic used to measure actual motion"),
+      BT::InputPort<double>(
+        "command_speed_threshold", 0.08, "Minimum translational command speed for stall detection"),
+      BT::InputPort<double>(
+        "stall_displacement_threshold", 0.03,
+        "Minimum odometry displacement expected during the stall window"),
+      BT::InputPort<double>(
+        "stall_duration", 1.5, "Seconds of command without enough displacement to confirm a stall"),
+      BT::InputPort<double>(
+        "data_timeout", 0.5, "Maximum age of command and odometry samples in seconds"),
+      BT::InputPort<double>(
+        "latch_timeout", 30.0, "Maximum age of a latched motion stall in seconds"),
     };
   }
 
 private:
   void costmapCallback(nav2_msgs::msg::Costmap::SharedPtr msg);
+  void cmdVelCallback(geometry_msgs::msg::Twist::SharedPtr msg);
+  void odometryCallback(nav_msgs::msg::Odometry::SharedPtr msg);
+  void updateMotionStallLocked(const rclcpp::Time & now);
+  void resetMotionWindowLocked();
 
   rclcpp::Node::SharedPtr node_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
@@ -72,6 +94,8 @@ private:
   std::thread callback_group_executor_thread_;
 
   rclcpp::Subscription<nav2_msgs::msg::Costmap>::SharedPtr costmap_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
 
   // Latest costmap (guarded by mutex_)
   std::mutex mutex_;
@@ -80,6 +104,29 @@ private:
   // Parameters (read once from BT ports)
   double check_interval_{0.2};
   int consecutive_hits_{3};
+  double command_speed_threshold_{0.08};
+  double stall_displacement_threshold_{0.03};
+  double stall_duration_{1.5};
+  double data_timeout_{0.5};
+  double latch_timeout_{30.0};
+
+  // Motion-stall state (guarded by mutex_)
+  bool have_cmd_vel_{false};
+  bool have_odom_{false};
+  double latest_command_speed_{0.0};
+  double latest_odom_x_{0.0};
+  double latest_odom_y_{0.0};
+  rclcpp::Time latest_cmd_vel_time_;
+  rclcpp::Time latest_odom_time_;
+  bool motion_window_active_{false};
+  rclcpp::Time motion_window_start_;
+  double motion_window_start_x_{0.0};
+  double motion_window_start_y_{0.0};
+  bool motion_stall_latched_{false};
+  rclcpp::Time motion_stall_latched_time_;
+  double latched_stall_duration_{0.0};
+  double latched_stall_displacement_{0.0};
+  double latched_command_speed_{0.0};
 
   // Filtering state
   int hit_count_{0};

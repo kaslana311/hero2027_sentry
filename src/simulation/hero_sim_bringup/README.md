@@ -53,6 +53,35 @@ streams into `chassis` and merges them inside `sim_ground_truth_bridge`. It
 does not yet synthesize Livox `CustomMsg` or exercise the real `lidar_merge`
 and Point-LIO timing path.
 
+## Raised-edge stall recovery
+
+The arena is a detailed 3-D collision mesh while Nav2 plans in a 2-D
+costmap. A low mesh edge can therefore stop the physical chassis even when
+the planned path and costmap cell are valid. The simulation behavior tree now
+distinguishes that case from a costmap overlap:
+
+- `IsStuckCondition` latches a stall when `cmd_vel_nav2_result` requests at
+  least 0.08 m/s for 1.5 s but `odometry/filtered` moves less than 0.03 m;
+- the simulator progress checker allows slow narrow-gap motion, but starts
+  recovery after 5 s without 0.10 m of progress;
+- recovery first performs one local clear, then requests a conservative
+  0.30 m reverse at 0.15 m/s;
+- if the ESDF says the robot is already in free space, `BackUpFreeSpace` now
+  executes Nav2's collision-checked reverse instead of reporting success
+  without motion.
+
+Expected diagnostic messages are:
+
+```text
+IsStuckCondition: commanded-motion stall confirmed (...)
+BackUpFreeSpace: costmap reports free space despite a recovery request; using collision-checked reverse fallback (...)
+```
+
+These changes improve recovery; they do not prove that the simulated ramp
+geometry matches the real chassis clearance. Do not simplify the world
+collision mesh until the robot collision dimensions and real-field/CAD
+geometry have been compared.
+
 ## Costmap boundary
 
 The current `combined` mode intentionally keeps the established baseline:
