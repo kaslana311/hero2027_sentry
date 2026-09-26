@@ -25,6 +25,11 @@ namespace pb_minco {
 using nav2_util::declare_parameter_if_not_declared;
 using std::chrono::steady_clock;
 
+namespace {
+constexpr double kMaxTrajectoryDurationSeconds = 300.0;
+constexpr std::size_t kMaxPathSamples = 2000;
+}  // namespace
+
 void MincoSmoother::configure(
     const nav2_util::LifecycleNode::WeakPtr &parent, std::string name,
     std::shared_ptr<tf2_ros::Buffer> tf,
@@ -395,6 +400,37 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
                          head_pos.x(), head_pos.y());
         }
 
+        if (use_projection &&
+            (!head_pos.allFinite() || !head_vel.allFinite() ||
+             !head_acc.allFinite())) {
+            const auto &start_pose = path.poses.front().pose.position;
+            head_pos = Eigen::Vector2d(start_pose.x, start_pose.y);
+            head_vel = Eigen::Vector2d::Zero();
+            head_acc = Eigen::Vector2d::Zero();
+            use_projection = false;
+            RCLCPP_WARN_THROTTLE(
+                logger_, *clock_, 1000,
+                "上一条 MINCO 轨迹投影包含非有限值，已退化为零速起点");
+        }
+
+        const double projected_speed = head_vel.norm();
+        if (projected_speed > params_.max_vel && params_.max_vel > 0.0) {
+            head_vel *= params_.max_vel / projected_speed;
+            RCLCPP_WARN_THROTTLE(
+                logger_, *clock_, 1000,
+                "MINCO 热启动速度 %.2f m/s 超过上限 %.2f m/s，已限幅",
+                projected_speed, params_.max_vel);
+        }
+
+        const double projected_acc = head_acc.norm();
+        if (projected_acc > params_.max_acc && params_.max_acc > 0.0) {
+            head_acc *= params_.max_acc / projected_acc;
+            RCLCPP_WARN_THROTTLE(
+                logger_, *clock_, 1000,
+                "MINCO 热启动加速度 %.2f m/s^2 超过上限 %.2f m/s^2，已限幅",
+                projected_acc, params_.max_acc);
+        }
+
         // 2. 路径预处理：梯形速度规划 + 均匀时间重采样
         // 直接使用确定的 head_vel 和 head_pos
         PathProcessingResult processed = processPath(path, head_vel, head_pos);
@@ -534,7 +570,8 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
                 //             s", pieceNum, initialTimes.sum());
 
                 // 发布第一阶段轨迹可视化
-                if (params_.publish_trajectory && stage1_trajectory_pub_) {
+                if (params_.publish_trajectory && stage1_trajectory_pub_ &&
+                    stage1_trajectory_pub_->get_subscription_count() > 0) {
                     Trajectory<5, 2> stage1Traj;
                     stage1_optimizer_->getTrajectory(stage1Traj);
                     auto stage1_path =
@@ -594,6 +631,16 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
         Trajectory<5, 2> optimizedTraj;
         optimizer_->getTrajectory(optimizedTraj);
 
+        const double optimized_duration = optimizedTraj.getTotalDuration();
+        if (!std::isfinite(optimized_duration) || optimized_duration <= 0.0 ||
+            optimized_duration > kMaxTrajectoryDurationSeconds) {
+            RCLCPP_ERROR(logger_,
+                         "拒绝异常 MINCO 轨迹: duration=%.6f s，允许范围为 "
+                         "(0, %.1f] s",
+                         optimized_duration, kMaxTrajectoryDurationSeconds);
+            return false;
+        }
+
         // 11. 缓存优化后的轨迹（供下次重规划时查找投影点）
         last_trajectory_ = optimizedTraj;
         last_trajectory_time_ = clock_->now();
@@ -651,18 +698,44 @@ nav_msgs::msg::Path MincoSmoother::trajectoryToPath(
     path.header = header;
 
     double totalDuration = traj.getTotalDuration();
-    int numSamples = static_cast<int>(totalDuration / params_.output_dt) + 1;
+    if (!std::isfinite(totalDuration) || totalDuration <= 0.0 ||
+        totalDuration > kMaxTrajectoryDurationSeconds) {
+        throw std::runtime_error("invalid trajectory duration: " +
+                                 std::to_string(totalDuration));
+    }
+    if (!std::isfinite(params_.output_dt) || params_.output_dt <= 0.0) {
+        throw std::runtime_error("invalid trajectory output_dt: " +
+                                 std::to_string(params_.output_dt));
+    }
+
+    std::size_t numSamples = static_cast<std::size_t>(
+                                 std::ceil(totalDuration / params_.output_dt)) +
+                             1U;
+    numSamples = std::max<std::size_t>(numSamples, 2U);
+    if (numSamples > kMaxPathSamples) {
+        RCLCPP_WARN(logger_,
+                    "轨迹可视化请求 %zu 个采样点，已限制为 %zu 个 "
+                    "(duration=%.3f s, output_dt=%.6f s)",
+                    numSamples, kMaxPathSamples, totalDuration,
+                    params_.output_dt);
+        numSamples = kMaxPathSamples;
+    }
+
+    const double sample_dt =
+        totalDuration / static_cast<double>(numSamples - 1U);
 
     path.poses.reserve(numSamples);
 
-    for (int i = 0; i < numSamples; ++i) {
-        double t = i * params_.output_dt;
-        if (t > totalDuration) {
-            t = totalDuration;
-        }
+    for (std::size_t i = 0; i < numSamples; ++i) {
+        const double t =
+            std::min(static_cast<double>(i) * sample_dt, totalDuration);
 
         Eigen::Vector2d pos = traj.getPos(t);
         Eigen::Vector2d vel = traj.getVel(t);
+        if (!pos.allFinite() || !vel.allFinite()) {
+            throw std::runtime_error(
+                "non-finite position or velocity while sampling trajectory");
+        }
 
         geometry_msgs::msg::PoseStamped pose;
         pose.header = header;
@@ -687,7 +760,7 @@ nav_msgs::msg::Path MincoSmoother::trajectoryToPath(
 
 void MincoSmoother::publishTrajectoryVisualization(
     const Trajectory<5, 2> &traj, const std_msgs::msg::Header &header) {
-    if (!trajectory_pub_) {
+    if (!trajectory_pub_ || trajectory_pub_->get_subscription_count() == 0) {
         return;
     }
 
@@ -697,7 +770,8 @@ void MincoSmoother::publishTrajectoryVisualization(
 
 void MincoSmoother::publishWaypointsVisualization(
     const Eigen::Matrix2Xd &waypoints, const std_msgs::msg::Header &header) {
-    if (!waypoints_marker_pub_) {
+    if (!waypoints_marker_pub_ ||
+        waypoints_marker_pub_->get_subscription_count() == 0) {
         return;
     }
 
@@ -818,7 +892,8 @@ void MincoSmoother::publishWaypointsVisualization(
 
 void MincoSmoother::publishFinalWaypointsVisualization(
     const Eigen::Matrix2Xd &waypoints, const std_msgs::msg::Header &header) {
-    if (!final_waypoints_marker_pub_) {
+    if (!final_waypoints_marker_pub_ ||
+        final_waypoints_marker_pub_->get_subscription_count() == 0) {
         return;
     }
 
@@ -1373,11 +1448,11 @@ MincoSmoother::PathProcessingResult MincoSmoother::processPath(
     // 检查2: 或者算出的几何时间太短
     if (total_time < min_physical_time) {
         RCLCPP_WARN(logger_,
-                    "检测到物理不可行约束: 真实速度 %.2f m/s 需要 %.2f s "
+                    "检测到物理不可行约束: 轨迹起点速度 %.2f m/s 需要 %.2f s "
                     "刹停，但几何规划仅分配 %.2f s",
                     current_real_vel, min_physical_time, total_time);
 
-        // 强制使用物理时间，并给予 10% 的余量让优化器更从容
+        // 强制使用物理时间，并给予 50% 的余量让优化器更从容
         double safe_total_time = min_physical_time * 1.5;
 
         // 拉伸时间：这等价于告诉后续步骤“慢慢刹，别急”
