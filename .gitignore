@@ -76,6 +76,7 @@ doc/_build/
 *.dat
 *.pgm
 !src/simulation/hero_sim_bringup/maps/rmuc_2025.pgm
+!src/simulation/hero_sim_bringup/maps/rmuc_2026.pgm
 *.pcd
 src/planning/map_server/map/map.pgm
 src/common/point_cloud_files/odin_file/odin_map

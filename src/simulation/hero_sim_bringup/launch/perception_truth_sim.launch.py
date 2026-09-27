@@ -13,6 +13,7 @@ from launch_ros.actions import Node, PushRosNamespace, SetRemap
 
 VALID_COSTMAP_MODES = ("combined", "static_only", "dynamic_only")
 VALID_LIDAR_MODES = ("single", "dual")
+VALID_FIELDS = ("rmuc_2025", "rmuc_2026")
 
 
 def _make_sim_params(
@@ -119,6 +120,7 @@ def _launch_setup(context):
     namespace = LaunchConfiguration("namespace").perform(context)
     costmap_mode = LaunchConfiguration("costmap_mode").perform(context).lower()
     lidar_mode = LaunchConfiguration("lidar_mode").perform(context).lower()
+    field = LaunchConfiguration("field").perform(context).lower()
     use_rviz = LaunchConfiguration("use_rviz")
     relay_cmd_vel = LaunchConfiguration("relay_cmd_vel")
     publish_debug_visualizations = (
@@ -136,10 +138,16 @@ def _launch_setup(context):
         raise RuntimeError(
             f"Unknown lidar_mode '{lidar_mode}'. Choose one of: {', '.join(VALID_LIDAR_MODES)}"
         )
+    if field not in VALID_FIELDS:
+        raise RuntimeError(
+            f"Unknown field '{field}'. Choose one of: {', '.join(VALID_FIELDS)}"
+        )
 
     sim_share = get_package_share_directory("hero_sim_bringup")
     nav_share = get_package_share_directory("hero2025_nav_bringup")
-    map_yaml = os.path.join(sim_share, "maps", "rmuc_2025.yaml")
+    map_yaml = os.path.join(sim_share, "maps", f"{field}.yaml")
+    if not os.path.isfile(map_yaml):
+        raise RuntimeError(f"Static map metadata not found: {map_yaml}")
     behavior_tree_xml = os.path.join(
         sim_share, "behavior_trees", "navigate_to_pose_sim.xml"
     )
@@ -245,7 +253,7 @@ def _launch_setup(context):
         LogInfo(
             msg=(
                 f"Starting HERO perception simulation in '{costmap_mode}' costmap mode "
-                f"with '{lidar_mode}' lidar input"
+                f"with '{lidar_mode}' lidar input on '{field}'"
             )
         ),
         LogInfo(msg=f"Generated parameter file: {generated_params}"),
@@ -274,6 +282,11 @@ def generate_launch_description():
                 "lidar_mode",
                 default_value="single",
                 description="single (official simulator image) or dual (custom dual-lidar image)",
+            ),
+            DeclareLaunchArgument(
+                "field",
+                default_value="rmuc_2025",
+                description="Static map selection: rmuc_2025 or rmuc_2026",
             ),
             DeclareLaunchArgument(
                 "use_rviz",

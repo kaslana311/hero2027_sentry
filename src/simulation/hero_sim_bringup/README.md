@@ -27,6 +27,21 @@ source "/home/apocalypse_linux_00/hero2026_-sentry (to_compile_not_develop))/ins
 ros2 launch hero_sim_bringup perception_truth_sim.launch.py costmap_mode:=combined
 ```
 
+The default remains the RMUC 2025 static map. For the RMUC 2026 Gazebo world
+and dual-lidar image, use the matching map explicitly:
+
+```bash
+ros2 launch hero_sim_bringup perception_truth_sim.launch.py \
+  field:=rmuc_2026 \
+  lidar_mode:=dual \
+  costmap_mode:=combined
+```
+
+The RMUC 2026 map uses 0.05 m cells and is registered to the simulator's
+current `(-10, 0, yaw=0)` spawn while the truth bridge zeroes the first
+odometry sample. See `maps/rmuc_2026_SOURCE.md` before changing either the
+spawn or `zero_at_first_odometry`.
+
 Available modes:
 
 - `combined`: static map + `fast_layer` + inflation
