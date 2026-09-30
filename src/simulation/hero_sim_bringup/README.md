@@ -124,11 +124,27 @@ distinguishes that case from a costmap overlap:
   least 0.08 m/s for 1.5 s but `odometry/filtered` moves less than 0.03 m;
 - the simulator progress checker allows slow narrow-gap motion, but starts
   recovery after 5 s without 0.10 m of progress;
-- recovery first performs one local clear, then requests a conservative
+- recovery allows up to 10 local-clear retries for FollowPath, then requests a conservative
   0.30 m reverse at 0.15 m/s;
 - if the ESDF says the robot is already in free space, `BackUpFreeSpace` now
   executes Nav2's collision-checked reverse instead of reporting success
-  without motion.
+without motion.
+
+On 2026-09-30 the simulation tree's overall retry count was restored from 6
+to the previous 150, and FollowPath retries from 1 to 10. These were the
+overly aggressive parts of `fd84a3b`; physical stall detection, progress
+checking and collision-checked reverse remain. The old `Wait="0.2"` is also
+corrected to `Wait="1"`: Humble's integer-seconds input had truncated 0.2 to
+zero, so clearing/replanning could exhaust retries without waiting for a
+transient obstacle to disappear. This is a forward correction, not a revert
+of the whole recovery implementation. Three BT regression checks accompany
+the eight cloud-registration tests.
+
+One second is a genuine minimum wait, not an asserted DOG-map expiration
+time: occupancy decays over updates/log odds and fresh observations can
+extend it. Restored retries also mean persistent failures take longer to
+abort; users can still cancel the navigation goal. Clearing is not a
+substitute for correct cloud registration or a guarantee of passability.
 
 Expected diagnostic messages are:
 

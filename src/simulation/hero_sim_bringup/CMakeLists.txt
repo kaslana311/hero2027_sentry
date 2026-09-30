@@ -41,6 +41,7 @@ if(BUILD_TESTING)
     ENV "BRIDGE_EXECUTABLE=$<TARGET_FILE:sim_ground_truth_bridge>"
         "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=173"
   )
+  ament_add_pytest_test(recovery_contract test/test_recovery_contract.py TIMEOUT 30)
 endif()
 
 ament_package()

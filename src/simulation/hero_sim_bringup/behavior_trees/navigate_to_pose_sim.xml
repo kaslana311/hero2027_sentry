@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <root BTCPP_format="3" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <RecoveryNode name="NavigateRecovery" number_of_retries="6">
+    <!-- Restore tolerance lost in fd84a3b; transient clouds must not rapidly abort a goal. -->
+    <RecoveryNode name="NavigateRecovery" number_of_retries="150">
       <PipelineSequence name="NavigateWithReplanning">
         <!-- The real-robot tree remains at 15 Hz; the simulator replans at 3 Hz. -->
         <RateController hz="3.0">
@@ -13,7 +14,7 @@
             <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
           </RecoveryNode>
         </RateController>
-        <RecoveryNode name="FollowPath" number_of_retries="1">
+        <RecoveryNode name="FollowPath" number_of_retries="10">
           <FollowPath path="{path}" controller_id="FollowPath"/>
           <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
         </RecoveryNode>
@@ -36,7 +37,8 @@
         <Sequence name="ClearingActions">
           <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
           <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
-          <Wait wait_duration="0.2"/>
+          <!-- Humble Wait uses an integer seconds port: "0.2" becomes zero, not 200 ms. -->
+          <Wait wait_duration="1"/>
         </Sequence>
       </ReactiveFallback>
     </RecoveryNode>
