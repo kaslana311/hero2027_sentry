@@ -4,8 +4,9 @@ This package is a simulation-only entry point. It does not start real Livox,
 serial, Odin, or Zenoh drivers and does not change the real-robot launch path.
 
 The first stage intentionally bypasses Point-LIO. Gazebo ground-truth odometry
-provides the `map -> odom -> base_footprint` transform, while the simulated
-point cloud is exposed as `cloud_registered`. This isolates `dog_map`, the
+provides the planar `map -> odom -> base_footprint` transform. A separate
+stamped 6-D chassis pose registers each simulated scan into `map` before it
+is exposed as `cloud_registered`. This isolates `dog_map`, the
 custom Nav2 costmap layers, inflation, planning, and control.
 
 ## Build
@@ -19,7 +20,9 @@ source install/setup.bash
 
 ## Run
 
-Start Gazebo first from the simulator repository. In a second terminal:
+Start Gazebo first from the simulator repository. Use the updated startup
+scripts: they build the separate 6-D truth topic into the local derivative
+image. The published official base image is not modified. In a second terminal:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -55,7 +58,8 @@ For a costmap-only inspection that cannot move the robot, add
 
 Under `/red_standard_robot1`:
 
-- common input: `chassis_odometry_gt`
+- navigation input: `chassis_odometry_gt` (unchanged planar pose)
+- cloud pose input: `chassis_odometry_3d_gt` (full position, roll/pitch/yaw)
 - single-lidar input: `livox/lidar`
 - dual-lidar inputs: `livox/lidar_left`, `livox/lidar_right`
 - generated: `odometry/filtered`, `cloud_registered`, TF
@@ -63,10 +67,51 @@ Under `/red_standard_robot1`:
 - Nav2: `local_costmap/costmap`, `global_costmap/costmap`
 - control relay: `cmd_vel_nav2_result` -> `cmd_vel`
 
-The dual-lidar simulation currently transforms both standard `PointCloud2`
-streams into `chassis` and merges them inside `sim_ground_truth_bridge`. It
+The dual-lidar simulation transforms each standard `PointCloud2` stream into
+`map` at its own acquisition stamp, then merges them inside `sim_ground_truth_bridge`. It
 does not yet synthesize Livox `CustomMsg` or exercise the real `lidar_merge`
 and Point-LIO timing path.
+
+## Acquisition-time cloud registration (2026-09-30)
+
+The old bridge forwarded single-lidar scans in the sensor frame and merged
+dual scans in `chassis`. DOG map then used the latest TF, not the scan's TF.
+Moreover, the upstream `MecanumDrive2` publishes only X/Y/yaw on its original
+odometry topic. Timing alone cannot recover the missing slope attitude.
+
+The simulator now publishes `chassis_odometry_3d_gt` independently. The bridge
+buffers those poses and interpolates at each scan's acquisition stamp. Single
+lidar mounts come from robot TF; dual mounts keep the existing calibrated
+parameters. `lidar_sensor_pose` accounts for the macro's 0.03 m ray-origin
+offset above each MID360 link. Output XYZ is in `map`; acquisition stamps,
+intensity and other fields are preserved. A merged scan uses the newer stamp,
+but each constituent was already registered at its own stamp.
+
+This does not change navigation's planar odometry, motor/PID control, DOG map,
+or the real-robot Point-LIO path. It is frame-level registration, not Livox
+per-point motion compensation. `cloud_target_frame` still denotes the chassis
+mounting reference; it no longer denotes the published cloud frame.
+
+Missing acquisition-time pose/TF waits in a bounded, nonblocking queue
+(`cloud_queue_size=20`, `cloud_tf_wait_sec=0.5` wall-clock seconds). Expired or
+zero-stamped scans are dropped; there is no latest-pose fallback. If clouds
+stop and the bridge reports missing 3-D truth, rebuild/restart the simulator
+through its updated script. Do not reuse an old running container.
+
+Regression verification (no Gazebo, RViz or motor commands):
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select hero_sim_bringup --cmake-args -DBUILD_TESTING=ON
+colcon test --packages-select hero_sim_bringup
+colcon test-result --test-result-base build/hero_sim_bringup
+```
+
+Eight black-box tests cover delayed scans after a tilt, delayed poses, dual
+acquisition stamps, pose interpolation, missing/zero stamps, map origin, and
+queue overflow. They pass on the host. Image rebuilding and repeated physical
+slope/tunnel navigation still require field validation; synthetic tests are
+not a claim of successful full simulation runs.
 
 ## Raised-edge stall recovery
 

@@ -34,4 +34,13 @@ install(DIRECTORY behavior_trees launch maps rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(cloud_registration test/test_cloud_registration.py
+    TIMEOUT 120
+    ENV "BRIDGE_EXECUTABLE=$<TARGET_FILE:sim_ground_truth_bridge>"
+        "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=173"
+  )
+endif()
+
 ament_package()
