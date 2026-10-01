@@ -115,8 +115,14 @@ shadow launch after a simulator time reset. No new Docker image is needed.
 
 The simulator uses rendered whole-frame snapshots, not Livox scan timing:
 only exactly equal acquisition stamps are merged, with zero per-point offset.
-The SI IMU and output-frame adaptations are explicit simulation-only settings;
-the Point-LIO filter/matching equations and real-robot defaults are unchanged.
+The initial SI IMU and output-frame adaptations were simulation-only settings.
+After stationary divergence was observed, `1c14dd3` corrected the shared Point-LIO
+batch measurement-noise weighting on this experimental branch; `94495a3` added
+read-only scan diagnostics, and `e447239` aligned only the snapshot YAML gravity
+with the measured 9.8 m/s². Real-robot YAML, stable branches, truth navigation,
+DOG map, Nav2/MINCO/MPC and Docker images remain unchanged. The shared filter
+formula change is not a simulation-only parameter. Restart the shadow launch
+after re-sourcing to load it; actual slope/tunnel motion acceptance is pending.
 Full contract, limitations, tests and pending runtime checks are in
 [POINT_LIO.md](./POINT_LIO.md).
 
