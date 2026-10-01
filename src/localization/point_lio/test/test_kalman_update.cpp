@@ -65,6 +65,9 @@ TEST_P(KalmanRows, MatchesInformationFormAndPreservesCovariance) {
     const Eigen::VectorXd expected = expected_cov * observation.transpose() * measurement / variance;
     auto actual = filter(p);
     ASSERT_TRUE(actual.update_iterated_dyn_share_modified());
+    EXPECT_EQ(actual.update_statistics().matched_rows, GetParam());
+    EXPECT_EQ(actual.update_statistics().max_rows, GetParam());
+    EXPECT_EQ(actual.update_statistics().batch_updates, GetParam() >= 30 ? 1 : 0);
     EXPECT_LT((actual.get_x().values - expected).norm(), 1e-9);
     EXPECT_LT((actual.get_P() - expected_cov).norm(), 1e-9);
     EXPECT_LT((actual.get_P() - actual.get_P().transpose()).norm(), 1e-9);
@@ -99,6 +102,7 @@ TEST(KalmanUpdate, MissingMatchesDoesNotApplyMeasurementCorrection) {
     observations(0);
     variance = .005;
     EXPECT_FALSE(actual.update_iterated_dyn_share_modified());
+    EXPECT_EQ(actual.update_statistics().missing_matches, 1);
     EXPECT_EQ((actual.get_x().values - before_x).norm(), 0.);
     EXPECT_EQ((actual.get_P() - before_p).norm(), 0.);
 }

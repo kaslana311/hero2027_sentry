@@ -649,6 +649,8 @@ int main(int argc, char** argv) {
             }
 
             /*** ICP and Kalman filter update ***/
+            kf_input.reset_update_statistics();
+            kf_output.reset_update_statistics();
             normvec->resize(feats_down_size);
             feats_down_world->resize(feats_down_size);
 
@@ -1193,6 +1195,25 @@ int main(int argc, char** argv) {
                 publish_frame_body(pub_laser_cloud_full_res_body);
 
             /*** Debug variables Logging ***/
+            if (runtime_lio_diagnostics) {
+                // State and counters are observed only; no truth feedback,
+                // clamping, automatic reset, or hidden re-alignment.
+                auto log_diagnostics = [&](const auto &filter) {
+                  const auto &stats = filter.update_statistics();
+                  const V3D pos = filter.x_.pos;
+                  const V3D vel = filter.x_.vel;
+                  RCLCPP_INFO_THROTTLE(LOGGER, *nh->get_clock(), 1000,
+                    "[LIO_DIAG] stamp=%.6f points=%d matched=%d max_batch=%d "
+                    "batch_updates=%d no_match=%d dt=[%.6f,%.6f] negative_dt=%d "
+                    "pos=(%.4f,%.4f,%.4f) speed=%.4f imu_acc_norm=%.4f",
+                    Measures.lidar_beg_time, feats_down_size, stats.matched_rows,
+                    stats.max_rows, stats.batch_updates, stats.missing_matches,
+                    stats.min_dt, stats.max_dt, stats.negative_dt,
+                    pos.x(), pos.y(), pos.z(), vel.norm(), acc_avr.norm());
+                };
+                if (use_imu_as_input) log_diagnostics(kf_input);
+                else log_diagnostics(kf_output);
+            }
             if (runtime_pos_log) {
                 frame_num++;
                 aver_time_consu =

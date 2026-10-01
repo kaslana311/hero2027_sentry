@@ -1,6 +1,7 @@
 #include "parameters.h"
 
 bool is_first_frame = true;
+bool runtime_lio_diagnostics = false;
 double lidar_end_time = 0.0, first_lidar_time = 0.0, time_con = 0.0;
 double last_timestamp_lidar = -1.0, last_timestamp_imu = -1.0;
 int pcd_index = 0;
@@ -69,6 +70,9 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh) {
 
         nh->declare_parameter<int>("init_map_size", 100);
         nh->get_parameter("init_map_size", init_map_size);
+
+        nh->declare_parameter<bool>("runtime_lio_diagnostics", false);
+        nh->get_parameter("runtime_lio_diagnostics", runtime_lio_diagnostics);
 
         nh->declare_parameter<bool>("space_down_sample", true);
         nh->get_parameter("space_down_sample", space_down_sample);

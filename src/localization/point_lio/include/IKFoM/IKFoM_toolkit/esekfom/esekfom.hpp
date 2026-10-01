@@ -109,6 +109,20 @@ class esekf {
     typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic>
         measurementnoisecovariance_dyn;
 
+    // Read-only per-scan diagnostics. They never alter prediction/update.
+    struct UpdateStatistics {
+        int matched_rows = 0;
+        int max_rows = 0;
+        int batch_updates = 0;
+        int missing_matches = 0;
+        int negative_dt = 0;
+        bool predicted = false;
+        double min_dt = 0.;
+        double max_dt = 0.;
+    };
+    void reset_update_statistics() { update_statistics_ = UpdateStatistics(); }
+    const UpdateStatistics &update_statistics() const { return update_statistics_; }
+
     esekf(const state &x = state(), const cov &P = cov::Identity())
         : x_(x), P_(P) {};
 
@@ -148,6 +162,15 @@ class esekf {
     void predict(double &dt, processnoisecovariance &Q, const input &i_in,
                  bool predict_state, bool prop_cov) {
         if (predict_state) {
+            auto &stats = update_statistics_;
+            if (!stats.predicted) {
+                stats.min_dt = stats.max_dt = dt;
+                stats.predicted = true;
+            } else {
+                if (dt < stats.min_dt) stats.min_dt = dt;
+                if (dt > stats.max_dt) stats.max_dt = dt;
+            }
+            if (dt < 0.) ++stats.negative_dt;
             flatted_state f_ = f(x_, i_in);
             x_.oplus(f_, dt);
         }
@@ -210,6 +233,7 @@ class esekf {
             h_dyn_share_modified_1(x_, P_.template block<3, 3>(0, 0),
                                    P_.template block<3, 3>(3, 3), dyn_share);
             if (!dyn_share.valid) {
+                ++update_statistics_.missing_matches;
                 return false;
                 // continue;
             }
@@ -221,6 +245,11 @@ class esekf {
             // Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic> h_v =
             // dyn_share.h_v;
             dof_Measurement = h_x.rows();
+            update_statistics_.matched_rows += dof_Measurement;
+            if (dof_Measurement > update_statistics_.max_rows) {
+                update_statistics_.max_rows = dof_Measurement;
+            }
+            if (dof_Measurement >= n) ++update_statistics_.batch_updates;
             m_noise = dyn_share.M_Noise;
             // dof_Measurement_noise = dyn_share.R.rows();
             // vectorized_state dx, dx_new;
@@ -320,6 +349,7 @@ class esekf {
     state x_;
 
    private:
+    UpdateStatistics update_statistics_;
     measurement m_;
     spMt l_;
     spMt f_x_1;

@@ -11,6 +11,7 @@
     filter_size_map: 0.3
     ivox_nearby_type: 18
     runtime_pos_log_enable: false
+    runtime_lio_diagnostics: true  # One read-only scan summary per sim second.
     common:
       lid_topic: input/fused_cloud
       imu_topic: input/imu
