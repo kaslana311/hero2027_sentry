@@ -92,6 +92,9 @@ public:
       std::bind(&SimGroundTruthBridge::publishPendingClouds, this));
 
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>(output_odom_topic, 10);
+    // Additive diagnostic output: the exact map origin used by cloud registration.
+    // A comparison node started later must not infer a new origin from its first sample.
+    truth_3d_pub_ = create_publisher<nav_msgs::msg::Odometry>("odometry/truth_3d", 10);
     // Gazebo sensor topics are best-effort, while the team dog_map consumes
     // Point-LIO's reliable cloud_registered output. Bridge between the two QoS
     // contracts instead of forwarding the simulator QoS unchanged.
@@ -228,6 +231,11 @@ private:
     pose.header.frame_id = map_frame_;
     pose.child_frame_id = "sim_cloud_chassis_truth";
     pose.transform = tf2::toMsg(map_to_chassis);
+    nav_msgs::msg::Odometry truth = *msg;
+    truth.header.frame_id = map_frame_;
+    truth.child_frame_id = pose.child_frame_id;
+    tf2::toMsg(map_to_chassis, truth.pose.pose);
+    truth_3d_pub_->publish(truth);
     tf_buffer_->setTransform(pose, "sim_ground_truth_bridge", false);
     publishPendingClouds();
   }
@@ -471,6 +479,7 @@ private:
   sensor_msgs::msg::PointCloud2::SharedPtr left_cloud_;
   sensor_msgs::msg::PointCloud2::SharedPtr right_cloud_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr truth_3d_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
 };

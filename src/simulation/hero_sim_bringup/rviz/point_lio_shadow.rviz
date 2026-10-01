@@ -1,45 +1,111 @@
 Panels:
   - Class: rviz_common/Displays
     Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+    Expanded:
+      - /Current View1
 Visualization Manager:
   Class: ""
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: pointlio_odom
+    Fixed Frame: map
     Frame Rate: 15
   Displays:
-    - Class: rviz_default_plugins/Grid
-      Name: Grid
+    - Class: rviz_default_plugins/Map
+      Name: Static field map (not costmap)
       Enabled: true
+      Alpha: 0.65
+      Color Scheme: map
+      Draw Behind: true
+      Topic:
+        Value: evaluation/static_map
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
+    - Class: rviz_default_plugins/Grid
+      Name: Metric grid (1 m)
+      Enabled: true
+      Alpha: 0.2
       Cell Size: 1
       Plane: XY
-    - Class: rviz_default_plugins/PointCloud2
-      Name: Point-LIO registered scan
+      Plane Cell Count: 60
+    - Class: rviz_default_plugins/Axes
+      Name: Map and odom origin axes
       Enabled: true
+      Reference Frame: map
+      Length: 1
+      Radius: 0.025
+    - Class: rviz_default_plugins/MarkerArray
+      Name: YELLOW origin - GREEN truth - BLUE Point-LIO
+      Enabled: true
+      Topic:
+        Value: evaluation/markers
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
+    - Class: rviz_default_plugins/Path
+      Name: Truth chassis trail (GREEN)
+      Enabled: true
+      Topic:
+        Value: evaluation/truth_path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 1
+      Color: 25; 255; 51
+      Alpha: 1
+      Line Style: Billboards
+      Line Width: 0.04
+      Buffer Length: 1
+    - Class: rviz_default_plugins/Path
+      Name: Point-LIO chassis trail (BLUE)
+      Enabled: true
+      Topic:
+        Value: evaluation/pointlio_path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 1
+      Color: 25; 128; 255
+      Alpha: 1
+      Line Style: Billboards
+      Line Width: 0.025
+      Buffer Length: 1
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Point-LIO scan (optional - colors mean height)
+      Enabled: false
       Topic:
         Value: cloud_registered
         Reliability Policy: Reliable
         Durability Policy: Volatile
         History Policy: Keep Last
-        Depth: 5
+        Depth: 2
       Style: Points
       Size (Pixels): 2
+      Alpha: 0.5
       Color Transformer: AxisColor
       Axis: Z
       Decay Time: 0
-    - Class: rviz_default_plugins/TF
-      Name: Point-LIO TF only
-      Enabled: true
-      Show Axes: true
-      Show Arrows: true
-      Show Names: true
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 10
-      Pitch: 0.8
+      Distance: 45
+      Pitch: 1.25
       Yaw: 0
-      Target Frame: pointlio_imu
+      Target Frame: map
+      Focal Point:
+        X: 10
+        Y: 1.5
+        Z: 0
 Window Geometry:
-  Width: 1000
-  Height: 700
+  Width: 1400
+  Height: 900
+  Hide Left Dock: false
+  Hide Right Dock: false

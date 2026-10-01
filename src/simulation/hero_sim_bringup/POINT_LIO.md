@@ -16,7 +16,8 @@ Gazebo 原始 lidar_left + lidar_right + imu_right
 原 truth bridge → DOG map → costmap → Nav2/MINCO/MPC 继续照常运行
 ```
 
-不读取真值里程计，不使用仿真绝对 orientation，不加载先验 PCD，不启用 small_gicp，
+输入适配器与 Point-LIO 不读取真值里程计，不使用仿真绝对 orientation；独立显示观察器
+只为对照而读取真值，不反馈给估计器或导航。不加载先验 PCD，不启用 small_gicp，
 不启动真车雷达/串口，不发速度指令。DOG map、地图、规划、控制、恢复树和原导航
 频率均未改动。没有新增镜像或容器。
 
@@ -71,7 +72,9 @@ source "/home/apocalypse_linux_00/hero2026_-sentry (to_compile_not_develop))/ins
 ros2 launch hero_sim_bringup point_lio_shadow.launch.py use_rviz:=true
 ```
 
-可不启动真值导航，只启动 Gazebo 和旁路做静止检查。默认 `use_rviz:=false`。
+只启动 Gazebo 和旁路仍能做前端静止检查，但地图/真值对照需要原真值导航入口。
+默认 `use_rviz:=false`。本次新增真值诊断发布者，更新后需重启第二、三个终端的
+算法进程并重新 source；Gazebo 启动命令、镜像和容器不变。
 Gazebo 播放后先静止初始化，确认以下输出，再用原导航低速走平地/坡面/隧道：
 
 ```bash
@@ -81,10 +84,64 @@ ros2 topic hz /red_standard_robot1/pointlio/cloud_registered --wall-time
 ros2 topic echo /red_standard_robot1/pointlio/odometry nav_msgs/msg/Odometry --once
 ```
 
-hz 持续运行，按 Ctrl+C 退出。原 RViz/DOG map 仍使用真值点云；新 RViz 用
-`pointlio_odom` 和私有 `/red_standard_robot1/pointlio/tf`，不能仅改名叠到 Nav2 map。
-必须在评估时按同一时间戳、虚拟 IMU→底盘外参和初始对齐比较误差。
+hz 持续运行，按 Ctrl+C 退出。原 RViz/DOG map 仍使用真值点云；新 RViz 现在固定在
+`map`，通过下面的一次性对齐和私有 TF 显示两套底盘位姿，非简单 frame 改名。
 仿真重置时间后重启旁路，不沿用原有缓存或估计器地图。关闭第三个终端即可关闭实验。
+
+## 对照画面、原点与对齐（2026-10-01）
+
+第二个窗口只用于定位对照，不用于发导航目标。默认显示灰黑静态场地图（非 costmap）、
+1 m 网格、原点、定位标记和轨迹；点云默认关闭，避免遮挡，勾选 `Point-LIO scan`
+可看已对齐的配准点云，高度颜色不是障碍分类。工具栏恢复 Move Camera/Select/Focus
+Camera，右侧恢复 Views；滚轮缩放，左键旋转，Shift+左键平移。默认 Orbit 固定在
+map 而非跟随 IMU，Distance=45、Focal Point=(10,1.5,0)，先看到整个 2026 地图，
+也可在 Views 中直接修改距离和焦点。
+
+| 画面标记 | 代表什么 |
+|---|---|
+| 黄色球与 `MAP = ODOM ORIGIN (0,0,0)` | 固定 map/odom 原点，不随机器人运动 |
+| 绿色大环、长箭头、`TRUTH chassis` | 同一采样时刻的三维真值底盘位置/朝向 |
+| 蓝色小环、短箭头、`POINT-LIO chassis` | Point-LIO IMU 位姿经固定外参转换后的估计底盘位置/朝向 |
+| 绿/蓝轨迹 | 两者最近最多 1000 个样本，最多 10 Hz；初始重合是正常的 |
+
+环的半径不同只是避免重叠看不清，不是 footprint、碰撞体或误差置信圆。文字位置有
+显示偏移，定位位置是环的中心和箭头起点；文字同时列出 map 坐标。定位标记短时
+过期，收到新数据才刷新；停更不能被误看成当前位置持续更新。
+
+当前真值入口发布固定 identity 的 map→odom；第一帧**二维**底盘真值定义原点的
+X/Y/yaw，Z=0。它不是 PGM 左下角（YAML 的 origin），也不是 Gazebo 世界原点或
+地图中心。机器人初始底盘中心可能有离地高度，因此标记 Z 不必等于 0。
+Point-LIO 的 `pointlio_odom` 是独立初始化局部系，原点对应右 IMU 初始化状态。
+
+真值桥新增仅用于位姿诊断的 `/red_standard_robot1/odometry/truth_3d`，沿用桥已确定的
+map 原点，保留三维姿态和源时间戳；观察器晚启动也不重新定义原点。该消息只用于
+pose 对照，twist 不作为 map-frame 速度接口使用。原二维 `odometry/filtered`、
+点云配准和导航 TF 不变。
+
+观察器缓存真值，在 Point-LIO 时间戳处做平移插值与四元数 slerp；不拿最新姿态替代。
+首次匹配 t0 时冻结显示变换：
+
+```text
+T_map_lio = T_map_chassis_truth(t0) × T_chassis_imu × inverse(T_lio_imu(t0))
+T_map_chassis_est(t) = T_map_lio × T_lio_imu(t) × inverse(T_chassis_imu)
+T_chassis_imu = translation(0, -0.217, 0.121) m，旋转为 identity
+```
+
+因此 t0 误差为零是人为初始化对齐，**不证明绝对定位精度或自动地图重定位成功**。
+后续绝不实时追随真值重对齐，漂移会保留。真值插值帧间隔超过 0.15 s、不足或缺失，
+最多等待 1 s（墙钟）后丢弃该比较；时间大幅倒退停止对照，须重启旁路。
+map→pointlio_odom 只发布在私有 `pointlio/tf_static`；不污染原导航 TF。
+
+观察器输出都在 `/red_standard_robot1/pointlio/evaluation/` 下：
+`truth_pose`、`pointlio_pose`（底盘 PoseStamped）、`truth_path`、`pointlio_path`、
+`markers`、`error`（JSON，米/度，含采样与对齐时间）。例如：
+
+```bash
+ros2 topic echo /red_standard_robot1/pointlio/evaluation/error std_msgs/msg/String --once
+```
+
+估计器 odometry 本身仍是 IMU 位姿、配准点云仍在 pointlio_odom；只改变显示变换，
+未更改估计计算、输入、导航/感知/控制参数，也没有把真值喂给 Point-LIO。
 
 回归测试（隔离 domain，不操作真实仿真/底盘）：
 
@@ -92,15 +149,25 @@ hz 持续运行，按 Ctrl+C 退出。原 RViz/DOG map 仍使用真值点云；�
 export BRIDGE_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_ground_truth_bridge"
 export POINT_LIO_INPUT_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_input_bridge"
 export POINT_LIO_EXECUTABLE="$(ros2 pkg prefix point_lio)/lib/point_lio/pointlio_mapping"
+export EVALUATION_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_evaluation"
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=174 python3 -m pytest src/simulation/hero_sim_bringup/test -q
 ```
 
 ## 已测与未测
 
-安全脚本 38 包构建成功；安装审核 42 前缀、115 ELF，断链/缺库/临时 RPATH 均为 0。
-18 测试通过：8 个真值桥、3 个恢复契约、7 个旁路输入/前端测试。新测试覆盖固定
+初版旁路安全脚本 38 包构建成功；安装审核 42 前缀、115 ELF，断链/缺库/临时 RPATH
+均为 0，18 测试通过。本次新增观察器的构建/测试结果在下面另记，不覆盖初版记录。
+初版输入/前端测试覆盖固定
 安装变换、同步边界、IMU 单位/旋转、非法输入、无真值订阅和实际 Point-LIO 初始化；
 真实可执行程序处理合成平面后能发布有限、近原点的位姿和配准点云。
+
+本次对照窗口：同一安全脚本最终完整 38 包构建成功，42 前缀/116 ELF，断链、缺库、
+临时 RPATH 均为 0。26 项测试通过（9 真值桥 + 3 BT + 7 输入/前端 + 7 对照），
+新增覆盖 map 原点/三维姿态、一致采样时间、IMU→底盘外参、一次对齐后保留漂移、
+延迟真值插值、缺失/非法 frame、时间重置、无导航发布和相机工具配置。
+以 domain 177 合成位姿/静态地图短暂打开 RViz，检查标记、轨迹和工具/Views，
+并调整文字偏移减少重叠；不连接实际 Gazebo、不发控制指令、测试进程已关闭。
+这个显示检查不是实测 Point-LIO 运动或导航验收，也不改变全局图形/GPU 设置。
 
 尚未测：真实 Gazebo 消息同步、实际重力测量、运动响应、静止漂移、坡面残差、
 洞内退化、时间延迟和定量误差；未启动 Gazebo/Nav2 或移动机器人验证此旁路。

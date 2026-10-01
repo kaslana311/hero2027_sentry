@@ -97,11 +97,19 @@ source "/home/apocalypse_linux_00/hero2026_-sentry (to_compile_not_develop))/ins
 ros2 launch hero_sim_bringup point_lio_shadow.launch.py use_rviz:=true
 ```
 
-This subscribes only to raw dual lidar and the right IMU; it neither consumes
-truth odometry nor sends motor commands. Outputs are isolated under
+The input adapter and estimator consume only raw dual lidar and the right IMU;
+they never consume truth odometry or send motor commands. A separate observer
+reads truth only for display/evaluation, without feedback. Outputs are isolated under
 `/red_standard_robot1/pointlio`, including `odometry`, `cloud_registered` and
 private `tf`. The original DOG map and navigation still consume truth data.
-The optional second RViz shows the Point-LIO local frame, not the Nav2 map.
+The optional second RViz now shows the existing static map in the fixed `map`
+frame: yellow origin, green truth chassis, blue estimated chassis and their trails.
+Camera tools and the Views panel enable zoom/pan; clouds are optional, off by default.
+Alignment is frozen at the first time-matched pair, including the IMU-to-chassis
+offset; subsequent drift is retained. Initial overlap is by construction, not a
+localization accuracy result. Only private TF is used for this display alignment.
+After updating, restart both host algorithm launches and re-source the install;
+the truth launch adds pose-only `odometry/truth_3d` diagnostics at its existing origin.
 Leave the robot still for IMU initialization before moving it. Restart this
 shadow launch after a simulator time reset. No new Docker image is needed.
 
@@ -146,6 +154,7 @@ source install/setup.bash
 export BRIDGE_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_ground_truth_bridge"
 export POINT_LIO_INPUT_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_input_bridge"
 export POINT_LIO_EXECUTABLE="$(ros2 pkg prefix point_lio)/lib/point_lio/pointlio_mapping"
+export EVALUATION_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_evaluation"
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=174 python3 -m pytest src/simulation/hero_sim_bringup/test -q
 ```
 
@@ -153,7 +162,10 @@ Eight black-box tests cover delayed scans after a tilt, delayed poses, dual
 acquisition stamps, pose interpolation, missing/zero stamps, map origin, and
 queue overflow. Together with three BT contract tests, all 11 pass on the host.
 Seven new shadow tests (including real Point-LIO initialization on synthetic
-planes) also pass: 18 total. The 2026-10-01 truth runtime report is recorded
+planes) also passed initially: 18 total. Comparison tests now additionally cover
+the unchanged map origin, fixed one-time alignment, chassis extrinsics, acquisition-time
+interpolation, missing truth, time reset and visualization tools (see POINT_LIO.md).
+The 2026-10-01 truth runtime report is recorded
 separately from these synthetic tests; shadow motion validation is still pending;
 per-run action results, error statistics and image ID have not been collected.
 

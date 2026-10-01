@@ -82,9 +82,10 @@ class BridgeHarness:
             "-p", f"right_lidar_pose:={list(RIGHT_MOUNT)}",
         ]
         self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        self.clouds, self.odoms = [], []
+        self.clouds, self.odoms, self.full_truth = [], [], []
         self.node.create_subscription(PointCloud2, "cloud_registered", self.clouds.append, 10)
         self.node.create_subscription(Odometry, "odometry/filtered", self.odoms.append, 10)
+        self.node.create_subscription(Odometry, "odometry/truth_3d", self.full_truth.append, 10)
         self.odom_pub = self.node.create_publisher(Odometry, "chassis_odometry_gt", 10)
         self.pose_pub = self.node.create_publisher(Odometry, "chassis_odometry_3d_gt", 10)
         topics = ["livox/lidar_left", "livox/lidar_right"] if dual else ["livox/lidar"]
@@ -186,6 +187,21 @@ def assert_cloud(cloud, seconds, points):
     for actual, expected in zip(values, points):
         assert actual[:3] == pytest.approx(expected, abs=2e-5)
         assert actual[3] == 42.
+
+
+def test_diagnostic_truth_keeps_bridge_map_origin_and_full_attitude(bridge_factory):
+    bridge = bridge_factory(zero=True)
+    bridge.chassis_pose(12., (6., 3., .4, .1, .3, .2))
+    bridge.until(lambda: bool(bridge.full_truth))
+    actual = bridge.full_truth[-1]
+    assert actual.header.frame_id == "map"
+    assert actual.header.stamp == stamp(12.)
+    p = actual.pose.pose.position
+    assert (p.x, p.y, p.z) == pytest.approx((1., 1., .4))
+    expected = Odometry()
+    set_pose(expected.pose.pose, (1., 1., .4, .1, .3, .2))
+    qa, qe = actual.pose.pose.orientation, expected.pose.pose.orientation
+    assert (qa.x, qa.y, qa.z, qa.w) == pytest.approx((qe.x, qe.y, qe.z, qe.w), abs=1e-12)
 
 
 def test_delayed_ground_cloud_does_not_use_latest_tilt(bridge_factory):

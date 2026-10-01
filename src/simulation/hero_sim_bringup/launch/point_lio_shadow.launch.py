@@ -1,6 +1,7 @@
 """Point-LIO shadow only: raw simulator sensors in, isolated estimates out.
 
-Does not start navigation, load a prior PCD, subscribe to truth or relay motors.
+Estimator inputs never use truth; a separate display observer compares truth.
+Does not start navigation, load a prior PCD or relay motors.
 Run alongside the unchanged perception_truth_sim.launch.py for comparisons.
 """
 import os
@@ -40,10 +41,20 @@ def _setup(context):
             remappings=tf_remaps + [("/odometry/filtered", "odometry")],
         ),
         Node(
+            package="hero_sim_bringup", executable="sim_point_lio_evaluation",
+            namespace=namespace, output="screen", remappings=tf_remaps,
+            parameters=[{
+                "use_sim_time": True,
+                "truth_topic": f"/{robot}/odometry/truth_3d",
+            }],
+        ),
+        Node(
             condition=IfCondition(LaunchConfiguration("use_rviz")),
             package="rviz2", executable="rviz2", name="pointlio_rviz",
-            namespace=namespace, output="screen", remappings=tf_remaps,
+            namespace=namespace, output="screen",
             parameters=[{"use_sim_time": True}],
+            # Display only: subscribe to the existing navigation map, not another map_server.
+            remappings=tf_remaps + [("evaluation/static_map", f"/{robot}/map")],
             arguments=["-d", os.path.join(share, "rviz", "point_lio_shadow.rviz")],
         ),
     ]
