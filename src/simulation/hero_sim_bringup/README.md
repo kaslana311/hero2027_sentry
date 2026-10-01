@@ -12,8 +12,10 @@ custom Nav2 costmap layers, inflation, planning, and control.
 On 2026-10-01 the user confirmed smooth RMUC 2026 tunnel navigation with
 the default tunnel profile, dual lidar and combined costmaps. The paired
 `sim/truth-tunnel-baseline-v1` tag preserves that truth-based baseline;
-`codex/point-lio-sim` is the next-stage branch, not an implemented Point-LIO
-entry point. See [SIMULATION_BASELINE.md](../../../SIMULATION_BASELINE.md).
+`codex/point-lio-sim` now includes an isolated Point-LIO shadow entry point.
+Navigation still uses the unchanged truth pipeline; Point-LIO has not taken
+over navigation or passed a Gazebo tunnel test. See
+[POINT_LIO.md](./POINT_LIO.md) and [SIMULATION_BASELINE.md](../../../SIMULATION_BASELINE.md).
 
 ## Build
 
@@ -79,10 +81,36 @@ Under `/red_standard_robot1`:
 - Nav2: `local_costmap/costmap`, `global_costmap/costmap`
 - control relay: `cmd_vel_nav2_result` -> `cmd_vel`
 
-The dual-lidar simulation transforms each standard `PointCloud2` stream into
+The truth-based dual-lidar simulation transforms each standard `PointCloud2` stream into
 `map` at its own acquisition stamp, then merges them inside `sim_ground_truth_bridge`. It
 does not yet synthesize Livox `CustomMsg` or exercise the real `lidar_merge`
-and Point-LIO timing path.
+and Point-LIO timing path. The new shadow entry separately adapts raw scans
+to `CustomMsg` snapshots; it does not replace or change this truth launch.
+
+## Point-LIO shadow (2026-10-01)
+
+Keep Gazebo and the truth navigation launch above. In a third clean terminal:
+
+```bash
+source /opt/ros/humble/setup.bash
+source "/home/apocalypse_linux_00/hero2026_-sentry (to_compile_not_develop))/install/setup.bash"
+ros2 launch hero_sim_bringup point_lio_shadow.launch.py use_rviz:=true
+```
+
+This subscribes only to raw dual lidar and the right IMU; it neither consumes
+truth odometry nor sends motor commands. Outputs are isolated under
+`/red_standard_robot1/pointlio`, including `odometry`, `cloud_registered` and
+private `tf`. The original DOG map and navigation still consume truth data.
+The optional second RViz shows the Point-LIO local frame, not the Nav2 map.
+Leave the robot still for IMU initialization before moving it. Restart this
+shadow launch after a simulator time reset. No new Docker image is needed.
+
+The simulator uses rendered whole-frame snapshots, not Livox scan timing:
+only exactly equal acquisition stamps are merged, with zero per-point offset.
+The SI IMU and output-frame adaptations are explicit simulation-only settings;
+the Point-LIO filter/matching equations and real-robot defaults are unchanged.
+Full contract, limitations, tests and pending runtime checks are in
+[POINT_LIO.md](./POINT_LIO.md).
 
 ## Acquisition-time cloud registration (2026-09-30)
 
@@ -116,13 +144,17 @@ Regression verification (no Gazebo, RViz or motor commands):
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 export BRIDGE_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_ground_truth_bridge"
-ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=173 python3 -m pytest src/simulation/hero_sim_bringup/test -q
+export POINT_LIO_INPUT_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_input_bridge"
+export POINT_LIO_EXECUTABLE="$(ros2 pkg prefix point_lio)/lib/point_lio/pointlio_mapping"
+ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=174 python3 -m pytest src/simulation/hero_sim_bringup/test -q
 ```
 
 Eight black-box tests cover delayed scans after a tilt, delayed poses, dual
 acquisition stamps, pose interpolation, missing/zero stamps, map origin, and
 queue overflow. Together with three BT contract tests, all 11 pass on the host.
-The 2026-10-01 runtime report is recorded separately from these synthetic tests;
+Seven new shadow tests (including real Point-LIO initialization on synthetic
+planes) also pass: 18 total. The 2026-10-01 truth runtime report is recorded
+separately from these synthetic tests; shadow motion validation is still pending;
 per-run action results, error statistics and image ID have not been collected.
 
 ## Raised-edge stall recovery
@@ -199,5 +231,5 @@ the stable truth baseline on `sim-perception-integration`; develop the next
 Point-LIO stage on `codex/point-lio-sim` in both repositories. Preserve this
 truth launch and avoid mixing real-robot driver changes into the same commit.
 The combined costmap remains unchanged during that stage; the costmap split
-above is a separate future experiment. No Point-LIO code or new image is
-introduced by the baseline documentation/branch preparation.
+above is a separate future experiment. Baseline preparation introduced no code;
+the subsequent shadow commit introduces host-side code but no new Docker image.

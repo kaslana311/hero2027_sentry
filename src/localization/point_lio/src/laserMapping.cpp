@@ -181,7 +181,7 @@ void publish_init_map(
     pcl::toROSMsg(*init_feats_world, laserCloudmsg);
 
     laserCloudmsg.header.stamp = get_ros_time(lidar_end_time);
-    laserCloudmsg.header.frame_id = "odom";
+    laserCloudmsg.header.frame_id = lio_odom_frame;
     pubLaserCloudFullRes->publish(laserCloudmsg);
 }
 
@@ -197,7 +197,7 @@ void publish_frame_world(
         sensor_msgs::msg::PointCloud2 laserCloudmsg;
         pcl::toROSMsg(*feats_down_world, laserCloudmsg);
         laserCloudmsg.header.stamp = get_ros_time(lidar_end_time);
-        laserCloudmsg.header.frame_id = "odom";
+        laserCloudmsg.header.frame_id = lio_odom_frame;
         pubLaserCloudFullRes->publish(laserCloudmsg);
     }
 
@@ -250,7 +250,7 @@ void publish_frame_body(
     sensor_msgs::msg::PointCloud2 laserCloudmsg;
     pcl::toROSMsg(*laserCloudIMUBody, laserCloudmsg);
     laserCloudmsg.header.stamp = get_ros_time(lidar_end_time);
-    laserCloudmsg.header.frame_id = "lidar_link";
+    laserCloudmsg.header.frame_id = cloud_body_frame;
     pubLaserCloudFull_body->publish(laserCloudmsg);
 }
 
@@ -339,11 +339,17 @@ void publish_odometry(const rclcpp::Publisher<
     // 将 lidar 位姿转换到 base_link 位姿
     Eigen::Matrix3d rot_base = rot_lidar * R_base_lidar;
     Eigen::Vector3d pos_base = rot_lidar * t_base_lidar + pos_lidar;
+    if (output_imu_pose) {
+        // The KF state is an IMU pose (pointBodyToWorld applies lidar->IMU).
+        // Do not apply the real chassis's hard-coded mount to a virtual IMU.
+        rot_base = rot_lidar;
+        pos_base = pos_lidar;
+    }
     Eigen::Quaterniond q_base(rot_base);
 
     // 填充 Odometry 消息
-    odomAftMapped.header.frame_id = "odom";
-    odomAftMapped.child_frame_id = "base_link";
+    odomAftMapped.header.frame_id = lio_odom_frame;
+    odomAftMapped.child_frame_id = lio_body_frame;
     if (publish_odometry_without_downsample) {
         odomAftMapped.header.stamp = get_ros_time(time_current);
     } else {
@@ -362,8 +368,8 @@ void publish_odometry(const rclcpp::Publisher<
     // 发布 odom -> base_link 的 TF
     if (tf_send_en) {
         geometry_msgs::msg::TransformStamped transform;
-        transform.header.frame_id = "odom";
-        transform.child_frame_id = "base_link";
+        transform.header.frame_id = lio_odom_frame;
+        transform.child_frame_id = lio_body_frame;
         transform.transform.translation.x = pos_base.x();
         transform.transform.translation.y = pos_base.y();
         transform.transform.translation.z = pos_base.z();
@@ -381,7 +387,7 @@ void publish_path(
     set_posestamp(msg_body_pose.pose);
     // msg_body_pose.header.stamp = ros::Time::now();
     msg_body_pose.header.stamp = get_ros_time(lidar_end_time);
-    msg_body_pose.header.frame_id = "odom";
+    msg_body_pose.header.frame_id = lio_odom_frame;
     static int jjj = 0;
     jjj++;
     // if (jjj % 2 == 0) // if path is too large, the rvis will crash
@@ -403,7 +409,7 @@ int main(int argc, char** argv) {
     ivox_ = std::make_shared<IVoxType>(ivox_options_);
 
     path.header.stamp = get_ros_time(lidar_end_time);
-    path.header.frame_id = "odom";
+    path.header.frame_id = lio_odom_frame;
 
     /*** variables definition for counting ***/
     int frame_num = 0;

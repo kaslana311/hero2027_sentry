@@ -63,6 +63,10 @@ extern int lidar_type, pcd_save_interval;
 extern std::vector<double> gravity_init, gravity;
 extern bool runtime_pos_log, pcd_save_en, path_en;
 extern bool scan_pub_en, scan_body_pub_en, tf_send_en;
+// Defaults preserve the real-robot output contract. Simulation may expose the
+// estimator's IMU pose directly instead of applying the legacy vehicle mount.
+extern bool output_imu_pose;
+extern std::string lio_odom_frame, lio_body_frame, cloud_body_frame;
 extern shared_ptr<Preprocess> p_pre;
 extern shared_ptr<ImuProcess> p_imu;
 extern bool is_first_frame;

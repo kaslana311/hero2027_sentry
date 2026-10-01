@@ -1,0 +1,45 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: pointlio_odom
+    Frame Rate: 15
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Plane: XY
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Point-LIO registered scan
+      Enabled: true
+      Topic:
+        Value: cloud_registered
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 5
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: AxisColor
+      Axis: Z
+      Decay Time: 0
+    - Class: rviz_default_plugins/TF
+      Name: Point-LIO TF only
+      Enabled: true
+      Show Axes: true
+      Show Arrows: true
+      Show Names: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 10
+      Pitch: 0.8
+      Yaw: 0
+      Target Frame: pointlio_imu
+Window Geometry:
+  Width: 1000
+  Height: 700

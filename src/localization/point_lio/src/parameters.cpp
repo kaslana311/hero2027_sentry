@@ -32,6 +32,9 @@ int lidar_type, pcd_save_interval;
 std::vector<double> gravity_init, gravity;
 bool runtime_pos_log, pcd_save_en, path_en, extrinsic_est_en = true;
 bool scan_pub_en, scan_body_pub_en, tf_send_en;
+bool output_imu_pose = false;
+std::string lio_odom_frame = "odom", lio_body_frame = "base_link";
+std::string cloud_body_frame = "lidar_link";
 shared_ptr<Preprocess> p_pre;
 shared_ptr<ImuProcess> p_imu;
 double time_update_last = 0.0, time_current = 0.0,
@@ -207,6 +210,11 @@ void readParameters(std::shared_ptr<rclcpp::Node>& nh) {
             "odometry.publish_odometry_without_downsample", false);
         nh->get_parameter("odometry.publish_odometry_without_downsample",
                           publish_odometry_without_downsample);
+
+        output_imu_pose = nh->declare_parameter<bool>("odometry.output_imu_pose", false);
+        lio_odom_frame = nh->declare_parameter<std::string>("odometry.odom_frame_id", "odom");
+        lio_body_frame = nh->declare_parameter<std::string>("odometry.body_frame_id", "base_link");
+        cloud_body_frame = nh->declare_parameter<std::string>("publish.body_frame_id", "lidar_link");
 
         nh->declare_parameter<bool>("publish.path_en", true);
         nh->get_parameter("publish.path_en", path_en);

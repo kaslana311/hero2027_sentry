@@ -10,6 +10,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>geometry_msgs</depend>
+  <depend>livox_ros_driver2</depend>
   <depend>nav_msgs</depend>
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
@@ -18,6 +19,7 @@
   <depend>tf2_ros</depend>
 
   <exec_depend>hero2025_nav_bringup</exec_depend>
+  <exec_depend>point_lio</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
   <exec_depend>rviz2</exec_depend>

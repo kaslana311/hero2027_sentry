@@ -7,6 +7,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(livox_ros_driver2 REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -26,11 +27,16 @@ ament_target_dependencies(
   tf2_ros
 )
 
-install(TARGETS sim_ground_truth_bridge
+add_executable(sim_point_lio_input_bridge src/sim_point_lio_input_bridge.cpp)
+ament_target_dependencies(sim_point_lio_input_bridge
+  livox_ros_driver2 rclcpp sensor_msgs tf2
+)
+
+install(TARGETS sim_ground_truth_bridge sim_point_lio_input_bridge
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(DIRECTORY behavior_trees launch maps rviz
+install(DIRECTORY behavior_trees config launch maps rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -42,6 +48,11 @@ if(BUILD_TESTING)
         "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=173"
   )
   ament_add_pytest_test(recovery_contract test/test_recovery_contract.py TIMEOUT 30)
+  ament_add_pytest_test(point_lio_input test/test_point_lio_input.py
+    TIMEOUT 120
+    ENV "POINT_LIO_INPUT_EXECUTABLE=$<TARGET_FILE:sim_point_lio_input_bridge>"
+        "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=174"
+  )
 endif()
 
 ament_package()
