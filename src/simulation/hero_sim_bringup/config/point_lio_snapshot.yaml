@@ -35,9 +35,9 @@
       imu_time_inte: 0.005
       lidar_time_inte: 0.05
       # h_model_IMU_output compares the raw acceleration, before acc_norm.
-      satu_acc: 49.05  # Real 5 g threshold expressed in m/s^2.
+      satu_acc: 49.0  # 5 g at the Fortress world's measured 9.8 m/s^2.
       satu_gyro: 35.0
-      acc_norm: 9.81  # Gazebo m/s^2, unlike the real Livox driver's g units.
+      acc_norm: 9.8  # Match measured world gravity; preserve SI acceleration.
       lidar_meas_cov: 0.005
       acc_cov_output: 500.0
       gyr_cov_output: 1000.0
@@ -50,8 +50,8 @@
       plane_thr: 0.1
       match_s: 81.0
       ivox_grid_resolution: 0.5
-      gravity: [0.0, 0.0, -9.81]
-      gravity_init: [0.0, 0.0, -9.81]
+      gravity: [0.0, 0.0, -9.8]
+      gravity_init: [0.0, 0.0, -9.8]
       # Input rays and SI IMU vectors already share the virtual right-IMU frame.
       extrinsic_T: [0.0, 0.0, 0.0]
       extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]

@@ -184,7 +184,7 @@ def test_real_point_lio_initializes_from_synthetic_snapshots(harness_factory):
     for frame in range(35):
         base = 1. + frame * .05
         for i in range(10):
-            h.imu(base + i * .005, acc=(0., 0., 9.81), gyro=(0., 0., 0.))
+            h.imu(base + i * .005, acc=(0., 0., 9.8), gyro=(0., 0., 0.))
         h.scan(base + .045, 0, points=points)
         h.scan(base + .045, 1, points=points)
         h.spin(.035)
@@ -204,9 +204,69 @@ def test_sim_config_isolated_from_real_robot_defaults():
     import yaml
     root = Path(__file__).resolve().parents[1]
     params = yaml.safe_load((root / "config/point_lio_snapshot.yaml").read_text())["/**"]["ros__parameters"]
-    assert params["mapping"]["acc_norm"] == 9.81
-    assert params["mapping"]["satu_acc"] == pytest.approx(5 * 9.81)
-    assert params["mapping"]["satu_acc"] * .99 > 9.81
+    assert params["mapping"]["acc_norm"] == 9.8
+    assert params["mapping"]["gravity"] == [0., 0., -9.8]
+    assert params["mapping"]["gravity_init"] == [0., 0., -9.8]
+    assert params["mapping"]["satu_acc"] == pytest.approx(5 * 9.8)
+    assert params["mapping"]["satu_acc"] * .99 > 9.8
+    assert params["runtime_lio_diagnostics"]
     assert params["mapping"]["extrinsic_T"] == [0., 0., 0.]
     assert not params["prior_pcd"]["enable"] and not params["publish"]["path_en"]
     assert params["odometry"]["output_imu_pose"]
+
+
+def test_real_point_lio_snapshot_motion_tilt_and_stationary_hold(harness_factory):
+    """No Gazebo/truth inputs: known static planes and analytic SI IMU motion.
+
+    Initialize still, translate, change height/pitch, then hold still. This is
+    a frontend regression, not proof of accuracy in the real tunnel mesh.
+    """
+    h = harness_factory(frontend=True)
+    world = []
+    for i in range(22):
+        for j in range(22):
+            a, b = -1.05 + i * .1, -1.05 + j * .1
+            world.extend(((a, b, -.3), (2., a, b), (a, 2., b)))
+
+    def ease(t, start, duration, amount):
+        u = (t-start) / duration
+        if u <= 0.:
+            return 0., 0., 0.
+        if u >= 1.:
+            return amount, 0., 0.
+        return (amount*(3*u*u-2*u*u*u), amount*(6*u-6*u*u)/duration,
+                amount*(6-12*u)/(duration*duration))
+
+    def motion(t):
+        x, _, ax = ease(t, 1.5, 2., .4)
+        pitch, rate, _ = ease(t, 3.5, 1., .12)
+        z, _, az = ease(t, 3.5, 1., .03)
+        return x, z, pitch, rate, ax, az
+
+    for frame in range(150):
+        base = 1. + frame * .05
+        for i in range(10):
+            elapsed = frame*.05 + i*.005
+            x, z, pitch, rate, ax, az = motion(elapsed)
+            c, s = math.cos(pitch), math.sin(pitch)
+            h.imu(base+i*.005, acc=(c*ax-s*(az+9.8), 0., s*ax+c*(az+9.8)),
+                  gyro=(0., rate, 0.))
+        x, z, pitch, _, _, _ = motion(frame*.05+.045)
+        c, s = math.cos(pitch), math.sin(pitch)
+        # Adapter adds its known ray-origin offset of +.03 m in IMU Z.
+        points = tuple((c*(px-x)-s*(pz-z), py, s*(px-x)+c*(pz-z)-.03)
+                       for px, py, pz in world)
+        h.scan(base+.045, 0, points=points)
+        h.scan(base+.045, 1, points=points)
+        h.spin(.04)
+    h.until(lambda: h.odoms and h.odoms[-1].header.stamp.sec >= 7)
+    held = [m for m in h.odoms if m.header.stamp.sec >= 6]
+    assert len(held) >= 10
+    for msg in held:
+        p = msg.pose.pose.position
+        assert math.dist((p.x, p.y, p.z), (.4, 0., .03)) < .08
+        q = msg.pose.pose.orientation
+        dot = abs(q.y*math.sin(.06) + q.w*math.cos(.06))
+        assert 2*math.acos(min(1., dot)) < math.radians(2.)
+    first, last = held[0].pose.pose.position, held[-1].pose.pose.position
+    assert math.dist((first.x, first.y, first.z), (last.x, last.y, last.z)) < .02
