@@ -28,6 +28,10 @@ later drift is retained, with no automatic truth-cloud fallback. Do not also run
 the old truth or standalone shadow algorithm launches. See
 [POINT_LIO_CLOUD.md](./POINT_LIO_CLOUD.md) for commands, checks and rollback.
 Docker, planner/controller settings and the original truth entry are unchanged.
+A subsequent runtime check found that the new adapter's best-effort output did
+not match DOG map's reliable subscription. `25336a1` fixes only that output QoS;
+42 isolated regressions now include actual DOG map receipt and nonempty occupancy.
+The adapter's publishing counter alone is not downstream delivery evidence.
 
 ## Build
 
@@ -174,6 +178,7 @@ export POINT_LIO_INPUT_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_
 export POINT_LIO_EXECUTABLE="$(ros2 pkg prefix point_lio)/lib/point_lio/pointlio_mapping"
 export EVALUATION_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_evaluation"
 export POINT_LIO_CLOUD_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_cloud_bridge"
+export DOG_MAP_EXECUTABLE="$(ros2 pkg prefix dog_map)/lib/dog_map/dog_map_node_lidars"
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=174 python3 -m pytest src/simulation/hero_sim_bringup/test -q
 ```
 

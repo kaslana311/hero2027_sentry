@@ -57,10 +57,48 @@ ros2 topic info /red_standard_robot1/pointlio/cloud_registered_map --verbose
 ```
 
 DOG map 期望订阅 `pointlio/cloud_registered_map`；状态 `publishing`，published
-持续增加、wall_age_sec 较小。主 RViz 的 DOG map 障碍显示来自 LIO 云；
+持续增加、wall_age_sec 较小，**只证明适配节点正在发布，不证明 DOG map 已收到**。
+还必须检查发布端与 DOG map 订阅端均为 `RELIABLE`，以及下游实际输出。
+主 RViz 的 DOG map 障碍显示来自 LIO 云；
 对照窗口绿色是真值定位、蓝色是 LIO 定位。勾选 Point-LIO scan 看配准云，
 颜色表示高度而非障碍。原 `/red_standard_robot1/cloud_registered` 真值云保留
 供对照，但 DOG map 不订阅它，没有自动回退。
+
+```bash
+# DOG map 输出保持 BEST_EFFORT，检查时使用兼容的接收策略
+timeout 10s ros2 topic echo /red_standard_robot1/rog_map/ground \
+  sensor_msgs/msg/PointCloud2 --field header --qos-reliability best_effort --once
+timeout 10s ros2 topic echo /red_standard_robot1/rog_map/inf_occ \
+  sensor_msgs/msg/PointCloud2 --field width --qos-reliability best_effort --once
+```
+
+`rog_map/ground` 在当前实现中是 DOG map 接收、转换后的点云，不是仅含地面点；
+收到它证明输入回调已执行。`inf_occ` 是占据分析结果，非空输出才证明障碍生成链路
+已通；没有有效障碍时节点不会发布空结果，因此单次超时不能单独判定 QoS 故障。
+若下游未更新，先取消导航，避免只依赖静态地图继续移动。
+
+## 2026-10-02 实跑发现的 QoS 断链及修正
+
+11:24 的实跑日志出现 `RELIABILITY_QOS_POLICY`：新适配器此前输出 BEST_EFFORT，
+但 `dog_map_node_lidars` 要求 RELIABLE，ROS 2 因而不投递。Point-LIO 和适配器
+可以正常发布，DOG map 却收不到任何云；此前的 40 项回归没有覆盖这个实际接收端。
+这是新增接口的遗漏，不是 Point-LIO 发散或 DOG map 过滤阈值问题；不能把此前
+这次运行的导航效果记成“LIO 动态障碍闭环已验收”。
+
+修复提交 `25336a1ce976b09f4f66437a410dd3a96de34274`，
+2026-10-02T15:11:21+08:00，仅将点云适配器输出改成 RELIABLE / KeepLast(10)，
+与原真值桥输出契约一致。输入仍为 SensorDataQoS，DOG map 的订阅、BEST_EFFORT
+输出、感知阈值、导航/TF、规划/控制和 Docker 都不变。增加 Reliable 接收测试、
+实际生产 DOG map 接收并输出非空占据点云的测试，以及相应测试依赖。
+
+两个新增测试在修复前安装产物上均失败，DOG map 报出与实跑相同的 QoS 警告；
+安全脚本重编后全部 **42 项算法测试、14 项仿真测试通过**。生产 DOG map 测试
+沿用队内感知参数，使用隔离 ROS 域/合成墙面和小幅自由地图，不运行 Gazebo/Nav2，
+不发布运动指令；它证明数据接收/占据输出，不替代完整过洞验收。
+安全构建 38 包、42 前缀/117 ELF，断链/缺库/临时 RPATH 均为 0。
+
+修复后停止并重启整个算法入口，启动命令和参数不变；已有仿真容器可以继续用，
+无需重建镜像。完整证据见仿真仓库 `experiments/2026-10-02_point-lio-dog-map-qos.md`。
 
 ## 一次对齐，不是动态真值校正
 
@@ -112,7 +150,9 @@ ros2 launch hero_sim_bringup perception_truth_sim.launch.py \
 实现提交 `f0ea42d77611e4528749f9c0bb9eb8b099a3937c`，2026-10-02 11:00:08 UTC+8；
 权限整理另在 `34fd662` 提交，无消息/包定义文本变化。
 安全脚本完整 38 包构建成功，42 前缀/117 ELF，断链/缺库/临时 RPATH 均为 0。
-40 项隔离 ROS 测试和 14 项仿真仓库测试通过，新安装入口参数解析通过。
+首次 40 项隔离 ROS 测试和 14 项仿真仓库测试通过，新安装入口参数解析通过；
+它们当时只覆盖到点云适配器，遗漏 DOG map 实际 Reliable 订阅。
+上述 QoS 修复及两项新增回归后，当前算法回归总数为 42。
 “联合回归”是让实际 Point-LIO 与新适配节点连起来检查新旧功能，不是 Git 回退。
 
 回归覆盖真实 Point-LIO 输出接入、XYZ/法线变换、字段/时间保留、缺失/过期对齐、
