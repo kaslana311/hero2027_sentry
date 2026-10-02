@@ -17,7 +17,8 @@ VALID_FIELDS = ("rmuc_2025", "rmuc_2026")
 
 
 def _make_sim_params(
-    source_file, map_yaml, behavior_tree_xml, mode, namespace, publish_debug_visualizations
+    source_file, map_yaml, behavior_tree_xml, mode, namespace, publish_debug_visualizations,
+    perception_cloud_topic="cloud_registered",
 ):
     with open(source_file, "r", encoding="utf-8") as stream:
         params = yaml.safe_load(stream)
@@ -25,7 +26,7 @@ def _make_sim_params(
     dog_map = params["dog_map_node"]["ros__parameters"]
     dog_map["use_sim_time"] = True
     dog_map["odom_topic"] = "odometry/filtered"
-    dog_map["cloud_topic"] = "cloud_registered"
+    dog_map["cloud_topic"] = perception_cloud_topic
     dog_map["map_yaml_path"] = map_yaml
 
     for node_name in (
@@ -116,7 +117,7 @@ def _make_sim_params(
     return output.name
 
 
-def _launch_setup(context):
+def _launch_setup(context, perception_cloud_topic="cloud_registered"):
     namespace = LaunchConfiguration("namespace").perform(context)
     costmap_mode = LaunchConfiguration("costmap_mode").perform(context).lower()
     lidar_mode = LaunchConfiguration("lidar_mode").perform(context).lower()
@@ -159,6 +160,7 @@ def _launch_setup(context):
         costmap_mode,
         namespace,
         publish_debug_visualizations,
+        perception_cloud_topic,
     )
 
     bridge = Node(

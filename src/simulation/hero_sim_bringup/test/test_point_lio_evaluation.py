@@ -29,13 +29,14 @@ def ros_context():
 
 
 class EvaluationHarness:
-    def __init__(self):
+    def __init__(self, cloud_alignment=False):
         self.namespace = "/eval_test_" + uuid.uuid4().hex[:10]
         self.node = rclpy.create_node("probe", namespace=self.namespace)
         self.process = subprocess.Popen([
             os.environ["EVALUATION_EXECUTABLE"], "--ros-args",
             "-r", f"__ns:={self.namespace}", "-r", "/tf_static:=tf_static",
             "-r", "/tf:=tf",
+            "-p", f"publish_cloud_alignment:={str(cloud_alignment).lower()}",
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.truths, self.estimates, self.errors, self.transforms, self.markers = [], [], [], [], []
         self.node.create_subscription(PoseStamped, "evaluation/truth_pose", self.truths.append, 10)
@@ -179,6 +180,7 @@ def test_observer_does_not_publish_navigation_or_estimator_inputs(harness):
         "sim_point_lio_evaluation", harness.namespace)}
     assert harness.namespace + "/tf_static" in topics
     assert "/tf_static" not in topics
+    assert harness.namespace + "/evaluation/cloud_alignment" not in topics
     assert not any(name.endswith(("cmd_vel", "cloud_registered", "/odometry"))
                    for name in topics)
 

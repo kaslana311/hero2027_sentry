@@ -14,7 +14,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
-def _setup(context):
+def _setup(context, publish_cloud_alignment=False, rviz_argument="use_rviz"):
     robot = LaunchConfiguration("namespace").perform(context).strip("/")
     if not robot:
         raise RuntimeError("namespace must identify the simulated dual-lidar robot")
@@ -46,10 +46,11 @@ def _setup(context):
             parameters=[{
                 "use_sim_time": True,
                 "truth_topic": f"/{robot}/odometry/truth_3d",
+                "publish_cloud_alignment": publish_cloud_alignment,
             }],
         ),
         Node(
-            condition=IfCondition(LaunchConfiguration("use_rviz")),
+            condition=IfCondition(LaunchConfiguration(rviz_argument)),
             package="rviz2", executable="rviz2", name="pointlio_rviz",
             namespace=namespace, output="screen",
             parameters=[{"use_sim_time": True}],

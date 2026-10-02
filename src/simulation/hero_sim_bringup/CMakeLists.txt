@@ -39,7 +39,13 @@ ament_target_dependencies(sim_point_lio_evaluation
   geometry_msgs nav_msgs rclcpp std_msgs tf2 tf2_geometry_msgs tf2_ros visualization_msgs
 )
 
+add_executable(sim_point_lio_cloud_bridge src/sim_point_lio_cloud_bridge.cpp)
+ament_target_dependencies(sim_point_lio_cloud_bridge
+  geometry_msgs rclcpp sensor_msgs std_msgs tf2 tf2_geometry_msgs
+)
+
 install(TARGETS sim_ground_truth_bridge sim_point_lio_input_bridge sim_point_lio_evaluation
+  sim_point_lio_cloud_bridge
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -64,6 +70,13 @@ if(BUILD_TESTING)
     TIMEOUT 120
     ENV "EVALUATION_EXECUTABLE=$<TARGET_FILE:sim_point_lio_evaluation>"
         "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=176"
+  )
+  ament_add_pytest_test(point_lio_cloud test/test_point_lio_cloud.py
+    TIMEOUT 120
+    ENV "POINT_LIO_CLOUD_EXECUTABLE=$<TARGET_FILE:sim_point_lio_cloud_bridge>"
+        "POINT_LIO_INPUT_EXECUTABLE=$<TARGET_FILE:sim_point_lio_input_bridge>"
+        "EVALUATION_EXECUTABLE=$<TARGET_FILE:sim_point_lio_evaluation>"
+        "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=180"
   )
 endif()
 

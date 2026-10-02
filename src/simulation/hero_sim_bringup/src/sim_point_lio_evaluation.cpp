@@ -22,7 +22,8 @@
 #include "tf2_ros/static_transform_broadcaster.h"
 #include "visualization_msgs/msg/marker_array.hpp"
 
-// Observer only. Truth never goes back to Point-LIO, DOG map, navigation or motors.
+// Default: display-only observer. The cloud-only experiment may explicitly export
+// ONE initial alignment; never feeds truth back into the estimator or re-aligns drift.
 class SimPointLioEvaluation : public rclcpp::Node
 {
   using Odom = nav_msgs::msg::Odometry;
@@ -53,6 +54,12 @@ public:
     truth_path_pub_ = create_publisher<nav_msgs::msg::Path>("evaluation/truth_path", 1);
     estimate_path_pub_ = create_publisher<nav_msgs::msg::Path>("evaluation/pointlio_path", 1);
     error_pub_ = create_publisher<std_msgs::msg::String>("evaluation/error", 10);
+    if (declare_parameter<bool>("publish_cloud_alignment", false)) {
+      alignment_pub_ = create_publisher<geometry_msgs::msg::TransformStamped>(
+        "evaluation/cloud_alignment", rclcpp::QoS(1).transient_local());
+      RCLCPP_WARN(get_logger(), "Cloud experiment: export ONE truth-seeded initial alignment. "
+        "This is not autonomous map localization or ongoing truth correction.");
+    }
     static_tf_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
     truth_sub_ = create_subscription<Odom>(
       declare_parameter<std::string>("truth_topic", "truth_3d"), rclcpp::SensorDataQoS(),
@@ -162,6 +169,7 @@ private:
         transform.transform = tf2::toMsg(map_to_lio_);
         // Launch remaps /tf_static to the private pointlio/tf_static topic.
         static_tf_->sendTransform(transform);
+        if (alignment_pub_) {alignment_pub_->publish(transform);}
         RCLCPP_INFO(get_logger(), "Display alignment locked once at %.9f s; map/odom "
           "origin is unchanged. Initial pose error is zero by construction.", stamp * 1e-9);
       }
@@ -304,6 +312,7 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr truth_pose_pub_, estimate_pose_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr truth_path_pub_, estimate_path_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr error_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr alignment_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 
