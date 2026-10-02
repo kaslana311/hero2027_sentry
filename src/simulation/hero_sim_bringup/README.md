@@ -17,6 +17,18 @@ Navigation still uses the unchanged truth pipeline; Point-LIO has not taken
 over navigation or passed a Gazebo tunnel test. See
 [POINT_LIO.md](./POINT_LIO.md) and [SIMULATION_BASELINE.md](../../../SIMULATION_BASELINE.md).
 
+## Registered-cloud deployment (2026-10-02)
+
+After the filter/gravity fixes the user reports markedly reduced drift, not
+quantified full-route acceptance. `perception_point_lio_sim.launch.py` starts
+navigation and Point-LIO together in one host terminal. DOG map consumes
+`pointlio/cloud_registered_map`; navigation pose remains ground truth. A single,
+explicit truth-seeded initial transform aligns the local LIO world with map;
+later drift is retained, with no automatic truth-cloud fallback. Do not also run
+the old truth or standalone shadow algorithm launches. See
+[POINT_LIO_CLOUD.md](./POINT_LIO_CLOUD.md) for commands, checks and rollback.
+Docker, planner/controller settings and the original truth entry are unchanged.
+
 ## Build
 
 ```bash
@@ -161,6 +173,7 @@ export BRIDGE_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bring
 export POINT_LIO_INPUT_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_input_bridge"
 export POINT_LIO_EXECUTABLE="$(ros2 pkg prefix point_lio)/lib/point_lio/pointlio_mapping"
 export EVALUATION_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_evaluation"
+export POINT_LIO_CLOUD_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_cloud_bridge"
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=174 python3 -m pytest src/simulation/hero_sim_bringup/test -q
 ```
 

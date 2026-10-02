@@ -1,5 +1,11 @@
 # Point-LIO 仿真旁路
 
+2026-10-02 更新：用户已反馈上一轮修正后几乎不发散；尚无全路线统计。
+本篇三终端操作仍适用于**只读旁路**。另有两终端的点云接管入口，见
+[POINT_LIO_CLOUD.md](./POINT_LIO_CLOUD.md)：DOG map 用 LIO 云，导航仍用真值；
+显式给定一次初始位置，不实时校正，不与本篇旁路同时启动。
+此前待复测描述保留为历史记录，不代表尚未收到用户的新反馈。
+
 日期：2026-10-01。分支：`codex/point-lio-sim`。这是第一步旁路适配，
 **不是 Point-LIO 导航接管**。原真值过洞基线保留在 `sim-perception-integration`
 及标签 `sim/truth-tunnel-baseline-v1`，仿真仓库也有同名分支和基线标签。
@@ -153,6 +159,7 @@ export BRIDGE_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bring
 export POINT_LIO_INPUT_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_input_bridge"
 export POINT_LIO_EXECUTABLE="$(ros2 pkg prefix point_lio)/lib/point_lio/pointlio_mapping"
 export EVALUATION_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_evaluation"
+export POINT_LIO_CLOUD_EXECUTABLE="$(ros2 pkg prefix hero_sim_bringup)/lib/hero_sim_bringup/sim_point_lio_cloud_bridge"
 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=174 python3 -m pytest src/simulation/hero_sim_bringup/test -q
 ```
 
