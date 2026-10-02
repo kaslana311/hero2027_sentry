@@ -42,7 +42,11 @@ public:
       wait_sec_ > 10.)
     {throw std::runtime_error("cloud_queue_size must be 1..20; alignment_wait_sec in (0,10]");}
     queue_size_ = static_cast<size_t>(depth);
-    cloud_pub_ = create_publisher<Cloud>("cloud_registered_map", rclcpp::SensorDataQoS());
+    // DOG map requests reliable registered clouds, like the truth bridge output.
+    // A best-effort publisher cannot connect to that subscriber. Keep the raw
+    // Point-LIO input sensor QoS, but honor the downstream contract here.
+    cloud_pub_ = create_publisher<Cloud>(
+      "cloud_registered_map", rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
     status_pub_ = create_publisher<std_msgs::msg::String>(
       "cloud_deployment/status", rclcpp::QoS(1).transient_local());
     alignment_sub_ = create_subscription<Alignment>(

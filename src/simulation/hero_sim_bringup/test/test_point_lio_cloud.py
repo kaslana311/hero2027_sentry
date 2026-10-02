@@ -14,10 +14,11 @@ import uuid
 import pytest
 import rclpy
 from geometry_msgs.msg import TransformStamped
-from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import String
+from tf2_msgs.msg import TFMessage
 
 from test_cloud_registration import stamp
 from test_point_lio_evaluation import EvaluationHarness
@@ -139,6 +140,103 @@ def test_cloud_waits_for_alignment_and_never_falls_back(harness):
     harness.pub.publish(cloud(10.2))
     harness.until(lambda: len(harness.clouds) == 2)
     assert harness.clouds[-1].header.stamp == stamp(10.2)
+
+
+def test_output_delivers_to_reliable_consumers_and_best_effort_probes(harness):
+    reliable_clouds = []
+    harness.node.create_subscription(PointCloud2, "cloud_registered_map",
+                                      reliable_clouds.append, QoSProfile(depth=10))
+    topic = harness.namespace + "/cloud_registered_map"
+    endpoints = harness.node.get_publishers_info_by_topic(topic)
+    assert len(endpoints) == 1
+    assert endpoints[0].qos_profile.reliability == ReliabilityPolicy.RELIABLE
+    harness.align()
+    harness.spin_for(.2)
+    msg = cloud(10.1)
+    harness.pub.publish(msg)
+    harness.until(lambda: reliable_clouds and harness.clouds)
+    assert reliable_clouds[-1] == harness.clouds[-1]
+    assert reliable_clouds[-1].header.stamp == msg.header.stamp
+
+
+def test_actual_dog_map_receives_cloud_and_publishes_nonempty_occupancy(harness, tmp_path):
+    """Run the installed production DOG map, not a SensorDataQoS stand-in."""
+    import yaml
+    from ament_index_python.packages import get_package_prefix
+
+    # A small free map bounds the test; perception thresholds are copied unchanged
+    # from the tracked navigation configuration. No Gazebo, Nav2 or motor topics.
+    (tmp_path / "free.pgm").write_text("P2\n80 80\n255\n" + "255 " * (80 * 80) + "\n")
+    map_yaml = tmp_path / "map.yaml"
+    map_yaml.write_text(yaml.safe_dump({
+        "image": "free.pgm", "resolution": .1, "origin": [-4., -4., 0.],
+        "negate": 0, "occupied_thresh": .65, "free_thresh": .196,
+    }))
+    base = Path(__file__).parents[4] / "src/planning/hero2025_nav_bringup/config/nav2_params.yaml"
+    params = yaml.safe_load(base.read_text())["dog_map_node"]["ros__parameters"]
+    params.update(map_yaml_path=str(map_yaml), cloud_topic="cloud_registered_map",
+                  use_sim_time=False)
+    params_yaml = tmp_path / "dog.yaml"
+    params_yaml.write_text(yaml.safe_dump({"/**": {"ros__parameters": params}}))
+    received, occupied = [], []
+    harness.node.create_subscription(PointCloud2, "rog_map/ground", received.append,
+                                      qos_profile_sensor_data)
+    harness.node.create_subscription(PointCloud2, "rog_map/inf_occ", occupied.append,
+                                      qos_profile_sensor_data)
+    tf_pub = harness.node.create_publisher(TFMessage, "tf_static", harness.durable)
+    tf = TransformStamped()
+    tf.header.frame_id, tf.child_frame_id = "map", "base_link"
+    tf.transform.rotation.w = 1.
+    tf_pub.publish(TFMessage(transforms=[tf]))
+    executable = os.environ.get("DOG_MAP_EXECUTABLE") or str(
+        Path(get_package_prefix("dog_map")) / "lib/dog_map/dog_map_node_lidars")
+    log_path = tmp_path / "dog.log"
+    process = None
+    with log_path.open("w") as log:
+        try:
+            process = subprocess.Popen([
+                executable, "--ros-args", "-r", f"__ns:={harness.namespace}",
+                "--params-file", str(params_yaml),
+                "-r", f"/tf:={harness.namespace}/tf",
+                "-r", f"/tf_static:={harness.namespace}/tf_static",
+            ], stdout=log, stderr=subprocess.STDOUT)
+            topic = harness.namespace + "/cloud_registered_map"
+            harness.until(lambda: any(e.node_name == "dog_map_node" for e in
+                harness.node.get_subscriptions_info_by_topic(topic)))
+            endpoints = harness.node.get_subscriptions_info_by_topic(topic)
+            dog = next(e for e in endpoints if e.node_name == "dog_map_node")
+            assert dog.qos_profile.reliability == ReliabilityPolicy.RELIABLE
+            harness.align(10., translation=(0., 0., 0.), yaw=0.)
+            harness.spin_for(.3)
+            assert not received and not occupied
+            # A dense vertical patch away from the self-filter; its height span
+            # exceeds the real ground threshold. DOG map's existing z shift stays.
+            rows = [(2.01, 1.01 + j * .1, k * .03, 42.)
+                    for j in range(4) for k in range(14)]
+            for i in range(20):
+                assert process.poll() is None, log_path.read_text()
+                harness.pub.publish(cloud(10.1 + i * .05, rows))
+                harness.spin_for(.08)
+                if received and any(m.width * m.height > 0 for m in occupied):
+                    break
+            assert received, "DOG map never received the adapted cloud:\n" + log_path.read_text()
+            assert occupied and occupied[-1].width * occupied[-1].height > 0, log_path.read_text()
+            out = occupied[-1]
+            assert out.header.frame_id == "map"
+            offsets = {field.name: field.offset for field in out.fields}
+            x = struct.unpack_from("<f", out.data, offsets["x"])[0]
+            y = struct.unpack_from("<f", out.data, offsets["y"])[0]
+            assert 1.8 < x < 2.3 and .8 < y < 1.5
+            assert "incompatible QoS" not in log_path.read_text()
+        finally:
+            if process is not None:
+                if process.poll() is None:
+                    process.send_signal(signal.SIGINT)
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=3)
 
 
 def test_expired_or_pre_alignment_cloud_is_not_replayed(harness):
