@@ -13,8 +13,9 @@ On 2026-10-01 the user confirmed smooth RMUC 2026 tunnel navigation with
 the default tunnel profile, dual lidar and combined costmaps. The paired
 `sim/truth-tunnel-baseline-v1` tag preserves that truth-based baseline;
 `codex/point-lio-sim` now includes an isolated Point-LIO shadow entry point.
-Navigation still uses the unchanged truth pipeline; Point-LIO has not taken
-over navigation. On 2026-10-08 the user confirmed good clouds, negligible observed
+Navigation in that cloud-only baseline uses truth; Point-LIO has not taken
+over its navigation. The new full-navigation experiment is documented in
+[POINT_LIO_NAVIGATION.md](./POINT_LIO_NAVIGATION.md). On 2026-10-08 the user confirmed good clouds, negligible observed
 drift and normal tunnel traversal for the cloud-only stage. The paired
 `sim/point-lio-cloud-baseline-v1` tag archives that qualitative feedback, not
 full LIO navigation takeover or quantitative route acceptance. See
@@ -276,3 +277,10 @@ truth launch and avoid mixing real-robot driver changes into the same commit.
 The combined costmap remains unchanged during that stage; the costmap split
 above is a separate future experiment. Baseline preparation introduced no code;
 the subsequent shadow commit introduces host-side code but no new Docker image.
+## 2026-10-08：完整 Point-LIO 接管实验入口（C2）
+
+新增 `navigation_point_lio_sim.launch.py`，导航定位与 DOG map 点云共同来自
+Point-LIO。分支 `codex/point-lio-navigation`，从 C1 已验收标签新建；
+旧入口保留，不修改规划/控制参数或镜像。C2 尚待用户联合实跑，不能将 C1
+反馈直接当作 C2 验收。完整命令、初始化和切回方法见
+[POINT_LIO_NAVIGATION.md](./POINT_LIO_NAVIGATION.md)。
