@@ -14,7 +14,10 @@ the default tunnel profile, dual lidar and combined costmaps. The paired
 `sim/truth-tunnel-baseline-v1` tag preserves that truth-based baseline;
 `codex/point-lio-sim` now includes an isolated Point-LIO shadow entry point.
 Navigation still uses the unchanged truth pipeline; Point-LIO has not taken
-over navigation or passed a Gazebo tunnel test. See
+over navigation. On 2026-10-08 the user confirmed good clouds, negligible observed
+drift and normal tunnel traversal for the cloud-only stage. The paired
+`sim/point-lio-cloud-baseline-v1` tag archives that qualitative feedback, not
+full LIO navigation takeover or quantitative route acceptance. See
 [POINT_LIO.md](./POINT_LIO.md) and [SIMULATION_BASELINE.md](../../../SIMULATION_BASELINE.md).
 
 ## Registered-cloud deployment (2026-10-02)
@@ -32,6 +35,10 @@ A subsequent runtime check found that the new adapter's best-effort output did
 not match DOG map's reliable subscription. `25336a1` fixes only that output QoS;
 42 isolated regressions now include actual DOG map receipt and nonempty occupancy.
 The adapter's publishing counter alone is not downstream delivery evidence.
+The stage is now archived on `codex/point-lio-sim` in both repositories. This
+archive changes documentation only, leaves truth-baseline tags/stable branches
+untouched and does not require recompilation. All startup commands are collected
+in `/home/apocalypse_linux_00/build_sim_docker/docs/STARTUP.md`.
 
 ## Build
 

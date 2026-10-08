@@ -3,9 +3,11 @@
 日期：2026-10-01（+08:00）。用户确认当前配置顺畅过洞，原导航自动失败、地形卡滞
 和配准偏差在本次运行中不再出现。本记录不声称已经获得三轮统计或真车级精度。
 
-后续实验状态：`codex/point-lio-sim` 已增加独立 Point-LIO 旁路并通过宿主机合成测试，
-已增加地图原点/真值/估计的同时间戳对照窗口，仅首次对齐且不反馈给估计器；
-未接管导航、未完成 Gazebo 运动验收。见
+后续实验状态（2026-10-08）：`codex/point-lio-sim` 已实现 Point-LIO 点云接管，
+用户确认点云无大问题、定位对照几乎无漂移、过洞正常。配对标签
+`sim/point-lio-cloud-baseline-v1` 固定这一“LIO 点云 + 真值导航”阶段；
+尚未接管导航位姿，没有全路线定量统计。独立旁路与一次对齐对照工具仍保留。见
+[点云阶段说明](src/simulation/hero_sim_bringup/POINT_LIO_CLOUD.md) 与
 [`Point-LIO 说明`](src/simulation/hero_sim_bringup/POINT_LIO.md)。下文保留基线归档当时的
 版本与验证记录；同名标签、稳定分支和原真值启动命令不变。
 
