@@ -49,6 +49,12 @@ install(TARGETS sim_ground_truth_bridge sim_point_lio_input_bridge sim_point_lio
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_executable(sim_point_lio_navigation_bridge src/sim_point_lio_navigation_bridge.cpp)
+ament_target_dependencies(sim_point_lio_navigation_bridge
+  geometry_msgs nav_msgs rclcpp sensor_msgs std_msgs tf2 tf2_geometry_msgs tf2_ros
+)
+install(TARGETS sim_point_lio_navigation_bridge DESTINATION lib/${PROJECT_NAME})
+
 install(DIRECTORY behavior_trees config launch maps rviz
   DESTINATION share/${PROJECT_NAME}
 )
@@ -77,6 +83,12 @@ if(BUILD_TESTING)
         "POINT_LIO_INPUT_EXECUTABLE=$<TARGET_FILE:sim_point_lio_input_bridge>"
         "EVALUATION_EXECUTABLE=$<TARGET_FILE:sim_point_lio_evaluation>"
         "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=180"
+  )
+  ament_add_pytest_test(point_lio_navigation test/test_point_lio_navigation.py
+    TIMEOUT 120
+    ENV "POINT_LIO_NAV_EXECUTABLE=$<TARGET_FILE:sim_point_lio_navigation_bridge>"
+        "POINT_LIO_CLOUD_EXECUTABLE=$<TARGET_FILE:sim_point_lio_cloud_bridge>"
+        "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=183"
   )
 endif()
 

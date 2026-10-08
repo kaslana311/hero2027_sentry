@@ -117,7 +117,7 @@ def _make_sim_params(
     return output.name
 
 
-def _launch_setup(context, perception_cloud_topic="cloud_registered"):
+def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_navigation=False):
     namespace = LaunchConfiguration("namespace").perform(context)
     costmap_mode = LaunchConfiguration("costmap_mode").perform(context).lower()
     lidar_mode = LaunchConfiguration("lidar_mode").perform(context).lower()
@@ -172,13 +172,16 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered"):
             {
                 "use_sim_time": True,
                 "zero_at_first_odometry": True,
-                "relay_cmd_vel": relay_cmd_vel,
+                "relay_cmd_vel": False if point_lio_navigation else relay_cmd_vel,
+                **({"output_odom_topic": "odometry/truth_planar",
+                    "output_cmd_vel_topic": "truth/unrelayed_cmd_vel"}
+                   if point_lio_navigation else {}),
                 "dual_lidar": lidar_mode == "dual",
             }
         ],
         remappings=[
-            ("/tf", "tf"),
-            ("/tf_static", "tf_static"),
+            ("/tf", "truth/tf" if point_lio_navigation else "tf"),
+            ("/tf_static", "truth/tf_static" if point_lio_navigation else "tf_static"),
             # The real-robot RViz file uses this absolute topic. Keep that file
             # unchanged and adapt it at the simulation entry point.
             ("/rog_map/inf_occ", "rog_map/inf_occ"),

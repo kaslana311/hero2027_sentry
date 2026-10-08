@@ -62,7 +62,7 @@ public:
         publishStatus();
       });
     RCLCPP_INFO(get_logger(), "Point-LIO cloud deployment waiting for ONE initial alignment; "
-      "output=cloud_registered_map. No truth fallback; navigation pose is NOT replaced.");
+      "output=cloud_registered_map. No truth fallback; this node publishes no navigation pose/TF.");
     publishStatus();
   }
 

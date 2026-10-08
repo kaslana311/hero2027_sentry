@@ -23,7 +23,7 @@ def _setup(context, publish_cloud_alignment=False, rviz_argument="use_rviz"):
     # Separate TF topic and distinct frame IDs: no competing navigation TF.
     tf_remaps = [("/tf", "tf"), ("/tf_static", "tf_static")]
     return [
-        LogInfo(msg=f"Point-LIO shadow at /{namespace}; truth navigation remains unchanged"),
+        LogInfo(msg=f"Point-LIO estimator at /{namespace}; private TF, navigation source chosen by entry point"),
         Node(
             package="hero_sim_bringup", executable="sim_point_lio_input_bridge",
             namespace=namespace, output="screen",
