@@ -139,3 +139,61 @@ git switch codex/point-lio-navigation
 另开干净终端重新 source，运行原命令。Git 只切换源码，不会自动恢复 install、
 进程或环境。仿真实现此轮不变，无需切仿真分支或重建镜像。
 不合并稳定分支、不移动历史标签、不推送远程；通过实测后再讨论里程碑。
+
+## 2026-10-11：MINCO 软安全距离增加 0.50 m
+
+本次仍在 `codex/perception-navigation-iteration` 上作一次独立提交，不新建分支。
+算法修改前为 `108afdbead0fea9ed5f502a95766a93672e84c31`；仿真配对为
+`40adfd22abcf782fd42bce49fbf81d66830f8ee3`（移除 tunnel 后方灯条几何），
+本次不改仿真仓库、不构建镜像。
+
+只修改 `hero2025_nav_bringup/config/nav2_params.yaml` 中
+`smoother_server.ros__parameters.minco_smoother.safe_distance`：
+**0.30 m → 0.80 m**，增加 0.50 m。它是 MINCO 的软避障惩罚作用距离，
+相对于 ESDF 的硬障碍边界；当前该边界已包含代价地图内切圆硬膨胀带。
+不改变 costmap 膨胀半径 0.40 m、衰减因子 2.5、两阶段避障权重、规划/曲线频率、
+感知过滤、Point-LIO、MPC、行为树或车体尺寸。
+
+现有代码用 `10 * safe_distance` 初始化 ESDF 距离截断上限，因此它自然从
+3.0 m 变成 8.0 m；ROI 外扩仍为 4.0 m，没有单独修改 C++ 实现。
+0.80 m 是软偏好，不是新增硬禁行圈，但窄洞内可能持续受罚、产生优化困难，
+不能据此保证仍能通行；未扫描到的障碍也不会凭该参数产生斥力。
+
+配置范围：这是共享的主 YAML 默认值，**所有加载该 YAML 的入口**都会使用 0.80 m，
+不只 `static_only`。没有新增启动参数，也没有改动其它 YAML 变体。
+当前 install 中该 YAML 是指向源码的符号链接；不必重编译 C++，但必须停止旧算法
+并重启，启动时生成的新临时参数文件才会采用新值。若今后 install 变成普通副本，
+应通过 `./build_hero2026_safe.sh --jobs 4` 更新安装，不手改 install 冒充源码修改。
+
+本次沿用已存在的 C2 入口，只将地图模式设成 `static_only`：
+
+```bash
+cd "/home/apocalypse_linux_00/hero2026_-sentry (to_compile_not_develop))"
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch hero_sim_bringup navigation_point_lio_sim.launch.py \
+  field:=rmuc_2026 lidar_mode:=dual costmap_mode:=static_only \
+  relay_cmd_vel:=true publish_debug_visualizations:=false point_lio_rviz:=true \
+  filter_high_columns:=true high_column_min_z:=0.30
+```
+
+启动后可只读确认（在另一个已 source 的终端执行）：
+
+```bash
+ros2 param get /red_standard_robot1/smoother_server minco_smoother.safe_distance
+ros2 param get /red_standard_robot1/local_costmap/local_costmap plugins
+ros2 param get /red_standard_robot1/global_costmap/global_costmap plugins
+```
+
+预期为 0.8，以及两份 `['static_layer', 'inflation_layer']`。这里的 `static_only`
+仅表示不加载 `fast_layer`；既有 `UpdateStaticLayer` 仍订阅 `rog_map/fi`，可清除
+静态地图中被观测为空的格子，并不是完全冻结 PGM。不为本次试验修改这项旧行为。
+
+只比较距离参数时，应固定同一地图模式、路线和其它参数，分别测试 0.30/0.80 m；
+不要把同时从 combined 切为 static_only 的效果全归因于 ESDF。恢复旧参数只需把
+源码同一项改回 0.3 并重启算法，不需要回退其它实现；如需保留进展，作新的配置提交。
+验证：YAML 结构差异严格只有上述一个数值；combined/static_only/dynamic_only
+三种模式的前后生成参数也只有这一项变化，源码和安装路径结果一致；7 项参数/恢复
+契约测试通过。安全脚本 `--verify-only` 检查 42 个前缀、118 个 ELF，断链、缺失
+动态库和临时 RPATH 均为零；已安装 C2 入口 `--show-args` 检查通过。
+尚未在 Gazebo 中运行导航或发送运动指令，实际轨迹间距和洞口通行由用户测试。
