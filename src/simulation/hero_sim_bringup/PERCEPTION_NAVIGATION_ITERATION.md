@@ -79,6 +79,7 @@ SIM_ROBOT_PROFILE=tunnel ./scripts/start_sim_rmuc_2026_dual_lidar.sh
 新算法实验，干净终端，仅启动一套算法；先静止初始化约 10 秒：
 
 ```bash
+cd "/home/apocalypse_linux_00/hero2026_-sentry (to_compile_not_develop))"
 source /opt/ros/humble/setup.bash
 source "/home/apocalypse_linux_00/hero2026_-sentry (to_compile_not_develop))/install/setup.bash"
 ros2 launch hero_sim_bringup navigation_point_lio_sim.launch.py \
