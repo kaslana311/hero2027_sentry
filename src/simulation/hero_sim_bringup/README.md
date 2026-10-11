@@ -3,6 +3,13 @@
 This package is a simulation-only entry point. It does not start real Livox,
 serial, Odin, or Zenoh drivers and does not change the real-robot launch path.
 
+2026-10-11: algorithm-only branch `codex/perception-navigation-iteration` adds
+an opt-in high-column DOG output filter. Existing startup commands leave it off;
+`filter_high_columns:=true high_column_min_z:=0.30` enables an absolute-map-Z
+experiment, not a validated universal clearance rule. The simulator is unchanged.
+The five-item roadmap, limitations, commands and acceptance checklist are in
+[PERCEPTION_NAVIGATION_ITERATION.md](./PERCEPTION_NAVIGATION_ITERATION.md).
+
 The first stage intentionally bypasses Point-LIO. Gazebo ground-truth odometry
 provides the planar `map -> odom -> base_footprint` transform. A separate
 stamped 6-D chassis pose registers each simulated scan into `map` before it

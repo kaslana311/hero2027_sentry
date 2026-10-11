@@ -1,5 +1,11 @@
 # 仿真真值定位过洞基线
 
+当前算法迭代（2026-10-11）：从 `codex/point-lio-navigation` 的 `e3607f8` 创建
+`codex/perception-navigation-iteration`，优先验证默认关闭、可指定高度的 DOG
+高处整列输出过滤。旧分支/标签保留，仿真实现不变；未宣称四洞通过或合并稳定分支。
+五项范围、启动和消融见
+[感知与导航迭代记录](src/simulation/hero_sim_bringup/PERCEPTION_NAVIGATION_ITERATION.md)。
+
 最新实验（2026-10-08）：两仓库 `codex/point-lio-navigation` 从已验收的点云
 阶段标签新建，独立 `navigation_point_lio_sim.launch.py` 开始完整定位/点云接管。
 原入口和两组标签保留，尚待联合实跑，不合并稳定分支。说明见
