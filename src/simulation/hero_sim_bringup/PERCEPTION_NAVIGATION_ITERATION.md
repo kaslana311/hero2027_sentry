@@ -197,3 +197,54 @@ ros2 param get /red_standard_robot1/global_costmap/global_costmap plugins
 契约测试通过。安全脚本 `--verify-only` 检查 42 个前缀、118 个 ELF，断链、缺失
 动态库和临时 RPATH 均为零；已安装 C2 入口 `--show-args` 检查通过。
 尚未在 Gazebo 中运行导航或发送运动指令，实际轨迹间距和洞口通行由用户测试。
+
+## 2026-10-11：MINCO 两阶段避障权重扩大 10 倍
+
+按用户要求，在 `codex/perception-navigation-iteration` 上继续作一次独立配置提交，
+不新建分支。修改前算法版本为 `7df64c4e26683becc55173fa29014632abf8cafa`，
+仿真仍配对 `40adfd22abcf782fd42bce49fbf81d66830f8ee3`，本次不改仿真仓库或镜像。
+
+只修改共享主 YAML 的两项：
+
+- `minco_smoother.stage1_weight_obstacle`：8000 → **80000**。
+- `minco_smoother.weight_obstacle`：7500 → **75000**。
+
+`safe_distance` 保持 **0.8 m**，其余代价权重、采样、频率、感知、Point-LIO、MPC、
+行为树、梯度处理和时间换算均保持不变。这里扩大的是避障代价及其梯度的权重，
+不是再增大 ESDF 作用距离，也不将软约束变为硬碰撞保证。两阶段一并调整，
+避免第二阶段继续采用旧避障权重；但不保证实际净空增加或洞口仍然可通行。
+
+该 YAML 是所有引用它的启动入口共享的默认配置，三种 costmap 模式都会受影响。
+install 中的配置仍为源码符号链接，不需要重新编译；停止旧算法后重新运行原入口。
+保持上一轮的地图模式、路线、初始状态和其它启动参数，才是单独比较权重。
+最近日志中的 `dynamic_only` 与之前计划的 `static_only` 是两种不同实验，
+不要在比较权重时同时切换地图模式。
+
+若按之前约定用静态模式实验，算法命令仍为：
+
+```bash
+cd "/home/apocalypse_linux_00/hero2026_-sentry (to_compile_not_develop))"
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch hero_sim_bringup navigation_point_lio_sim.launch.py \
+  field:=rmuc_2026 lidar_mode:=dual costmap_mode:=static_only \
+  relay_cmd_vel:=true publish_debug_visualizations:=false point_lio_rviz:=true \
+  filter_high_columns:=true high_column_min_z:=0.30
+```
+
+在另一个已 source 的终端核对：
+
+```bash
+ros2 param get /red_standard_robot1/smoother_server minco_smoother.stage1_weight_obstacle
+ros2 param get /red_standard_robot1/smoother_server minco_smoother.weight_obstacle
+ros2 param get /red_standard_robot1/smoother_server minco_smoother.safe_distance
+```
+
+预期分别为 **80000.0、75000.0、0.8**。如果需要恢复原权重，只将同一源码 YAML
+两项改回 8000.0/7500.0 并重启算法；保留本次进展时作新的恢复提交，不回退其它代码。
+实际贴墙距离、跟随稳定性和过洞成功率待用户实跑验证，本次没有发送运动指令。
+
+提交前验证：YAML 结构差异严格只有上述两项权重；源码和安装配置一致，
+combined/static_only/dynamic_only 三种模式的生成参数均保留 80000/75000 和 0.8；
+7 项参数/恢复契约测试通过。执行 `./build_hero2026_safe.sh --verify-only`，
+42 个前缀、118 个 ELF 检查通过，断链、缺失动态库、临时 RPATH 均为零。
