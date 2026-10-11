@@ -67,6 +67,10 @@ if(BUILD_TESTING)
         "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=173"
   )
   ament_add_pytest_test(recovery_contract test/test_recovery_contract.py TIMEOUT 30)
+  ament_add_pytest_test(high_column_filter test/test_high_column_filter.py
+    TIMEOUT 120
+    ENV "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=187"
+  )
   ament_add_pytest_test(point_lio_input test/test_point_lio_input.py
     TIMEOUT 120
     ENV "POINT_LIO_INPUT_EXECUTABLE=$<TARGET_FILE:sim_point_lio_input_bridge>"

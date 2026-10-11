@@ -54,5 +54,8 @@ def generate_launch_description():
                               description="Optional truth/Point-LIO comparison RViz"),
         DeclareLaunchArgument("relay_cmd_vel", default_value="true"),
         DeclareLaunchArgument("publish_debug_visualizations", default_value="false"),
+        DeclareLaunchArgument("filter_high_columns", default_value="false"),
+        DeclareLaunchArgument("high_column_min_z", default_value="0.30",
+                              description="Absolute map Z threshold (metres), not local ground height"),
         OpaqueFunction(function=_setup),
     ])

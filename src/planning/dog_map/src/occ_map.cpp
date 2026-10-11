@@ -130,6 +130,12 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
                         break;
                     }
                 }
+                // A whole column is ignored only if its LOWEST occupied voxel
+                // is above the configured map-frame height. Low wall/step
+                // returns keep the column under the existing classification.
+                if (max_z_occ_index >= min_z_occ_index &&
+                    high_column_filter_.ignores(min_z_occ_index, resolution_z))
+                    continue;
                 int dzf_i= (max_z_occ_index - min_z_occ_index);
                 double dzf = dzf_i * resolution_z;
                 if (dzf < higher_than_ground_threshold_) continue;  //地面过滤

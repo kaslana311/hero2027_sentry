@@ -1,3 +1,4 @@
+import math
 import os
 import tempfile
 
@@ -19,7 +20,13 @@ VALID_FIELDS = ("rmuc_2025", "rmuc_2026")
 def _make_sim_params(
     source_file, map_yaml, behavior_tree_xml, mode, namespace, publish_debug_visualizations,
     perception_cloud_topic="cloud_registered",
+    filter_high_columns=False, high_column_min_z=0.30,
 ):
+    if not isinstance(filter_high_columns, bool):
+        raise ValueError("filter_high_columns must be a boolean")
+    high_column_min_z = float(high_column_min_z)
+    if not math.isfinite(high_column_min_z) or high_column_min_z < 0:
+        raise ValueError("high_column_min_z must be finite and nonnegative (absolute map Z, metres)")
     with open(source_file, "r", encoding="utf-8") as stream:
         params = yaml.safe_load(stream)
 
@@ -28,6 +35,8 @@ def _make_sim_params(
     dog_map["odom_topic"] = "odometry/filtered"
     dog_map["cloud_topic"] = perception_cloud_topic
     dog_map["map_yaml_path"] = map_yaml
+    dog_map["filter_high_columns"] = filter_high_columns
+    dog_map["high_column_min_z"] = high_column_min_z
 
     for node_name in (
         "bt_navigator",
@@ -124,6 +133,11 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
     field = LaunchConfiguration("field").perform(context).lower()
     use_rviz = LaunchConfiguration("use_rviz")
     relay_cmd_vel = LaunchConfiguration("relay_cmd_vel")
+    high_column_switch = LaunchConfiguration("filter_high_columns", default="false").perform(context).lower()
+    if high_column_switch not in ("true", "false"):
+        raise ValueError("filter_high_columns must be true or false")
+    filter_high_columns = high_column_switch == "true"
+    high_column_min_z = float(LaunchConfiguration("high_column_min_z", default="0.30").perform(context))
     publish_debug_visualizations = (
         LaunchConfiguration("publish_debug_visualizations")
         .perform(context)
@@ -161,6 +175,8 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         namespace,
         publish_debug_visualizations,
         perception_cloud_topic,
+        filter_high_columns,
+        high_column_min_z,
     )
 
     bridge = Node(
@@ -262,6 +278,8 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
             )
         ),
         LogInfo(msg=f"Generated parameter file: {generated_params}"),
+        LogInfo(msg=f"DOG high-column filter enabled={filter_high_columns}, "
+                    f"minimum absolute map Z={high_column_min_z:.3f} m (not robot-relative)"),
         bridge,
         map_server,
         map_lifecycle,
@@ -307,6 +325,14 @@ def generate_launch_description():
                 "publish_debug_visualizations",
                 default_value="false",
                 description="Publish high-rate MINCO debug Path messages",
+            ),
+            DeclareLaunchArgument(
+                "filter_high_columns", default_value="false",
+                description="Experimental DOG output filter for columns entirely above map Z threshold",
+            ),
+            DeclareLaunchArgument(
+                "high_column_min_z", default_value="0.30",
+                description="Lowest voxel lower-face threshold, absolute map Z in metres; not relative to local ground",
             ),
             OpaqueFunction(function=_launch_setup),
         ]

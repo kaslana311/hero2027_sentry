@@ -24,6 +24,12 @@
 
 using namespace analy_utils;
 class DogMapNode : public rclcpp::Node {
+    bool filter_high_columns_{false};
+#ifndef ODIN_WIDTH_LIDAR
+    static constexpr double cloud_z_offset_ = 0.30;
+#else
+    static constexpr double cloud_z_offset_ = 0.26;
+#endif
    public:
     struct ROSCallback {
         rclcpp::CallbackGroup::SharedPtr  cloud_me_cbk_group,
@@ -75,7 +81,7 @@ class DogMapNode : public rclcpp::Node {
         try {
             tf_stamped = this->tf_buffer_->lookupTransform(
                 "map", cloud_msg->header.frame_id, tf2::TimePointZero);
-            tf_stamped.transform.translation.z += 0.3;  //添加平移,防止越界
+            tf_stamped.transform.translation.z += cloud_z_offset_;  //添加平移,防止越界
             const auto& tr = tf_stamped.transform.translation;
             const auto& rr = tf_stamped.transform.rotation;
 
@@ -166,7 +172,7 @@ class DogMapNode : public rclcpp::Node {
         try {
             tf_stamped = this->tf_buffer_->lookupTransform(
                 "map", cloud_msg->header.frame_id, tf2::TimePointZero);
-            tf_stamped.transform.translation.z += 0.26;  //添加平移,防止越界
+            tf_stamped.transform.translation.z += cloud_z_offset_;  //添加平移,防止越界
             const auto& tr = tf_stamped.transform.translation;
             const auto& rr = tf_stamped.transform.rotation;
 
@@ -249,7 +255,10 @@ class DogMapNode : public rclcpp::Node {
         pcl::PointCloud<pcl::PointXYZI> occ_pc;
         occ_map_->PubRes(occ_pc);
         
-        if (!occ_pc.empty()) {
+        // With the experimental filter enabled, an empty result must replace
+        // the previous cloud in fast_layer/RViz instead of leaving stale points.
+        // Preserve the historical publication behavior when the filter is off.
+        if (!occ_pc.empty() || filter_high_columns_) {
             auto msg = sensor_msgs::msg::PointCloud2();
             pcl::toROSMsg(occ_pc, msg);
 
@@ -289,6 +298,9 @@ class DogMapNode : public rclcpp::Node {
     }
 
     DogMapNode() : Node("dog_map_node") {
+        filter_high_columns_ = declare_parameter<bool>("filter_high_columns", false);
+        const double high_column_min_z =
+            declare_parameter<double>("high_column_min_z", 0.30);
         this->declare_parameter<std::string>("odin_topic", odin_topic);
         this->declare_parameter<std::string>("cloud_topic", cloud_topic);
         this->declare_parameter<std::string>("map_yaml_path", "");
@@ -343,6 +355,10 @@ class DogMapNode : public rclcpp::Node {
                               higher_than_car_threshold, half_map_size,
                               resolution_z, frame_save, map_yaml_path);
         occ_map_->SetLOGParams(LOG_OCC_HIT_MID360, LOG_OCC_HIT_ODIN1, LOG_OCC_FREE, THR_OCC, MAX_LOG_MID360, MAX_LOG_ODIN1, MIN_LOG);
+        occ_map_->SetHighColumnFilter(filter_high_columns_, high_column_min_z, cloud_z_offset_);
+        RCLCPP_INFO(get_logger(),
+            "High-column output filter: enabled=%s, min map Z=%.3f m, cloud Z offset=%.2f m",
+            filter_high_columns_ ? "true" : "false", high_column_min_z, cloud_z_offset_);
         cost_pub_.cost_pc_pub =
             this->create_publisher<sensor_msgs::msg::PointCloud2>(
                 "rog_map/inf_occ", qos);

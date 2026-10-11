@@ -14,6 +14,7 @@
 #include <vector>
 #include <pcl/filters/crop_box.h>
 #include "dog_map/eigen_alias.hpp"
+#include "dog_map/high_column_filter.hpp"
 // #include "dog_map/static_fix_map.hpp"
 using namespace analy_utils;
 const float crop_min_x = -0.5f;
@@ -66,6 +67,9 @@ class OccMap {
     bool IsStaticMapPoint(int index);
     void TimeGoON();
     void PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc);
+    void SetHighColumnFilter(bool enabled, double min_z, double cloud_z_offset) {
+        high_column_filter_ = HighColumnFilter(enabled, min_z, cloud_z_offset);
+    }
     void PassFilter(pcl::PointCloud<HEROPointXYZK>::Ptr cloud_in, Pose pose);
     inline void racyHandle(const Vec3i& start_idx, const Vec3i& end_idx,
                            Vec3f& start_f, Vec3f& res) {
@@ -138,6 +142,7 @@ class OccMap {
 
    private:
     double higher_than_ground_threshold_;
+    HighColumnFilter high_column_filter_;
     double higher_than_car_threshold_;
     double half_map_size_;
     double resolution_z;
