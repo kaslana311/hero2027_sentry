@@ -235,14 +235,14 @@ smoother_server:
       odom_topic: "odometry/filtered"
       # ========== 第一阶段优化参数：优化轨迹形状 ==========
       stage1_weight_smooth: 5.0       # 阶段1 平滑性权重
-      stage1_weight_obstacle: 80000.0    # 阶段1 避障权重
+      stage1_weight_obstacle: 8000.0    # 阶段1 避障权重
       stage1_weight_feasibility: 40.0  # 阶段1 动力学可行性权重
       stage1_weight_time: 20.0        # 阶段1 时间正则化权重
       stage1_weight_mean_time: 40.0   # 阶段1 平均时间约束权重
       stage1_max_iterations: 8000     # 阶段1 最大迭代次数
       # ========== 第二阶段优化权重：优化动力学性质 ==========
       weight_smooth: 1.0           # 平滑性权重
-      weight_obstacle: 75000.0       # 避障权重（ESDF）
+      weight_obstacle: 7500.0       # 避障权重（ESDF）
       weight_feasibility: 100.0     # 动力学可行性权重
       weight_time: 25.0            # 时间正则化权重
       weight_mean_time: 100.0          # 平均时间约束权重
@@ -255,7 +255,7 @@ smoother_server:
       # ========== 动力学约束 ==========
       max_vel: 2.2                 # 最大速度 (m/s)
       max_acc: 3.0                 # 最大加速度 (m/s²)
-      safe_distance: 0.8           # 安全距离 (m)
+      safe_distance: 0.3           # 安全距离 (m)
       # ========== 路径处理参数 ==========
       min_waypoints: 2             # 最少路点数
       # ========== 输出参数 ==========

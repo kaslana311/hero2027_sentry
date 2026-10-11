@@ -248,3 +248,23 @@ ros2 param get /red_standard_robot1/smoother_server minco_smoother.safe_distance
 combined/static_only/dynamic_only 三种模式的生成参数均保留 80000/75000 和 0.8；
 7 项参数/恢复契约测试通过。执行 `./build_hero2026_safe.sh --verify-only`，
 42 个前缀、118 个 ELF 检查通过，断链、缺失动态库、临时 RPATH 均为零。
+
+## 2026-10-11：结束距离/权重实验，恢复原始 MINCO 参数
+
+用户反馈扩大软安全距离和避障权重的测试效果不理想，要求恢复原配置，
+暂不实施其它优化器修改，继续思考原因。该反馈不等于已经确定了故障根因。
+在 `codex/perception-navigation-iteration` 上作新的恢复提交，保留
+`7df64c4`（距离实验）和 `0547dba`（权重实验）及其文档，不撤销历史。
+
+仅恢复主 YAML 三项：`stage1_weight_obstacle=8000.0`、
+`weight_obstacle=7500.0`、`safe_distance=0.3`。既有实现自动将 ESDF 距离
+截断上限恢复为 3.0 m，ROI 外扩仍为 4.0 m；不修改其它源码、感知过滤、
+Point-LIO、MPC、行为树或 costmap 模式。仿真配对仍为 `40adfd2`，不改镜像。
+
+install YAML 仍链接到源码，因此不需要重新编译。停止旧算法，再按此前使用的
+启动入口和参数重启；本次没有改变入口或地图模式。启动后检查
+`minco_smoother.stage1_weight_obstacle`、`minco_smoother.weight_obstacle` 和
+`minco_smoother.safe_distance`，应分别返回 8000.0、7500.0、0.3。
+
+恢复验证：主 YAML 与实验前的 `108afdb` 版本逐字节一致，源码与 install 配置
+一致；7 项参数/恢复契约测试通过。没有启动仿真或发送运动指令。
