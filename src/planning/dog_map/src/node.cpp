@@ -255,10 +255,7 @@ class DogMapNode : public rclcpp::Node {
         pcl::PointCloud<pcl::PointXYZI> occ_pc;
         occ_map_->PubRes(occ_pc);
         
-        // With the experimental filter enabled, an empty result must replace
-        // the previous cloud in fast_layer/RViz instead of leaving stale points.
-        // Preserve the historical publication behavior when the filter is off.
-        if (!occ_pc.empty() || filter_high_columns_) {
+        if (!occ_pc.empty()) {
             auto msg = sensor_msgs::msg::PointCloud2();
             pcl::toROSMsg(occ_pc, msg);
 

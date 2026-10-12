@@ -218,16 +218,20 @@ def test_actual_dog_does_not_remove_ground_connected_column(dog):
     assert dog.points(), "a column containing low occupied voxels must not be removed"
 
 
-def test_actual_dog_emits_empty_replacement_after_last_low_obstacle_expires(dog):
+def test_actual_dog_preserves_nonempty_only_publication(dog):
+    for _ in range(15):
+        dog.feed(HIGH)
+    assert not dog.messages, "historical behavior must not publish an empty filtered result"
+
     for _ in range(15):
         dog.feed(HIGH + LOW)
         if dog.points():
             break
     assert dog.points()
-    previous = len(dog.messages)
     for _ in range(45):
         dog.feed(HIGH)
-        if len(dog.messages) > previous and not dog.points():
-            break
-    assert len(dog.messages) > previous and not dog.points(), (
-        "filtered/expired points left the previous nonempty cloud cached downstream")
+    previous = len(dog.messages)
+    for _ in range(10):
+        dog.feed(HIGH)
+    assert len(dog.messages) == previous, "empty results must leave the last published cloud unchanged"
+    assert all(msg.width * msg.height > 0 for msg in dog.messages)
