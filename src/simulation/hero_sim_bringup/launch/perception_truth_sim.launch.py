@@ -17,6 +17,40 @@ VALID_LIDAR_MODES = ("single", "dual")
 VALID_FIELDS = ("rmuc_2025", "rmuc_2026")
 
 
+def _dynamic_global_geometry(map_yaml):
+    """Read only PGM geometry; never turn its pixels into costmap obstacles."""
+    with open(map_yaml, "r", encoding="utf-8") as stream:
+        metadata = yaml.safe_load(stream)
+    resolution = float(metadata["resolution"])
+    origin_x, origin_y = (float(value) for value in metadata["origin"][:2])
+    if not math.isfinite(resolution) or resolution <= 0:
+        raise ValueError("Map resolution must be finite and positive")
+    if not all(math.isfinite(value) for value in (origin_x, origin_y)):
+        raise ValueError("Map origin must be finite")
+    image_path = os.path.join(os.path.dirname(map_yaml), metadata["image"])
+    with open(image_path, "rb") as stream:
+        header = []
+        while len(header) < 3:
+            line = stream.readline()
+            if not line:
+                raise ValueError("Incomplete PGM header")
+            header.extend(line.split(b"#", 1)[0].split())
+    if header[0] not in (b"P2", b"P5"):
+        raise ValueError("Dynamic-only map geometry requires a P2 or P5 PGM")
+    cells_x, cells_y = int(header[1]), int(header[2])
+    if cells_x <= 0 or cells_y <= 0:
+        raise ValueError("PGM dimensions must be positive")
+    return {
+        "origin_x": origin_x,
+        "origin_y": origin_y,
+        "resolution": resolution,
+        # Humble declares width/height as integer metres. Round UP so the
+        # fixed map covers all PGM cells without adding a static-map plugin.
+        "width": math.ceil(cells_x * resolution),
+        "height": math.ceil(cells_y * resolution),
+    }
+
+
 def _make_sim_params(
     source_file, map_yaml, behavior_tree_xml, mode, namespace, publish_debug_visualizations,
     perception_cloud_topic="cloud_registered",
@@ -96,14 +130,13 @@ def _make_sim_params(
             "rog_map/inf_occ"
         )
 
-    # Without a static layer there is no incoming map to size the global costmap.
+    # Dynamic-only uses the arena geometry, but no PGM occupancy/free pixels.
+    # Only FastLayer marks obstacles; unmarked cells start/reset as free.
     if mode == "dynamic_only":
         global_costmap = params["global_costmap"]["global_costmap"]["ros__parameters"]
-        global_costmap["rolling_window"] = True
-        # Nav2 declares these parameters as integers from the base YAML. ROS 2
-        # rejects replacing an already-declared integer with a YAML double.
-        global_costmap["width"] = 12
-        global_costmap["height"] = 12
+        global_costmap.update(_dynamic_global_geometry(map_yaml))
+        global_costmap["rolling_window"] = False
+        global_costmap["track_unknown_space"] = False
 
     def force_sim_time(value):
         if isinstance(value, dict):

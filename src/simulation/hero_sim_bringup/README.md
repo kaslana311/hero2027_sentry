@@ -96,6 +96,32 @@ Available modes:
 - `static_only`: static map + inflation
 - `dynamic_only`: `fast_layer` + inflation
 
+### Full-field dynamic-only map (2026-10-13)
+
+`dynamic_only` now uses a fixed global map covering the selected PGM's geometry
+(origin and resolution), with an initially free background. PGM occupancy values
+are NOT merged; FastLayer still supplies the detected obstacles. Humble requires
+integer-metre width/height parameters, so each extent is rounded up: RMUC 2026
+uses 30 x 17 m at 0.05 m/cell, origin (-4.575, -6.4006561), covering the original
+29.15 x 16.05 m PGM with less than 1 m extra at each positive boundary. Goals
+outside the old +/-6 m window can now be planned if they are within this fixed
+map and a feasible path exists. Unobserved/unmarked cells are assumed free,
+not proven safe by lidar; DOG still processes only +/-10 m and retains its old
+filtering/decay/publication behavior. Its historical nonempty-only publication
+and FastLayer cache are unchanged, not a new obstacle-memory system.
+
+Only the `dynamic_only` global settings change. `combined`/`static_only`, the
+5 x 5 m local map, DOG range, ESDF/MINCO/MPC source and weights, point-cloud
+bridges, BT, and Docker images are unchanged. The original PGM and map_server
+remain available for RViz/metadata; a visible black PGM wall is not a dynamic
+costmap obstacle unless perception marks it. ESDF code is unchanged, but it
+receives free (0) rather than unknown (255) background in this mode.
+
+Rebuild with the safe script above and restart the same algorithm command with
+`costmap_mode:=dynamic_only`. Do not start an additional algorithm instance.
+Configuration-isolation regressions are in `test/test_costmap_modes.py`;
+synthetic tests are not full Gazebo/real-robot acceptance.
+
 For a costmap-only inspection that cannot move the robot, add
 `relay_cmd_vel:=false`. RViz can be disabled with `use_rviz:=false`.
 
