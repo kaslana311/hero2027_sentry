@@ -194,3 +194,61 @@ def test_boundary_map_rejects_invalid_or_oversized_rim(tmp_path, boundary_width)
     with pytest.raises(ValueError):
         factory()._make_dynamic_boundary_map(str(PACKAGE / "maps/rmuc_2026.yaml"),
                                             boundary_width, tmp_path)
+
+
+def test_main_rviz_enables_reference_trajectory_and_registered_cloud():
+    config = yaml.safe_load((PACKAGE / "rviz/hero_sim.rviz").read_text())
+    displays = config["Visualization Manager"]["Displays"]
+    reference = next(d for d in displays if d["Name"] == "Smoothed trajectory (MPC reference)")
+    cloud = next(d for d in displays if d["Name"] == "Registered point cloud")
+    assert reference["Class"] == "rviz_default_plugins/MarkerArray"
+    assert reference["Enabled"] is True and reference["Value"] is True
+    assert reference["Topic"]["Value"] == "FollowPath/reference_path"
+    assert cloud["Class"] == "rviz_default_plugins/PointCloud2"
+    assert cloud["Enabled"] is True and cloud["Value"] is True
+    assert cloud["Topic"]["Value"] == "pointlio/cloud_registered_map"
+    assert cloud["Topic"]["Reliability Policy"] == "Best Effort"
+    assert cloud["Position Transformer"] == "XYZ"
+    assert cloud["Color Transformer"] == "FlatColor"
+
+
+@pytest.mark.parametrize("mode", ["combined", "static_only", "dynamic_only"])
+@pytest.mark.parametrize("namespace", ["red_standard_robot1", "blue_standard_robot2"])
+@pytest.mark.parametrize("cloud_topic,navigation", [
+    ("cloud_registered", False),
+    ("pointlio/cloud_registered_map", False),
+    ("pointlio/cloud_registered_map", True),
+])
+def test_all_modes_share_enabled_displays_and_follow_actual_cloud_input(
+    monkeypatch, mode, namespace, cloud_topic, navigation
+):
+    from launch import LaunchContext
+    module = factory()
+    context = LaunchContext()
+    context.launch_configurations.update(namespace=namespace, field="rmuc_2026",
+        lidar_mode="dual", costmap_mode=mode, use_rviz="true", relay_cmd_vel="false",
+        publish_debug_visualizations="false")
+    nodes, files = [], []
+    monkeypatch.setattr(module, "Node", lambda **kwargs: nodes.append(kwargs) or kwargs)
+    # Map generation already has pixel tests; this test only constructs actions.
+    monkeypatch.setattr(module, "_make_dynamic_boundary_map", lambda value: value)
+    original = module._make_sim_params
+    def params(*args):
+        result = original(*args)
+        files.append(Path(result))
+        return result
+    monkeypatch.setattr(module, "_make_sim_params", params)
+    try:
+        module._launch_setup(context, perception_cloud_topic=cloud_topic,
+                             point_lio_navigation=navigation)
+        rviz = next(n for n in nodes if n["executable"] == "rviz2")
+        assert rviz["namespace"] == namespace
+        assert rviz["arguments"][0] == "-d"
+        assert Path(rviz["arguments"][1]).name == "hero_sim.rviz"
+        assert ("pointlio/cloud_registered_map", cloud_topic) in rviz["remappings"]
+        params = yaml.safe_load(files[0].read_text())
+        assert params["dog_map_node"]["ros__parameters"]["cloud_topic"] == cloud_topic
+        assert params["smoother_server"]["ros__parameters"]["minco_smoother"]["publish_trajectory"] is False
+    finally:
+        for path in files:
+            path.unlink()

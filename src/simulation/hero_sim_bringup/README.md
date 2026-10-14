@@ -3,6 +3,18 @@
 This package is a simulation-only entry point. It does not start real Livox,
 serial, Odin, or Zenoh drivers and does not change the real-robot launch path.
 
+2026-10-14: the main `hero_sim.rviz` enables `Smoothed trajectory (MPC reference)`
+and `Registered point cloud` by default in all three costmap modes. The former
+subscribes to `FollowPath/reference_path`, the MPC horizon sampled from MINCO,
+not the debug-only discrete `minco_trajectory` Path. It does not require
+`publish_debug_visualizations:=true`; it appears during valid MPC execution.
+The latter uses the actual perception input: `pointlio/cloud_registered_map`
+in C1/C2 and, via an RViz-only remap, `cloud_registered` in the truth entry.
+Both topics are robot-relative; Best Effort cloud subscription accepts either
+publisher reliability. Close the old RViz without saving its old configuration
+over the template, then reopen normally. There is no new launch argument,
+algorithm change, Docker rebuild or C++ compilation requirement.
+
 2026-10-11: algorithm-only branch `codex/perception-navigation-iteration` adds
 an opt-in high-column DOG output filter. Existing startup commands leave it off;
 `filter_high_columns:=true high_column_min_z:=0.30` enables an absolute-map-Z

@@ -364,7 +364,12 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         output="screen",
         arguments=["-d", os.path.join(sim_share, "rviz", "hero_sim.rviz")],
         parameters=[{"use_sim_time": True}],
-        remappings=[("/tf", "tf"), ("/tf_static", "tf_static")],
+        remappings=[
+            ("/tf", "tf"), ("/tf_static", "tf_static"),
+            # The shared display follows the actual DOG input: Point-LIO in
+            # C1/C2, registered truth in the original truth-only entry.
+            ("pointlio/cloud_registered_map", perception_cloud_topic),
+        ],
     )
 
     return [
