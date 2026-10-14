@@ -17,8 +17,8 @@ VALID_LIDAR_MODES = ("single", "dual")
 VALID_FIELDS = ("rmuc_2025", "rmuc_2026")
 
 
-def _dynamic_global_geometry(map_yaml):
-    """Read only PGM geometry; never turn its pixels into costmap obstacles."""
+def _dynamic_map_info(map_yaml):
+    """Read PGM geometry only; never copy its interior obstacle pixels."""
     with open(map_yaml, "r", encoding="utf-8") as stream:
         metadata = yaml.safe_load(stream)
     resolution = float(metadata["resolution"])
@@ -40,6 +40,13 @@ def _dynamic_global_geometry(map_yaml):
     cells_x, cells_y = int(header[1]), int(header[2])
     if cells_x <= 0 or cells_y <= 0:
         raise ValueError("PGM dimensions must be positive")
+    return metadata, cells_x, cells_y
+
+
+def _dynamic_global_geometry(map_yaml):
+    metadata, cells_x, cells_y = _dynamic_map_info(map_yaml)
+    resolution = float(metadata["resolution"])
+    origin_x, origin_y = (float(value) for value in metadata["origin"][:2])
     return {
         "origin_x": origin_x,
         "origin_y": origin_y,
@@ -49,6 +56,50 @@ def _dynamic_global_geometry(map_yaml):
         "width": math.ceil(cells_x * resolution),
         "height": math.ceil(cells_y * resolution),
     }
+
+
+def _make_dynamic_boundary_map(map_yaml, boundary_width=0.20, output_directory=None):
+    """Free arena interior, occupied inward rim and integer-window padding.
+
+    PGM rows run top to bottom, whereas OccupancyGrid Y runs bottom to top.
+    Keep the original arena's cell bounds, not the rounded costmap's edges:
+    the extra positive-X/Y padding must never become a route off the floor.
+    """
+    metadata, cells_x, cells_y = _dynamic_map_info(map_yaml)
+    resolution = float(metadata["resolution"])
+    if not math.isfinite(boundary_width) or boundary_width <= 0:
+        raise ValueError("Boundary width must be finite and positive")
+    rim = math.ceil(boundary_width / resolution)
+    if cells_x <= 2 * rim or cells_y <= 2 * rim:
+        raise ValueError("Arena is too small for the occupied boundary rim")
+    geometry = _dynamic_global_geometry(map_yaml)
+    padded_x = math.ceil(geometry["width"] / resolution)
+    padded_y = math.ceil(geometry["height"] / resolution)
+    pixels = bytearray(padded_x * padded_y)  # Occupied rim and padding: black.
+    free_row = bytes([255]) * (cells_x - 2 * rim)
+    for y in range(rim, cells_y - rim):
+        start = (padded_y - 1 - y) * padded_x + rim
+        pixels[start:start + len(free_row)] = free_row
+
+    directory = output_directory or tempfile.mkdtemp(prefix="hero_dynamic_boundary_")
+    os.makedirs(directory, exist_ok=True)
+    image_path = os.path.abspath(os.path.join(directory, "boundary_only.pgm"))
+    yaml_path = os.path.abspath(os.path.join(directory, "boundary_only.yaml"))
+    with open(image_path, "wb") as stream:
+        stream.write(f"P5\n{padded_x} {padded_y}\n255\n".encode())
+        stream.write(pixels)
+    boundary_metadata = {
+        "image": image_path,
+        "mode": "trinary",
+        "resolution": resolution,
+        "origin": list(metadata["origin"]),
+        "negate": 0,
+        "occupied_thresh": 0.65,
+        "free_thresh": 0.25,
+    }
+    with open(yaml_path, "w", encoding="utf-8") as stream:
+        yaml.safe_dump(boundary_metadata, stream, sort_keys=False)
+    return yaml_path
 
 
 def _make_sim_params(
@@ -107,7 +158,7 @@ def _make_sim_params(
     mode_plugins = {
         "combined": ["static_layer", "fast_layer", "inflation_layer"],
         "static_only": ["static_layer", "inflation_layer"],
-        "dynamic_only": ["fast_layer", "inflation_layer"],
+        "dynamic_only": ["boundary_layer", "fast_layer", "inflation_layer"],
     }
 
     topic_root = f"/{namespace.strip('/')}" if namespace.strip("/") else ""
@@ -129,9 +180,19 @@ def _make_sim_params(
         costmap.setdefault("fast_layer", {})["pointcloud_topic"] = robot_topic(
             "rog_map/inf_occ"
         )
+        if mode == "dynamic_only":
+            # Standard Nav2 static layer, not the team's mutable static layer.
+            # Only the generated free-interior/boundary map is served in this mode.
+            costmap["boundary_layer"] = {
+                "plugin": "nav2_costmap_2d::StaticLayer",
+                "map_topic": robot_topic("map"),
+                "map_subscribe_transient_local": True,
+                "subscribe_to_updates": False,
+                "use_maximum": True,
+            }
 
-    # Dynamic-only uses the arena geometry, but no PGM occupancy/free pixels.
-    # Only FastLayer marks obstacles; unmarked cells start/reset as free.
+    # Original PGM interior pixels never enter dynamic-only navigation.
+    # BoundaryLayer adds only the arena rim; FastLayer supplies sensed obstacles.
     if mode == "dynamic_only":
         global_costmap = params["global_costmap"]["global_costmap"]["ros__parameters"]
         global_costmap.update(_dynamic_global_geometry(map_yaml))
@@ -211,6 +272,9 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         filter_high_columns,
         high_column_min_z,
     )
+    navigation_map_yaml = (
+        _make_dynamic_boundary_map(map_yaml) if costmap_mode == "dynamic_only" else map_yaml
+    )
 
     bridge = Node(
         package="hero_sim_bringup",
@@ -243,7 +307,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         namespace=namespace,
         name="map_server",
         output="screen",
-        parameters=[{"use_sim_time": True, "yaml_filename": map_yaml}],
+        parameters=[{"use_sim_time": True, "yaml_filename": navigation_map_yaml}],
     )
 
     map_lifecycle = Node(

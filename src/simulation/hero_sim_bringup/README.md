@@ -94,28 +94,35 @@ Available modes:
 
 - `combined`: static map + `fast_layer` + inflation
 - `static_only`: static map + inflation
-- `dynamic_only`: `fast_layer` + inflation
+- `dynamic_only`: boundary-only static layer + `fast_layer` + inflation
 
-### Full-field dynamic-only map (2026-10-13)
+### Full-field dynamic-only map with an arena rim (2026-10-14)
 
 `dynamic_only` now uses a fixed global map covering the selected PGM's geometry
-(origin and resolution), with an initially free background. PGM occupancy values
-are NOT merged; FastLayer still supplies the detected obstacles. Humble requires
+(origin and resolution), with a free interior and a 0.20 m inward occupied rim.
+Original PGM interior occupancy values are NOT merged; FastLayer still supplies
+the detected interior obstacles. Humble requires
 integer-metre width/height parameters, so each extent is rounded up: RMUC 2026
 uses 30 x 17 m at 0.05 m/cell, origin (-4.575, -6.4006561), covering the original
-29.15 x 16.05 m PGM with less than 1 m extra at each positive boundary. Goals
+29.15 x 16.05 m PGM. The extra positive-X/Y padding is occupied, not traversable.
+The rim follows the original PGM bounds, not the padded 30 x 17 m perimeter. Goals
 outside the old +/-6 m window can now be planned if they are within this fixed
 map and a feasible path exists. Unobserved/unmarked cells are assumed free,
 not proven safe by lidar; DOG still processes only +/-10 m and retains its old
 filtering/decay/publication behavior. Its historical nonempty-only publication
 and FastLayer cache are unchanged, not a new obstacle-memory system.
 
-Only the `dynamic_only` global settings change. `combined`/`static_only`, the
-5 x 5 m local map, DOG range, ESDF/MINCO/MPC source and weights, point-cloud
-bridges, BT, and Docker images are unchanged. The original PGM and map_server
-remain available for RViz/metadata; a visible black PGM wall is not a dynamic
-costmap obstacle unless perception marks it. ESDF code is unchanged, but it
-receives free (0) rather than unknown (255) background in this mode.
+Only `dynamic_only` changes: both costmaps load the standard Nav2 StaticLayer
+named `boundary_layer` before FastLayer and InflationLayer. The existing
+map_server serves a generated boundary-only PGM in this mode, so RViz's `/map`
+shows only the rim/padding rather than the original arena's interior walls.
+The DOG map still reads the original YAML for geometry. `combined`/`static_only`
+keep their original map and complete configuration. Local geometry remains
+5 x 5 m; DOG range/filters, ESDF/MINCO/MPC source and weights, point-cloud
+bridges, BT and Docker images are unchanged. There are no new nodes or custom
+plugins. Existing inflation and ESDF now also see the rim as a hard obstacle.
+This is a navigation guard, not a Gazebo collision fence or a guarantee against
+falling under manual velocity commands, localization drift or control errors.
 
 Rebuild with the safe script above and restart the same algorithm command with
 `costmap_mode:=dynamic_only`. Do not start an additional algorithm instance.
