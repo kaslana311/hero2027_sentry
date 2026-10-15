@@ -326,6 +326,35 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         ],
     )
 
+    reference_map_nodes = []
+    reference_map_remappings = []
+    if costmap_mode == "dynamic_only":
+        # Display only: never replace the boundary map or its lifecycle manager.
+        # A private namespace also keeps map/load_map services away from navigation.
+        reference_namespace = f"{namespace.rstrip('/')}/visualization"
+        reference_map_nodes = [
+            Node(
+                condition=IfCondition(use_rviz),
+                package="nav2_map_server", executable="map_server",
+                namespace=reference_namespace, name="reference_map_server",
+                output="screen",
+                parameters=[{"use_sim_time": True, "yaml_filename": map_yaml,
+                             "frame_id": "map"}],
+                remappings=[("map", "static_map")],
+            ),
+            Node(
+                condition=IfCondition(use_rviz),
+                package="nav2_lifecycle_manager", executable="lifecycle_manager",
+                namespace=reference_namespace, name="lifecycle_manager_reference_map",
+                output="screen",
+                parameters=[{"use_sim_time": True, "autostart": True,
+                             "node_names": ["reference_map_server"]}],
+            ),
+        ]
+        # Only RViz's existing Map background reads the original PGM. Its
+        # Global/Local Costmap displays still read the real navigation costmaps.
+        reference_map_remappings = [("map", "visualization/static_map")]
+
     navigation = GroupAction(
         actions=[
             PushRosNamespace(namespace),
@@ -370,7 +399,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
             # The shared display follows the actual DOG input: Point-LIO in
             # C1/C2, registered truth in the original truth-only entry.
             ("pointlio/cloud_registered_map", perception_cloud_topic),
-        ],
+        ] + reference_map_remappings,
     )
 
     return [
@@ -386,6 +415,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         bridge,
         map_server,
         map_lifecycle,
+        *reference_map_nodes,
         navigation,
         rviz,
     ]

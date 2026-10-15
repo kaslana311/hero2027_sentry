@@ -128,13 +128,23 @@ and FastLayer cache are unchanged, not a new obstacle-memory system.
 
 Only `dynamic_only` changes: both costmaps load the standard Nav2 StaticLayer
 named `boundary_layer` before FastLayer and InflationLayer. The existing
-map_server serves a generated boundary-only PGM in this mode, so RViz's `/map`
-shows only the rim/padding rather than the original arena's interior walls.
+map_server serves a generated boundary-only PGM on the navigation `/map` topic.
+Since 2026-10-15, with `use_rviz:=true`, an independent map_server and lifecycle
+manager under `<robot>/visualization` publish the original PGM on
+`visualization/static_map`. Only the main RViz's existing `Map` background is
+remapped there, showing black walls/white free space for visual reference.
+`Global Costmap`/`Local Costmap` still show the actual navigation costs, including
+the 0.35 m rim. Original PGM walls do NOT enter planning or smoothing in this mode.
+Untick `Map` to hide the reference; no extra terminal or launch argument is needed.
+The reference nodes are disabled with `use_rviz:=false`, and their lifecycle is
+separate from the navigation map. Other costmap modes keep their existing nodes
+and RViz subscriptions; the Point-LIO comparison RViz is unchanged.
 The DOG map still reads the original YAML for geometry. `combined`/`static_only`
 keep their original map and complete configuration. Local geometry remains
 5 x 5 m; DOG range/filters, ESDF/MINCO/MPC source and weights, point-cloud
-bridges, BT and Docker images are unchanged. There are no new nodes or custom
-plugins. Existing inflation and ESDF now also see the rim as a hard obstacle.
+bridges, BT and Docker images are unchanged. No custom costmap plugin is added;
+the two new nodes above are visualization-only. Existing inflation and ESDF
+also see the rim as a hard obstacle, not the reference PGM's interior walls.
 This is a navigation guard, not a Gazebo collision fence or a guarantee against
 falling under manual velocity commands, localization drift or control errors.
 
