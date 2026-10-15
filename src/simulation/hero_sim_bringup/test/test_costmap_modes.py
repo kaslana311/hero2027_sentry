@@ -163,7 +163,9 @@ def test_boundary_map_preserves_originals_has_free_interior_and_occupied_padding
     assert (width, height) == (600, 340)
     assert generated_metadata["origin"] == metadata["origin"]
     assert generated_metadata["resolution"] == metadata["resolution"]
-    rim = math.ceil(.20 / metadata["resolution"])
+    rim = math.ceil(.35 / metadata["resolution"])
+    assert rim == 7  # Current fields: 0.35 m at 0.05 m/cell.
+    assert rim - math.ceil(.20 / metadata["resolution"]) == 3  # +0.15 m on all sides.
     for y in range(height):
         for x in range(width):
             free = rim <= x < arena_x - rim and rim <= y < arena_y - rim

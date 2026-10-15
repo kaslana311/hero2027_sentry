@@ -111,7 +111,9 @@ Available modes:
 ### Full-field dynamic-only map with an arena rim (2026-10-14)
 
 `dynamic_only` now uses a fixed global map covering the selected PGM's geometry
-(origin and resolution), with a free interior and a 0.20 m inward occupied rim.
+(origin and resolution), with a free interior and a 0.35 m inward occupied rim.
+On 2026-10-15 the rim increased from 0.20 m by another 0.15 m on each side;
+map geometry and inflation settings are unchanged. Restart the algorithm to regenerate it.
 Original PGM interior occupancy values are NOT merged; FastLayer still supplies
 the detected interior obstacles. Humble requires
 integer-metre width/height parameters, so each extent is rounded up: RMUC 2026

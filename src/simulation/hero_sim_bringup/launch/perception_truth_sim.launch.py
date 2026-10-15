@@ -58,12 +58,13 @@ def _dynamic_global_geometry(map_yaml):
     }
 
 
-def _make_dynamic_boundary_map(map_yaml, boundary_width=0.20, output_directory=None):
+def _make_dynamic_boundary_map(map_yaml, boundary_width=0.35, output_directory=None):
     """Free arena interior, occupied inward rim and integer-window padding.
 
     PGM rows run top to bottom, whereas OccupancyGrid Y runs bottom to top.
     Keep the original arena's cell bounds, not the rounded costmap's edges:
     the extra positive-X/Y padding must never become a route off the floor.
+    The default rim adds 0.15 m inward on every side to the original 0.20 m.
     """
     metadata, cells_x, cells_y = _dynamic_map_info(map_yaml)
     resolution = float(metadata["resolution"])
