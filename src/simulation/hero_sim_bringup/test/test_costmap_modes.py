@@ -32,7 +32,7 @@ def generated(mode, map_yaml):
         path.unlink()
 
 
-@pytest.mark.parametrize("field", ["rmuc_2025", "rmuc_2026"])
+@pytest.mark.parametrize("field", ["rmuc_2025", "rmuc_2026", "rmuc_2027"])
 def test_dynamic_global_covers_selected_field_with_boundary_only_layer(field):
     map_yaml = PACKAGE / "maps" / f"{field}.yaml"
     metadata = yaml.safe_load(map_yaml.read_text())
@@ -51,7 +51,7 @@ def test_dynamic_global_covers_selected_field_with_boundary_only_layer(field):
         assert local_map["boundary_layer"] == global_map["boundary_layer"]
         assert global_map["rolling_window"] is False
         assert global_map["track_unknown_space"] is False
-        assert type(global_map["width"]) is int and global_map["width"] == 30
+        assert type(global_map["width"]) is int and global_map["width"] == (28 if field == "rmuc_2027" else 30)
         assert type(global_map["height"]) is int and global_map["height"] == 17
         assert global_map["resolution"] == metadata["resolution"]
         assert global_map["origin_x"] == metadata["origin"][0]
@@ -149,7 +149,7 @@ def read_generated_pgm(path):
     return width, height, pixels
 
 
-@pytest.mark.parametrize("field", ["rmuc_2025", "rmuc_2026"])
+@pytest.mark.parametrize("field", ["rmuc_2025", "rmuc_2026", "rmuc_2027"])
 def test_boundary_map_preserves_originals_has_free_interior_and_occupied_padding(tmp_path, field):
     module = factory()
     original = PACKAGE / "maps" / f"{field}.yaml"
@@ -160,7 +160,7 @@ def test_boundary_map_preserves_originals_has_free_interior_and_occupied_padding
     generated_yaml = module._make_dynamic_boundary_map(str(original), output_directory=tmp_path)
     generated_metadata = yaml.safe_load(Path(generated_yaml).read_text())
     width, height, pixels = read_generated_pgm(generated_metadata["image"])
-    assert (width, height) == (600, 340)
+    assert (width, height) == ((560, 340) if field == "rmuc_2027" else (600, 340))
     assert generated_metadata["origin"] == metadata["origin"]
     assert generated_metadata["resolution"] == metadata["resolution"]
     rim = math.ceil(.35 / metadata["resolution"])
@@ -216,7 +216,7 @@ def test_main_rviz_enables_reference_trajectory_and_registered_cloud():
 
 @pytest.mark.parametrize("mode", ["combined", "static_only", "dynamic_only"])
 @pytest.mark.parametrize("namespace", ["red_standard_robot1", "blue_standard_robot2"])
-@pytest.mark.parametrize("field", ["rmuc_2025", "rmuc_2026"])
+@pytest.mark.parametrize("field", ["rmuc_2025", "rmuc_2026", "rmuc_2027"])
 @pytest.mark.parametrize("use_rviz", ["true", "false"])
 @pytest.mark.parametrize("cloud_topic,navigation", [
     ("cloud_registered", False),
@@ -251,8 +251,10 @@ def test_all_modes_share_enabled_displays_and_follow_actual_cloud_input(
         assert rviz["arguments"][0] == "-d"
         assert Path(rviz["arguments"][1]).name == "hero_sim.rviz"
         assert ("pointlio/cloud_registered_map", cloud_topic) in rviz["remappings"]
-        original_yaml = str(PACKAGE / "maps" / f"{field}.yaml")
-        # Installed paths may be symlinks; compare the original map by resolution.
+        original_yaml = str(Path(module.get_package_share_directory("hero_sim_bringup")) / "maps" / f"{field}.yaml")
+        # Safe installation may copy new assets or retain existing symlinks.
+        # Check selected installed file AND contents, not a symlink assumption.
+        assert Path(original_yaml).read_bytes() == (PACKAGE / "maps" / f"{field}.yaml").read_bytes()
         map_server = next(n for n in nodes if n.get("name") == "map_server")
         map_lifecycle = next(n for n in nodes if n.get("name") == "lifecycle_manager_map")
         assert map_lifecycle["parameters"][0]["node_names"] == ["map_server"]

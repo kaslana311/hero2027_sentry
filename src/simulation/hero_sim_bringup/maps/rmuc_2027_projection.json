@@ -1,0 +1,119 @@
+{
+  "source_sha256": "f002f5eef870caa721ee2d600eddebff8278487bc564b62d38388bba7331cb67",
+  "triangles": 378666,
+  "raw_min_xyz": [
+    0.14910008013248444,
+    0.06378698348999023,
+    0.019413471221923828
+  ],
+  "raw_extent_xyz": [
+    27.999993547797203,
+    16.003132343292236,
+    3.7988295555114746
+  ],
+  "scale": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "model_translation": [
+    -0.14910008013248444,
+    -0.06378698348999023,
+    -0.16228600648401698
+  ],
+  "floor_planes_above_bottom": [
+    [
+      -8.017723153011839e-07,
+      0.026201808126740445,
+      0.09047052255324287
+    ],
+    [
+      1.5841337559682287e-07,
+      -0.026207111537112443,
+      0.5098611099073654
+    ]
+  ],
+  "floor_fit_max_residual_m": [
+    0.000176477312579304,
+    0.00036155038608098877
+  ],
+  "spawn_world_xyz_yaw": [
+    2.0,
+    2.0,
+    0.28,
+    0.0
+  ],
+  "spawn_floor_above_bottom": 0.14287253526209315,
+  "spawn_rays": [
+    {
+      "xy": [
+        2.0,
+        2.0
+      ],
+      "heights_above_bottom": [
+        0.0,
+        0.142864
+      ]
+    },
+    {
+      "xy": [
+        1.6,
+        1.6
+      ],
+      "heights_above_bottom": [
+        0.0,
+        0.1324883
+      ]
+    },
+    {
+      "xy": [
+        1.6,
+        2.4
+      ],
+      "heights_above_bottom": [
+        0.0,
+        0.1533313
+      ]
+    },
+    {
+      "xy": [
+        2.4,
+        1.6
+      ],
+      "heights_above_bottom": [
+        0.0,
+        0.132392
+      ]
+    },
+    {
+      "xy": [
+        2.4,
+        2.4
+      ],
+      "heights_above_bottom": [
+        0.0,
+        0.1533313
+      ]
+    }
+  ],
+  "map_resolution": 0.05,
+  "map_size_cells": [
+    560,
+    321
+  ],
+  "map_origin": [
+    -2.0,
+    -2.0,
+    0.0
+  ],
+  "body_band_above_local_floor_m": [
+    0.03,
+    0.24
+  ],
+  "steep_slope_min_deg": 20.0,
+  "projected_polygons": 9580,
+  "occupied_cells": 90524,
+  "free_cells": 89236,
+  "pgm_sha256": "7813dce9375f139eb5b07bf797df0c08b8e3236944e01dd0e0f88f30e4664a2e",
+  "limitations": "Provisional mesh projection, not validated traversability. Gentle slopes excluded; enclosed contours filled. No STL cleanup or inflation. New floor grade changes absolute map-Z thresholds."
+}

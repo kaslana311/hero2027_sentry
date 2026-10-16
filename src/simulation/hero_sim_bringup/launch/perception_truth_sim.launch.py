@@ -14,7 +14,7 @@ from launch_ros.actions import Node, PushRosNamespace, SetRemap
 
 VALID_COSTMAP_MODES = ("combined", "static_only", "dynamic_only")
 VALID_LIDAR_MODES = ("single", "dual")
-VALID_FIELDS = ("rmuc_2025", "rmuc_2026")
+VALID_FIELDS = ("rmuc_2025", "rmuc_2026", "rmuc_2027")
 
 
 def _dynamic_map_info(map_yaml):
@@ -442,7 +442,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "field",
                 default_value="rmuc_2025",
-                description="Static map selection: rmuc_2025 or rmuc_2026",
+                description="Static map selection: rmuc_2025, rmuc_2026, or rmuc_2027",
             ),
             DeclareLaunchArgument(
                 "use_rviz",
