@@ -1,62 +1,65 @@
-# RMUC 2027 provisional STL-derived map
+# RMUC 2027 multilevel support-surface map (applied 2026-10-16)
 
-Source: user-provided `/home/apocalypse_linux_00/Downloads/rmuc_2027.stl`.
-STL SHA-256: `f002f5eef870caa721ee2d600eddebff8278487bc564b62d38388bba7331cb67`.
-The simulator repository preserves all 378666 triangles, including 32 degenerate
-faces; no 2026 decoration-removal rules or 0.1 scale are reused.
+The active `rmuc_2027.pgm` is now the redrawn map from the paired simulator:
+`maps/candidates/rmuc_2027/rmuc_2027_surface_candidate.pgm`.
+It is byte-identical, not a resampled or manually whitened version.
 
-Generator in the paired simulator repository: `scripts/build_rmuc_2027_map.py`.
-Exact inputs, plane fits, spawn rays, raster parameters and output hash are in
-`rmuc_2027_projection.json`. The PGM is generated, NOT a blank placeholder.
+- PGM SHA-256: `902253cafa5a040539d5edb8465b2cf1309aa4cf56aaf80ff78f74712c89558a`.
+- Size: 1120x642; resolution: 0.025 m/cell; extent: 28x16.05 m.
+- YAML origin: (-4.6,-6.4,0), where the third component is yaw, not height.
+- Generator: `scripts/build_rmuc_2027_surface_map.py` in the simulator repository.
+- Source STL: user-provided `/home/apocalypse_linux_00/Downloads/rmuc_2027.stl`.
+- STL SHA-256: `f002f5eef870caa721ee2d600eddebff8278487bc564b62d38388bba7331cb67`.
 
-Known mapping error: this first PGM fills the central highland, which is actually
-driveable. Do not treat it as an accepted static-navigation map. The paired
-simulator repository has a corrected review candidate under
-`maps/candidates/rmuc_2027/`; that candidate is NOT deployed here. The spawn update
-below changes coordinates only, not either map's occupancy pixels.
+The old 560x321, 5 cm map incorrectly filled the central highland and is no
+longer active. Its source and old bytes remain recoverable from Git at
+algorithm commit `ac6aae2`; restoring it requires a new deliberate change,
+not resetting the branch. No legacy PGM or extra launch selector was added.
 
-## Coordinates
+## Geometry and coordinates
 
-- Mesh scale: 1. World translation:
-  `(-0.14910008013248444, -0.06378698348999023, -0.27757187763365515)`.
-- World XY lower bound becomes (0,0). Z translation places the main floor TOP
-  near world Z=0 at spawn (4.6,6.4); the STL's lowest face is an underside, not the road.
-- The main floor slopes about 1.5 degrees toward the centre from each side.
-  It is preserved, not flattened. Two fitted planes have max residual <0.4 mm.
-- Robot spawn world XY=(4.6,6.4), Z=0.28, yaw=0. It is in the open left-side area,
-  near the 2026 spawn's offset from its map lower bound (4.575,6.4006561), NOT
-  a claim of an officially confirmed 2027 spawn. Centre and four corners 40 cm away
-  have ground/no overhead obstruction in vertical ray checks. This is geometric
-  screening, not a Gazebo settling or collision acceptance test.
-- The existing first-planar-odometry origin convention maps this spawn to (0,0).
-  Thus YAML origin=(-4.6,-6.4,0), where the third component is YAW, not height.
-  Restart both simulation and algorithm after updating; the one-time Point-LIO
-  alignment must not be reused from the old (2,2) spawn. No TF/Point-LIO code changes.
-  The field is lowered by 0.1152858711 m to keep the new spawn floor near Z=0;
-  floor grade and every source triangle are unchanged. Thin decorations elsewhere
-  have NOT been removed by this coordinate update.
-- PGM: 560x321 at 0.05 m/cell, covers 28x16.05 m. Image rows are flipped from
-  bottom-up world Y. dynamic_only uses a 28x17 m fixed window and the existing
-  35 cm inward rim, with any positive-Y padding occupied.
+The new method finds multiple upward-facing support surfaces per XY cell,
+checks 24 cm headroom and steep-wall intersections in the 2..24 cm local body
+band, then keeps support states reachable from spawn. Slope limit is 20 degrees;
+neighbor height allowance is 2 cm plus the height change of a 20 degree slope
+over one cell. There is no blind hole filling or obstacle inflation.
 
-## Interpretation and limits
+The central highland's reachable upper floor stays free; the central mechanism
+remains occupied. Mapping assumptions and numerical checks are recorded in
+`rmuc_2027_projection.json`. Its fitted main-floor planes are retained ONLY
+for the simulator spawn-Z calibration, not used as the new mapping model.
+Reported support heights are above the STL minimum, NOT absolute map Z.
 
-The generator clips steep surfaces to a 0.03..0.24 m band above the fitted LOCAL
-main floor, excludes slopes below 20 degrees, and fills enclosed obstacle
-contours. It does not simply project all roof points downward. It does not add
-inflation; Nav2 still does that separately. Sampling can shift edges by a cell.
+The simulator model/spawn are unchanged by this map deployment:
+scale=1; world translation=(-0.14910008013248444,-0.06378698348999023,
+-0.27757187763365515); spawn=(4.6,6.4,0.28), yaw=0. The first planar odometry
+sample zeroes this spawn in map/odom. The local floor is near world Z=0.
+The ~1.5 degree field grade and all STL triangles/possible thin decorations
+remain unchanged. This map does not repair physical collisions.
 
-This is a provisional geometric map, NOT a certified traversability/semantic
-map. Raised platforms, small steps, moving mechanisms, overhangs and narrow
-openings require review/real driving. combined/static_only may be conservative
-or miss details; dynamic_only is recommended for initial tests, where this PGM
-is a visual reference and geometry source, not internal static-wall costs.
+## Consumers and resolution coupling
 
-Point-LIO pose/cloud and DOG filters are unchanged. In particular,
-high_column_min_z is still ABSOLUTE map Z, not height above this sloped floor.
-The old 0.20 m setting needs scene-specific evaluation; do not interpret it as
-20 cm above every part of the new floor. No rules, decision logic or relocation
-are added. No success milestone is claimed before user acceptance.
+- `combined` / `static_only`: the original map_server topic now supplies this
+  map, so its internal walls participate as static obstacles.
+- `dynamic_only`: the reference RViz map displays this map; navigation still
+  uses the existing free-interior + 0.35 m rim map and sensed FastLayer obstacles.
+  The global window stays 28x17 m, with occupied positive-Y padding; its raster
+  becomes 1120x680 at 2.5 cm. No interior PGM walls are merged in this mode.
+- DOG map reads XY resolution from this same YAML: 5 cm becomes 2.5 cm, with
+  approximately four times as many XY cells. Its +/-10 m processing range,
+  Z resolution, decay, high-column filters and all code/thresholds are unchanged.
+  This is an inherent map-resolution effect, NOT an independent tuning change.
+- Point-LIO, planner, MINCO/ESDF/MPC and behavior-tree implementations are unchanged.
+  Nav2 retains footprint/inflation processing; the PGM contains no inflation.
 
-Redistribution licence is unverified; do not publish these assets to a public
-remote without confirming the source/licence.
+Use `./build_hero2026_safe.sh --jobs 4` to synchronize installation. The original
+`field:=rmuc_2027` launch command is unchanged. Restart the algorithm to reload
+the map, boundary and DOG grids. An already-running simulator with the current
+(4.6,6.4) spawn needs no restart or image rebuild for this map-only deployment.
+
+No full navigation/clearance acceptance is claimed before driving tests.
+2.5 cm sampling, multilevel 2-D projection and robot dynamics remain limitations;
+check runtime CPU load, DOG occupancy and tunnel behavior after deployment.
+2025/2026 maps and launch defaults are untouched.
+
+Redistribution licence is unverified; do not publish the assets to a public remote.

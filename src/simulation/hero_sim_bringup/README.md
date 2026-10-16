@@ -115,14 +115,18 @@ accept `field:=rmuc_2027`. Existing defaults and the 2025/2026 assets are unchan
 Use the paired simulator's `scripts/start_sim_rmuc_2027_dual_lidar.sh`; the old
 2026 script still selects the old field. Do not mix a 2027 world with a 2026 map.
 
-The installed 560x321, 5 cm PGM is the first provisional projection. It incorrectly
-fills the central highland; a corrected review candidate exists in the paired
-simulator repository but is not installed here. See `maps/rmuc_2027_SOURCE.md`
-and `rmuc_2027_projection.json` for the limits and current coordinates.
+The installed 1120x642, 2.5 cm PGM is now the redrawn multilevel support-surface
+map, applied at the user's request on 2026-10-16. The central highland remains
+driveable and the central mechanism remains occupied. It replaces the incorrect
+5 cm projection. See `maps/rmuc_2027_SOURCE.md` and `rmuc_2027_projection.json`
+for provenance, mapping assumptions and runtime acceptance limits.
 The 2026-like open-area spawn is now (4.6,6.4), yaw=0; map origin is (-4.6,-6.4).
-The field Z is realigned so this local floor remains near zero. Restart BOTH
-simulation and algorithm; do not reuse the old Point-LIO alignment. PGM pixels,
-resolutions, planner/controller/TF logic and the old 2026 field are unchanged.
+The field Z is realigned so this local floor remains near zero. The spawn update
+requires both sides to restart; this later map-only deployment needs only an
+algorithm restart when the simulator is already at the current spawn. No new
+Docker image or launch argument is needed. DOG XY resolution also follows the
+new 2.5 cm YAML (about 4x XY cells); its range and filter thresholds are unchanged.
+Planner/controller/TF implementations and the old 2026 field are unchanged.
 For initial tests use the existing C2 launch with `field:=rmuc_2027`,
 `lidar_mode:=dual`, `costmap_mode:=dynamic_only`; its global window is 28x17 m,
 and the inherited 35 cm boundary/PGM-reference visualization remain enabled.

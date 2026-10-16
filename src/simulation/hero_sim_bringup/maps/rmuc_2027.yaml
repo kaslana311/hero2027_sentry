@@ -1,6 +1,6 @@
 image: rmuc_2027.pgm
 mode: trinary
-resolution: 0.05
+resolution: 0.025
 origin: [-4.6, -6.4, 0]
 negate: 0
 occupied_thresh: 0.65

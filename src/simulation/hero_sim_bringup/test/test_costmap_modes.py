@@ -23,16 +23,28 @@ def factory():
     return module
 
 
-def test_2027_relocated_spawn_and_yaml_share_coordinates_without_changing_pixels():
+def test_2027_applied_surface_map_and_spawn_share_coordinates():
     metadata = yaml.safe_load((PACKAGE / "maps/rmuc_2027.yaml").read_text())
     report = json.loads((PACKAGE / "maps/rmuc_2027_projection.json").read_text())
     assert metadata["origin"] == [-4.6, -6.4, 0]
-    assert metadata["resolution"] == .05
+    assert metadata["resolution"] == .025
+    assert report["resolution"] == report["map_resolution"] == metadata["resolution"]
+    assert report["map_size_cells"] == [1120, 642]
     assert report["spawn_world_xyz_yaw"] == [4.6, 6.4, .28, 0.]
     assert report["map_origin"] == metadata["origin"]
     assert report["model_translation"][2] + report["raw_min_xyz"][2] + report["spawn_floor_above_bottom"] == pytest.approx(0.)
     digest = hashlib.sha256((PACKAGE / "maps/rmuc_2027.pgm").read_bytes()).hexdigest()
-    assert digest == report["pgm_sha256"] == "7813dce9375f139eb5b07bf797df0c08b8e3236944e01dd0e0f88f30e4664a2e"
+    assert digest == report["pgm_sha256"] == "902253cafa5a040539d5edb8465b2cf1309aa4cf56aaf80ff78f74712c89558a"
+
+
+def test_2027_central_highland_is_free_but_central_mechanism_is_occupied():
+    data = (PACKAGE / "maps/rmuc_2027.pgm").read_bytes()
+    header, pixels = data.split(b"\n255\n", 1)
+    assert b"1120 642" in header
+    assert len(pixels) == 1120 * 642
+    for x, y in ((14, 5), (14, 10), (11, 8), (17, 8), (12, 6), (16, 10)):
+        assert pixels[(641-int(y/.025))*1120 + int(x/.025)] == 255
+    assert pixels[(641-int(8/.025))*1120 + int(14/.025)] == 0
 
 
 @contextmanager
@@ -174,12 +186,13 @@ def test_boundary_map_preserves_originals_has_free_interior_and_occupied_padding
     generated_yaml = module._make_dynamic_boundary_map(str(original), output_directory=tmp_path)
     generated_metadata = yaml.safe_load(Path(generated_yaml).read_text())
     width, height, pixels = read_generated_pgm(generated_metadata["image"])
-    assert (width, height) == ((560, 340) if field == "rmuc_2027" else (600, 340))
+    assert (width, height) == ((1120, 680) if field == "rmuc_2027" else (600, 340))
     assert generated_metadata["origin"] == metadata["origin"]
     assert generated_metadata["resolution"] == metadata["resolution"]
     rim = math.ceil(.35 / metadata["resolution"])
-    assert rim == 7  # Current fields: 0.35 m at 0.05 m/cell.
-    assert rim - math.ceil(.20 / metadata["resolution"]) == 3  # +0.15 m on all sides.
+    assert rim == (14 if field == "rmuc_2027" else 7)
+    assert rim * metadata["resolution"] == pytest.approx(.35)
+    assert (rim - math.ceil(.20 / metadata["resolution"])) * metadata["resolution"] == pytest.approx(.15)
     for y in range(height):
         for x in range(width):
             free = rim <= x < arena_x - rim and rim <= y < arena_y - rim
