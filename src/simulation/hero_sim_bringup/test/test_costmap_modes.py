@@ -1,7 +1,9 @@
 """Launch-configuration isolation; no ROS nodes, Gazebo or motor commands."""
 from contextlib import contextmanager
 import copy
+import hashlib
 import importlib.util
+import json
 import math
 from pathlib import Path
 
@@ -19,6 +21,18 @@ def factory():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_2027_relocated_spawn_and_yaml_share_coordinates_without_changing_pixels():
+    metadata = yaml.safe_load((PACKAGE / "maps/rmuc_2027.yaml").read_text())
+    report = json.loads((PACKAGE / "maps/rmuc_2027_projection.json").read_text())
+    assert metadata["origin"] == [-4.6, -6.4, 0]
+    assert metadata["resolution"] == .05
+    assert report["spawn_world_xyz_yaw"] == [4.6, 6.4, .28, 0.]
+    assert report["map_origin"] == metadata["origin"]
+    assert report["model_translation"][2] + report["raw_min_xyz"][2] + report["spawn_floor_above_bottom"] == pytest.approx(0.)
+    digest = hashlib.sha256((PACKAGE / "maps/rmuc_2027.pgm").read_bytes()).hexdigest()
+    assert digest == report["pgm_sha256"] == "7813dce9375f139eb5b07bf797df0c08b8e3236944e01dd0e0f88f30e4664a2e"
 
 
 @contextmanager

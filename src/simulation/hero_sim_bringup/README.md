@@ -115,9 +115,14 @@ accept `field:=rmuc_2027`. Existing defaults and the 2025/2026 assets are unchan
 Use the paired simulator's `scripts/start_sim_rmuc_2027_dual_lidar.sh`; the old
 2026 script still selects the old field. Do not mix a 2027 world with a 2026 map.
 
-The new 560x321, 5 cm PGM is a provisional floor-relative STL projection, not a
-blank map. See `maps/rmuc_2027_SOURCE.md` and `rmuc_2027_projection.json` for the
-exact scale, translation, (2,2) spawn, map origin (-2,-2), derivation and limits.
+The installed 560x321, 5 cm PGM is the first provisional projection. It incorrectly
+fills the central highland; a corrected review candidate exists in the paired
+simulator repository but is not installed here. See `maps/rmuc_2027_SOURCE.md`
+and `rmuc_2027_projection.json` for the limits and current coordinates.
+The 2026-like open-area spawn is now (4.6,6.4), yaw=0; map origin is (-4.6,-6.4).
+The field Z is realigned so this local floor remains near zero. Restart BOTH
+simulation and algorithm; do not reuse the old Point-LIO alignment. PGM pixels,
+resolutions, planner/controller/TF logic and the old 2026 field are unchanged.
 For initial tests use the existing C2 launch with `field:=rmuc_2027`,
 `lidar_mode:=dual`, `costmap_mode:=dynamic_only`; its global window is 28x17 m,
 and the inherited 35 cm boundary/PGM-reference visualization remain enabled.
