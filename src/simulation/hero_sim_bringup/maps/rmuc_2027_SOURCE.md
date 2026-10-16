@@ -5,7 +5,7 @@ map from the paired simulator. The unchanged generated baseline remains at
 `maps/candidates/rmuc_2027/rmuc_2027_surface_candidate.pgm`; it is no longer
 byte-identical to the active map. Do not copy/regenerate it over the manual edits.
 
-- Active PGM SHA-256: `ed7331d69bc59231752468a962c9b9ecfaf9e8927f0cd1fa9209fa133e5c4a58`.
+- Active PGM SHA-256: `e98bc31e0719deb36bdcf2acb876bfa1d4ff3758dc782553563e49590db4c204`.
 - Generated baseline SHA-256: `43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3`.
 - Size: 1120x642; resolution: 0.025 m/cell; extent: 28x16.05 m.
 - YAML origin: (-4.6,-6.4,0), where the third component is yaw, not height.
@@ -37,16 +37,26 @@ not a new STL clearance certification of the manual edits. Its fitted main-floor
 for the simulator spawn-Z calibration, not used as the new mapping model.
 Reported support heights are above the STL minimum, NOT absolute map Z.
 
-## User edit applied on 2026-10-16
+## First user edit applied on 2026-10-16
 
 The user edited the source PGM and asked to apply it. Its 1120x642 dimensions,
 0.025 m resolution, origin and all four 8-cell black rims are unchanged. Compared
 with the generated baseline, 38297 pixels changed: 35065 white-to-black and
-3232 black-to-white. Current totals are 171685 occupied and 547355 free pixels;
+3232 black-to-white. First-edit totals were 171685 occupied and 547355 free pixels;
 there are no gray/unknown pixels. The user's image bytes are preserved exactly.
 The simulator's generated baseline, STL, spawn and Docker image are not changed
 by this manual-map deployment. Review manual passage clearances during driving;
 only file/coordinate/configuration checks were performed here.
+
+## Second user edit applied on 2026-10-16
+
+The user revised the source PGM again. Compared with first-edit commit `451ea7e`
+(SHA-256 `ed7331d69bc59231752468a962c9b9ecfaf9e8927f0cd1fa9209fa133e5c4a58`),
+14615 pixels changed: 2367 white-to-black and 12248 black-to-white. Current totals
+are 161804 occupied and 557236 free pixels. Dimensions, resolution, origin,
+20 cm rims and the existing central check pixels remain unchanged; the image
+still contains only 0/255 values. This revision is installed without rewriting
+the user's PGM, changing algorithm logic, or rebuilding the simulator image.
 
 The simulator model/spawn are unchanged by this map deployment:
 scale=1; world translation=(-0.14910008013248444,-0.06378698348999023,
