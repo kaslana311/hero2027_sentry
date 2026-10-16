@@ -115,8 +115,10 @@ accept `field:=rmuc_2027`. Existing defaults and the 2025/2026 assets are unchan
 Use the paired simulator's `scripts/start_sim_rmuc_2027_dual_lidar.sh`; the old
 2026 script still selects the old field. Do not mix a 2027 world with a 2026 map.
 
-The installed 1120x642, 2.5 cm PGM is now the redrawn multilevel support-surface
-map, applied at the user's request on 2026-10-16. The central highland remains
+The installed 1120x642, 2.5 cm PGM is now the user's manual revision of the redrawn
+multilevel support-surface map, applied on 2026-10-16 without resampling or changing
+coordinates. The paired simulator retains the generated baseline for provenance;
+do not regenerate it over the user's source edits. The central highland remains
 driveable and the central mechanism remains occupied. It replaces the incorrect
 5 cm projection. See `maps/rmuc_2027_SOURCE.md` and `rmuc_2027_projection.json`
 for provenance, mapping assumptions and runtime acceptance limits.

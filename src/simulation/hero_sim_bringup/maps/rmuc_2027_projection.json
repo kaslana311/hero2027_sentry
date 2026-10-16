@@ -30,10 +30,10 @@
     642
   ],
   "source_triangles_in_vtk": 378666,
-  "pgm_sha256": "43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3",
-  "free_cells": 579188,
-  "occupied_cells": 139852,
-  "free_area_m2": 361.99250000000006,
+  "pgm_sha256": "ed7331d69bc59231752468a962c9b9ecfaf9e8927f0cd1fa9209fa133e5c4a58",
+  "free_cells": 547355,
+  "occupied_cells": 171685,
+  "free_area_m2": 342.096875,
   "support_states": 860841,
   "clear_support_states": 844039,
   "reachable_states": 603611,
@@ -181,7 +181,7 @@
       "free": true
     }
   },
-  "status": "Applied with 20 cm static PGM rim; narrow simulator strip repair awaits rebuilt image/runtime validation",
+  "status": "User-edited PGM applied 2026-10-16; runtime navigation acceptance pending; separate strip repair still needs rebuilt image/runtime validation",
   "limitations": [
     "No robot footprint/inflation; retain Nav2 footprint checks",
     "2-D projection cannot encode all multilevel transition constraints",
@@ -282,7 +282,22 @@
   ],
   "map_resolution": 0.025,
   "floor_planes_role": "Spawn Z calibration only; multilevel PGM uses per-cell support surfaces",
-  "generator": "scripts/build_rmuc_2027_surface_map.py in paired simulator repository",
+  "generator": "Baseline: scripts/build_rmuc_2027_surface_map.py in paired simulator repository; active PGM then manually edited by user",
+  "manual_edit": {
+    "date": "2026-10-16",
+    "author": "user",
+    "base_algorithm_commit": "ceaf33b",
+    "base_pgm_sha256": "43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3",
+    "changed_cells": 38297,
+    "free_to_occupied_cells": 35065,
+    "occupied_to_free_cells": 3232,
+    "base_free_cells": 579188,
+    "base_occupied_cells": 139852,
+    "rim_20cm_preserved": true,
+    "coordinates_and_dimensions_unchanged": true,
+    "geometry_report_role": "Support states, reachability, central checks and boundary-added count describe the generated baseline; not recomputed from manual pixels",
+    "validation": "Black/white PGM, dimensions, rim, central check pixels, metadata and installed byte equality; no motion acceptance"
+  },
   "occupied_rim_m": 0.2,
   "occupied_rim_cells": 8,
   "boundary_added_occupied_cells": 22336,
