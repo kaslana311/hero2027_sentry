@@ -4,7 +4,7 @@ The active `rmuc_2027.pgm` is now the redrawn map from the paired simulator:
 `maps/candidates/rmuc_2027/rmuc_2027_surface_candidate.pgm`.
 It is byte-identical, not a resampled or manually whitened version.
 
-- PGM SHA-256: `902253cafa5a040539d5edb8465b2cf1309aa4cf56aaf80ff78f74712c89558a`.
+- PGM SHA-256: `43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3`.
 - Size: 1120x642; resolution: 0.025 m/cell; extent: 28x16.05 m.
 - YAML origin: (-4.6,-6.4,0), where the third component is yaw, not height.
 - Generator: `scripts/build_rmuc_2027_surface_map.py` in the simulator repository.
@@ -22,7 +22,10 @@ The new method finds multiple upward-facing support surfaces per XY cell,
 checks 24 cm headroom and steep-wall intersections in the 2..24 cm local body
 band, then keeps support states reachable from spawn. Slope limit is 20 degrees;
 neighbor height allowance is 2 cm plus the height change of a 20 degree slope
-over one cell. There is no blind hole filling or obstacle inflation.
+over one cell. There is no blind hole filling or obstacle inflation. A separate 0.20 m inward
+occupied rim (8 cells) is now painted on all four PGM edges to keep static-mode
+navigation away from the unenclosed arena edge. Interior pixels are unchanged.
+The dynamic-only generated navigation rim remains 0.35 m, not 0.20 m.
 
 The central highland's reachable upper floor stays free; the central mechanism
 remains occupied. Mapping assumptions and numerical checks are recorded in
@@ -34,8 +37,15 @@ The simulator model/spawn are unchanged by this map deployment:
 scale=1; world translation=(-0.14910008013248444,-0.06378698348999023,
 -0.27757187763365515); spawn=(4.6,6.4,0.28), yaw=0. The first planar odometry
 sample zeroes this spawn in map/odom. The local floor is near world Z=0.
-The ~1.5 degree field grade and all STL triangles/possible thin decorations
-remain unchanged. This map does not repair physical collisions.
+The ~1.5 degree field grade is retained. The paired simulator now uses
+`rmuc_2027_strip_repaired.stl` for BOTH visual and collision geometry. This fixes
+one reviewed ~1 mm welded ground marking near world X=0..3.319,
+Y=3.27555..3.73026: 16 raised top/side faces removed, four existing underside
+faces reversed to retain ground. All other 378646 source face records are
+unchanged; the original STL is preserved. The repair is not a global decoration
+cleanup or terrain flattening. Its derivative SHA is
+`1d6c472f901e13df0396a18884da48d86b76d80b9e4b4bb0b557647dbf3f9318`.
+These geometric checks do not certify Gazebo contact behavior.
 
 ## Consumers and resolution coupling
 
@@ -54,8 +64,11 @@ remain unchanged. This map does not repair physical collisions.
 
 Use `./build_hero2026_safe.sh --jobs 4` to synchronize installation. The original
 `field:=rmuc_2027` launch command is unchanged. Restart the algorithm to reload
-the map, boundary and DOG grids. An already-running simulator with the current
-(4.6,6.4) spawn needs no restart or image rebuild for this map-only deployment.
+the map, boundary and DOG grids. The PGM rim alone needs only an algorithm restart, but the separate strip
+repair REQUIRES rebuilding/restarting the paired 2027 simulator using its usual
+startup script. Then restart the algorithm after settling; do not reuse the
+old Point-LIO alignment across a Gazebo restart. The 2026 image is unaffected.
+A PGM boundary is a planning constraint, not a physical fence for manual driving.
 
 No full navigation/clearance acceptance is claimed before driving tests.
 2.5 cm sampling, multilevel 2-D projection and robot dynamics remain limitations;

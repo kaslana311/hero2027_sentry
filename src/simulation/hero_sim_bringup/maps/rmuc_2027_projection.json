@@ -30,10 +30,10 @@
     642
   ],
   "source_triangles_in_vtk": 378666,
-  "pgm_sha256": "902253cafa5a040539d5edb8465b2cf1309aa4cf56aaf80ff78f74712c89558a",
-  "free_cells": 601524,
-  "occupied_cells": 117516,
-  "free_area_m2": 375.9525000000001,
+  "pgm_sha256": "43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3",
+  "free_cells": 579188,
+  "occupied_cells": 139852,
+  "free_area_m2": 361.99250000000006,
   "support_states": 860841,
   "clear_support_states": 844039,
   "reachable_states": 603611,
@@ -181,7 +181,7 @@
       "free": true
     }
   },
-  "status": "Applied to algorithm assets at user request; not yet runtime/Gazebo-validated",
+  "status": "Applied with 20 cm static PGM rim; narrow simulator strip repair awaits rebuilt image/runtime validation",
   "limitations": [
     "No robot footprint/inflation; retain Nav2 footprint checks",
     "2-D projection cannot encode all multilevel transition constraints",
@@ -282,5 +282,16 @@
   ],
   "map_resolution": 0.025,
   "floor_planes_role": "Spawn Z calibration only; multilevel PGM uses per-cell support surfaces",
-  "generator": "scripts/build_rmuc_2027_surface_map.py in paired simulator repository"
+  "generator": "scripts/build_rmuc_2027_surface_map.py in paired simulator repository",
+  "occupied_rim_m": 0.2,
+  "occupied_rim_cells": 8,
+  "boundary_added_occupied_cells": 22336,
+  "unbordered_pgm_sha256": "902253cafa5a040539d5edb8465b2cf1309aa4cf56aaf80ff78f74712c89558a",
+  "simulator_mesh_repair": {
+    "file": "rmuc_2027_strip_repaired.stl",
+    "sha256": "1d6c472f901e13df0396a18884da48d86b76d80b9e4b4bb0b557647dbf3f9318",
+    "removed_faces": 16,
+    "reversed_ground_faces": 4,
+    "original_source_preserved": true
+  }
 }

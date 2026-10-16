@@ -34,7 +34,20 @@ def test_2027_applied_surface_map_and_spawn_share_coordinates():
     assert report["map_origin"] == metadata["origin"]
     assert report["model_translation"][2] + report["raw_min_xyz"][2] + report["spawn_floor_above_bottom"] == pytest.approx(0.)
     digest = hashlib.sha256((PACKAGE / "maps/rmuc_2027.pgm").read_bytes()).hexdigest()
-    assert digest == report["pgm_sha256"] == "902253cafa5a040539d5edb8465b2cf1309aa4cf56aaf80ff78f74712c89558a"
+    assert digest == report["pgm_sha256"] == "43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3"
+
+
+def test_2027_static_pgm_has_20cm_inward_rim():
+    data = (PACKAGE / "maps/rmuc_2027.pgm").read_bytes()
+    _, pixels = data.split(b"\n255\n", 1)
+    report = json.loads((PACKAGE / "maps/rmuc_2027_projection.json").read_text())
+    assert report["occupied_rim_m"] == .20 and report["occupied_rim_cells"] == 8
+    for y in range(642):
+        row = pixels[y*1120:(y+1)*1120]
+        if y < 8 or y >= 634:
+            assert not any(row)
+        else:
+            assert not any(row[:8]) and not any(row[-8:])
 
 
 def test_2027_central_highland_is_free_but_central_mechanism_is_occupied():

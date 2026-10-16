@@ -120,6 +120,11 @@ map, applied at the user's request on 2026-10-16. The central highland remains
 driveable and the central mechanism remains occupied. It replaces the incorrect
 5 cm projection. See `maps/rmuc_2027_SOURCE.md` and `rmuc_2027_projection.json`
 for provenance, mapping assumptions and runtime acceptance limits.
+The PGM now has a 20 cm inward occupied rim (8 cells); dynamic_only retains
+its existing 35 cm generated rim. The paired simulator also fixes one reviewed
+1 mm welded ground strip without flattening the field. That mesh repair needs
+the usual 2027 simulator script to rebuild/restart the image, then an algorithm
+restart after settling. The original source STL and 2026 assets are retained.
 The 2026-like open-area spawn is now (4.6,6.4), yaw=0; map origin is (-4.6,-6.4).
 The field Z is realigned so this local floor remains near zero. The spawn update
 requires both sides to restart; this later map-only deployment needs only an
