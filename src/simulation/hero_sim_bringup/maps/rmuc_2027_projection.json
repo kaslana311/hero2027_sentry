@@ -181,7 +181,7 @@
       "free": true
     }
   },
-  "status": "Second user-edited PGM applied 2026-10-16; runtime navigation acceptance pending; separate strip repair still needs rebuilt image/runtime validation",
+  "status": "Second user-edited PGM applied 2026-10-16; 2026-10-17 simulator full ground cleanup is source-selected and awaits image rebuild/runtime validation",
   "limitations": [
     "No robot footprint/inflation; retain Nav2 footprint checks",
     "2-D projection cannot encode all multilevel transition constraints",
@@ -309,5 +309,22 @@
     "removed_faces": 16,
     "reversed_ground_faces": 4,
     "original_source_preserved": true
+  },
+  "simulator_mesh_cleanup": {
+    "date": "2026-10-17",
+    "file": "rmuc_2027_clean.stl",
+    "sha256": "625f1444f36098995e26fbe85cdc133ebbd00311505d96a60d226b16ed91793c",
+    "review_manifest": "ground_decorations.json in paired simulator model directory",
+    "reviewed_marking_groups": 44,
+    "embossed_rim_patches": 79,
+    "removed_faces": 3081,
+    "modified_faces": 3269,
+    "reversed_floor_faces": 744,
+    "unchanged_source_faces": 372316,
+    "local_vertex_z_updates": 1503,
+    "max_vertex_displacement_m": 0.001391872763633728,
+    "original_and_one_strip_derivative_preserved": true,
+    "hand_edited_pgm_unchanged": true,
+    "deployment": "Source-selected; image rebuild needs sudo password; runtime contact validation pending"
   }
 }

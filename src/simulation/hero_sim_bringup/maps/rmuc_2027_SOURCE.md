@@ -62,8 +62,8 @@ The simulator model/spawn are unchanged by this map deployment:
 scale=1; world translation=(-0.14910008013248444,-0.06378698348999023,
 -0.27757187763365515); spawn=(4.6,6.4,0.28), yaw=0. The first planar odometry
 sample zeroes this spawn in map/odom. The local floor is near world Z=0.
-The ~1.5 degree field grade is retained. The paired simulator now uses
-`rmuc_2027_strip_repaired.stl` for BOTH visual and collision geometry. This fixes
+The ~1.5 degree field grade is retained. The earlier paired simulator used
+`rmuc_2027_strip_repaired.stl` for both visual and collision geometry. This fixed
 one reviewed ~1 mm welded ground marking near world X=0..3.319,
 Y=3.27555..3.73026: 16 raised top/side faces removed, four existing underside
 faces reversed to retain ground. All other 378646 source face records are
@@ -71,6 +71,22 @@ unchanged; the original STL is preserved. The repair is not a global decoration
 cleanup or terrain flattening. Its derivative SHA is
 `1d6c472f901e13df0396a18884da48d86b76d80b9e4b4bb0b557647dbf3f9318`.
 These geometric checks do not certify Gazebo contact behavior.
+
+On 2026-10-17 the simulator source selects `rmuc_2027_clean.stl` for BOTH visual
+and collision geometry. Its SHA-256 is
+`625f1444f36098995e26fbe85cdc133ebbd00311505d96a60d226b16ed91793c`.
+The explicit simulator `ground_decorations.json` reviews 44 CAD marking groups
+and 79 embossed-rim patches (not 123 separate objects). It removes 3081 faces,
+modifies 3269, and leaves 372316 original records byte-identical. Where deletion
+would expose a ground hole, 744 underside faces instead become upward support.
+1503 local vertex Z edits are bounded by 1.4 mm; XY, field grade, model pose and
+spawn remain unchanged. No real wall, ramp or step is removed. Both the original
+STL and historical one-strip derivative remain available. The 7420 support samples
+and 68 simulator checks passed, but no Gazebo contact acceptance is claimed;
+the noninteractive Docker build still requires the user's sudo password. Rebuild
+with the usual 2027 simulator startup script, then restart Point-LIO/navigation.
+This geometry cleanup does not regenerate/alter the user's hand-edited PGM,
+change algorithm implementations/parameters, or alter the 2026 assets.
 
 ## Consumers and resolution coupling
 
