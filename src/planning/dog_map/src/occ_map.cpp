@@ -1,4 +1,5 @@
 #include "dog_map/occ_map.hpp"
+#include "dog_map/xy_grid.hpp"
 
 #include <oneapi/tbb/parallel_for.h>
 #include <pcl/filters/voxel_grid.h>
@@ -13,7 +14,7 @@
 OccMap::OccMap(double heighter_than_ground_threshold,
                double higher_than_car_threshold, double half_map_size,
                double resolution_z, int frame_save,
-               const std::string& pgm_yaml_path)
+               const std::string& pgm_yaml_path, double resolution_xy)
     : higher_than_ground_threshold_(heighter_than_ground_threshold),
       higher_than_car_threshold_(higher_than_car_threshold),
       half_map_size_(half_map_size),
@@ -22,7 +23,7 @@ OccMap::OccMap(double heighter_than_ground_threshold,
       pgm_yaml_path(pgm_yaml_path) {
     YAML::Node config = YAML::LoadFile(pgm_yaml_path);
     cloud_at_map_origin = yaml_get_value<std::vector<double>>(config, "origin");
-    resolution = yaml_get_value<double>(config, "resolution");
+    const double map_resolution = yaml_get_value<double>(config, "resolution");
 
     std::string pgm_path;
     int index = pgm_yaml_path.find_last_of("/");
@@ -30,10 +31,20 @@ OccMap::OccMap(double heighter_than_ground_threshold,
                yaml_get_value<std::string>(config, "image");
     cv::Mat map_img = cv::imread(pgm_path, cv::IMREAD_UNCHANGED);
     if (!map_img.empty()) {
+        auto grid = makeDogXYGrid(map_img, map_resolution, resolution_xy);
+        resolution = grid.resolution;
+        map_size_x_ = grid.size_x;
+        map_size_y_ = grid.size_y;
+        map_img = grid.image;
         std::cout << " -- [DOG_MAP] Map loaded: size_x="
-                  << map_img.cols * resolution
-                  << ", size_y=" << map_img.rows * resolution << std::endl;
+                  << map_size_x_ << ", size_y=" << map_size_y_
+                  << ", PGM resolution=" << map_resolution
+                  << ", DOG XY resolution=" << resolution
+                  << ", DOG cells=" << map_img.cols << "x" << map_img.rows
+                  << std::endl;
         InitMap(map_img);
+    } else {
+        throw std::invalid_argument("DOG could not read map image: " + pgm_path);
     }
 /*************fix map init */
 // #ifdef FIX_MAP
@@ -249,12 +260,12 @@ void OccMap::PassFilter(pcl::PointCloud<HEROPointXYZK>::Ptr cloud_in,
     min_x = std::max(min_x, cloud_at_map_origin[0] + 0.2);
     double max_x = pose.first[0] + half_map_size_;
     max_x = std::min(
-        max_x, resolution * grid_map_.cols + cloud_at_map_origin[0] - 0.2);
+        max_x, map_size_x_ + cloud_at_map_origin[0] - 0.2);
     double min_y = pose.first[1] - half_map_size_;
     min_y = std::max(min_y, cloud_at_map_origin[1] + 0.2);
     double max_y = pose.first[1] + half_map_size_;
     max_y = std::min(
-        max_y, resolution * grid_map_.rows + cloud_at_map_origin[1] - 0.2);
+        max_y, map_size_y_ + cloud_at_map_origin[1] - 0.2);
     pass.setInputCloud(cloud_in);
     pass.setFilterFieldName("x");
     pass.setFilterLimits(min_x, max_x);

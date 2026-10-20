@@ -3,11 +3,19 @@
 This package is a simulation-only entry point. It does not start real Livox,
 serial, Odin, or Zenoh drivers and does not change the real-robot launch path.
 
+2026-10-20 follow-up: at the user's request, all simulation navigation entries
+now default to `dog_resolution_xy:=0.05`. Only DOG's XY occupancy grid changes;
+DOG Z remains 0.03 m, and PGM/Nav2 geometry, filtering rules and thresholds stay
+unchanged. `dog_resolution_xy:=0.0` restores the old PGM-coupled behavior after
+an algorithm restart. This is a startup-only setting, not a dynamic parameter.
+See [DOG_XY_RESOLUTION.md](./DOG_XY_RESOLUTION.md) for scope, build and ablation.
+
 2026-10-20: algorithm branch `codex/split-static-planning` adds opt-in
 `costmap_mode:=split`. Both normal Nav2 maps and MINCO's map input remain
 identical to `dynamic_only`. Smac alone uses an independent original-PGM plus
 inflation map through `hero_static_prior_planner`; there is no DOG subscription
-on that prior. The other three modes keep their pre-split parameter snapshots.
+on that prior. At that commit the other three modes kept their pre-split
+parameter snapshots; the later DOG XY setting above is a separate change.
 Build, exact topic routing, commands, limitations and acceptance are documented
 in [SPLIT_MODE.md](./SPLIT_MODE.md). Gazebo, Point-LIO, DOG filtering, MINCO/MPC
 algorithms, existing rates and Docker images are unchanged. This is not a
@@ -141,8 +149,9 @@ The 2026-like open-area spawn is now (4.6,6.4), yaw=0; map origin is (-4.6,-6.4)
 The field Z is realigned so this local floor remains near zero. The spawn update
 requires both sides to restart; this later map-only deployment needs only an
 algorithm restart when the simulator is already at the current spawn. No new
-Docker image or launch argument is needed. DOG XY resolution also follows the
-new 2.5 cm YAML (about 4x XY cells); its range and filter thresholds are unchanged.
+Docker image or launch argument is needed. At that import, DOG XY resolution also
+followed the new 2.5 cm YAML (about 4x XY cells). The 2026-10-20 follow-up above
+decouples it and defaults DOG XY back to 5 cm; range and filter thresholds stay unchanged.
 Planner/controller/TF implementations and the old 2026 field are unchanged.
 For initial tests use the existing C2 launch with `field:=rmuc_2027`,
 `lidar_mode:=dual`, `costmap_mode:=dynamic_only`; its global window is 28x17 m,

@@ -101,7 +101,7 @@ def ros_context():
 
 
 class DogHarness:
-    def __init__(self, tmp_path, enabled, threshold):
+    def __init__(self, tmp_path, enabled, threshold, map_resolution=.1, resolution_xy=0.):
         self.namespace = "/high_column_test_" + uuid.uuid4().hex[:10]
         self.node = rclpy.create_node("high_column_probe", namespace=self.namespace)
         self.messages = []
@@ -114,14 +114,17 @@ class DogHarness:
         tf.header.frame_id, tf.child_frame_id = "map", "base_link"
         tf.transform.rotation.w = 1.
         self.tf_pub.publish(TFMessage(transforms=[tf]))
-        (tmp_path / "free.pgm").write_text("P2\n80 80\n255\n" + "255 " * 6400 + "\n")
+        cells = round(8. / map_resolution)
+        (tmp_path / "free.pgm").write_text(
+            f"P2\n{cells} {cells}\n255\n" + "255 " * (cells * cells) + "\n")
         map_yaml = tmp_path / "map.yaml"
-        map_yaml.write_text(yaml.safe_dump({"image": "free.pgm", "resolution": .1,
+        map_yaml.write_text(yaml.safe_dump({"image": "free.pgm", "resolution": map_resolution,
                           "origin": [-4., -4., 0.]}))
         base = ROOT / "src/planning/hero2025_nav_bringup/config/nav2_params.yaml"
         params = yaml.safe_load(base.read_text())["dog_map_node"]["ros__parameters"]
         params.update(map_yaml_path=str(map_yaml), cloud_topic="input", use_sim_time=False,
-                      filter_high_columns=enabled, high_column_min_z=float(threshold))
+                      filter_high_columns=enabled, high_column_min_z=float(threshold),
+                      resolution_xy=resolution_xy)
         params_yaml = tmp_path / "params.yaml"
         params_yaml.write_text(yaml.safe_dump({"/**": {"ros__parameters": params}}))
         executable = os.environ.get("DOG_MAP_EXECUTABLE") or str(

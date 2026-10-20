@@ -36,6 +36,8 @@ def generated(mode, field, namespace="red_standard_robot1"):
 # Canonical JSON hashes from pre-split commit 1c04855. Only the absolute
 # selected-map YAML filename is replaced with <map_yaml>; every parameter is
 # otherwise covered, including DOG, MINCO, MPC, BT, frequencies and old layers.
+# The later, explicitly requested DOG XY setting is asserted separately, then
+# removed before hashing; the original baseline hashes remain unchanged.
 LEGACY_HASHES = {
     "combined": "07349ba456bbddae2bc0a631140cace2c99c4119e7543f38ceb6393e1a49ca73",
     "static_only": "2153b4a41212d13cc78e5d8f3156c0a25c10726f4decc21e92f0130594ff4eba",
@@ -49,6 +51,7 @@ LEGACY_HASHES = {
 @pytest.mark.parametrize("mode", ("combined", "static_only", "dynamic_only"))
 def test_legacy_modes_match_every_pre_split_parameter(field, mode):
     with generated(mode, field) as params:
+        assert params["dog_map_node"]["ros__parameters"].pop("resolution_xy") == .05
         text = yaml.safe_dump(params).replace(
             str(PACKAGE / "maps" / f"{field}.yaml"), "<map_yaml>")
         canonical = json.dumps(yaml.safe_load(text), sort_keys=True, separators=(",", ":"))

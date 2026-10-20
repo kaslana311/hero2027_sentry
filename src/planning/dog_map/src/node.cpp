@@ -295,6 +295,11 @@ class DogMapNode : public rclcpp::Node {
     }
 
     DogMapNode() : Node("dog_map_node") {
+        rcl_interfaces::msg::ParameterDescriptor xy_descriptor;
+        xy_descriptor.description = "Startup-only DOG XY voxel size in metres; 0 follows PGM, otherwise an integer multiple of PGM resolution";
+        xy_descriptor.read_only = true;
+        const double resolution_xy =
+            declare_parameter<double>("resolution_xy", 0.0, xy_descriptor);
         filter_high_columns_ = declare_parameter<bool>("filter_high_columns", false);
         const double high_column_min_z =
             declare_parameter<double>("high_column_min_z", 0.30);
@@ -350,7 +355,7 @@ class DogMapNode : public rclcpp::Node {
             rclcpp::QoS(1).keep_last(1).durability_volatile());
         occ_map_ = new OccMap(heighter_than_ground_threshold,
                               higher_than_car_threshold, half_map_size,
-                              resolution_z, frame_save, map_yaml_path);
+                              resolution_z, frame_save, map_yaml_path, resolution_xy);
         occ_map_->SetLOGParams(LOG_OCC_HIT_MID360, LOG_OCC_HIT_ODIN1, LOG_OCC_FREE, THR_OCC, MAX_LOG_MID360, MAX_LOG_ODIN1, MIN_LOG);
         occ_map_->SetHighColumnFilter(filter_high_columns_, high_column_min_z, cloud_z_offset_);
         RCLCPP_INFO(get_logger(),

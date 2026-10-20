@@ -1,5 +1,11 @@
 # 仿真真值定位过洞基线
 
+2026-10-20后续：在 `codex/split-static-planning` / `815b666` 基础上，按用户要求
+将仿真 DOG X/Y 独立设为5厘米，Z仍3厘米；不修改PGM/Nav2地图、过滤规则或阈值。
+三个仿真入口与四模式默认 `dog_resolution_xy:=0.05`，启动时设0恢复跟随PGM。
+仿真仓库不变；不代表实际墙面/过洞验收已完成。见
+[DOG分辨率说明](src/simulation/hero_sim_bringup/DOG_XY_RESOLUTION.md)。
+
 最新算法实验（2026-10-20）：从 `codex/rmuc-2027-field` 的 `1c04855` 创建
 `codex/split-static-planning`。新增第四种 `costmap_mode:=split`：A星使用独立PGM
 先验图，Nav2全局/局部地图保持 dynamic_only 组成，MINCO仍用全局动态图。

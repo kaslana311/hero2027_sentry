@@ -2,6 +2,13 @@
 
 日期：2026-10-20，UTC+08:00。
 
+同日后续（父提交 `815b666`）：用户要求 DOG X/Y 恢复 5 厘米，现仿真入口默认
+`dog_resolution_xy:=0.05`，四模式一致；Z、PGM、Nav2 地图及过滤规则/阈值不变。
+`dog_resolution_xy:=0.0` 可重现本文件最初提交的 PGM 跟随行为。该变更不属于
+split 的地图职责分离，详见 [DOG_XY_RESOLUTION.md](./DOG_XY_RESOLUTION.md)。
+下文“旧模式参数不变”描述最初 split 提交；当前快照测试单独断言新 XY 设置，
+移除这一新增键后继续核对原摘要，其他参数不放宽。
+
 ## 版本与范围
 
 - 算法：从 `codex/rmuc-2027-field` / `1c04855` 创建

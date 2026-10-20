@@ -108,7 +108,11 @@ def _make_sim_params(
     source_file, map_yaml, behavior_tree_xml, mode, namespace, publish_debug_visualizations,
     perception_cloud_topic="cloud_registered",
     filter_high_columns=False, high_column_min_z=0.30,
+    dog_resolution_xy=0.05,
 ):
+    dog_resolution_xy = float(dog_resolution_xy)
+    if not math.isfinite(dog_resolution_xy) or dog_resolution_xy < 0:
+        raise ValueError("dog_resolution_xy must be finite and nonnegative; 0 follows PGM")
     if not isinstance(filter_high_columns, bool):
         raise ValueError("filter_high_columns must be a boolean")
     high_column_min_z = float(high_column_min_z)
@@ -122,6 +126,7 @@ def _make_sim_params(
     dog_map["odom_topic"] = "odometry/filtered"
     dog_map["cloud_topic"] = perception_cloud_topic
     dog_map["map_yaml_path"] = map_yaml
+    dog_map["resolution_xy"] = dog_resolution_xy
     dog_map["filter_high_columns"] = filter_high_columns
     dog_map["high_column_min_z"] = high_column_min_z
 
@@ -261,6 +266,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         raise ValueError("filter_high_columns must be true or false")
     filter_high_columns = high_column_switch == "true"
     high_column_min_z = float(LaunchConfiguration("high_column_min_z", default="0.30").perform(context))
+    dog_resolution_xy = float(LaunchConfiguration("dog_resolution_xy", default="0.05").perform(context))
     publish_debug_visualizations = (
         LaunchConfiguration("publish_debug_visualizations")
         .perform(context)
@@ -300,6 +306,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         perception_cloud_topic,
         filter_high_columns,
         high_column_min_z,
+        dog_resolution_xy,
     )
     navigation_map_yaml = (
         _make_dynamic_boundary_map(map_yaml)
@@ -459,6 +466,8 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
             )
         ),
         LogInfo(msg=f"Generated parameter file: {generated_params}"),
+        LogInfo(msg=f"DOG XY resolution setting={dog_resolution_xy:.3f} m "
+                    "(0 follows PGM); PGM, Nav2 resolution and DOG Z are unchanged"),
         LogInfo(msg=f"DOG high-column filter enabled={filter_high_columns}, "
                     f"minimum absolute map Z={high_column_min_z:.3f} m (not robot-relative)"),
         bridge,
@@ -511,6 +520,10 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "filter_high_columns", default_value="false",
                 description="Experimental DOG output filter for columns entirely above map Z threshold",
+            ),
+            DeclareLaunchArgument(
+                "dog_resolution_xy", default_value="0.05",
+                description="Startup-only DOG XY voxel size in metres; 0 follows PGM, otherwise an integer multiple of PGM resolution",
             ),
             DeclareLaunchArgument(
                 "high_column_min_z", default_value="0.30",

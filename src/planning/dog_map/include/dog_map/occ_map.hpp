@@ -40,7 +40,7 @@ class OccMap {
     OccMap(double higher_than_ground_threshold,
            double higher_than_car_threshold, double half_map_size,
            double resolution_z, int frame_save,
-           const std::string& pgm_yaml_path = "");
+           const std::string& pgm_yaml_path = "", double resolution_xy = 0.0);
     ~OccMap();
     void InitMap(cv::Mat& grid_map);
     void Update(pcl::PointCloud<HEROPointXYZK>::Ptr cloud, Pose pose);
@@ -153,6 +153,8 @@ class OccMap {
     cv::Mat grid_map_;
     uint8_t* occ_map;
     double resolution;
+    double map_size_x_;
+    double map_size_y_;
     double local_map_size;
     int local_map_size_d;
 

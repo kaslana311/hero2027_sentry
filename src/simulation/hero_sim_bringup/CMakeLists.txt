@@ -76,6 +76,10 @@ if(BUILD_TESTING)
     TIMEOUT 120
     ENV "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=187"
   )
+  ament_add_pytest_test(dog_xy_resolution test/test_dog_xy_resolution.py
+    TIMEOUT 120
+    ENV "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=197"
+  )
   ament_add_pytest_test(point_lio_input test/test_point_lio_input.py
     TIMEOUT 120
     ENV "POINT_LIO_INPUT_EXECUTABLE=$<TARGET_FILE:sim_point_lio_input_bridge>"

@@ -54,6 +54,8 @@ def generate_launch_description():
         DeclareLaunchArgument("relay_cmd_vel", default_value="true"),
         DeclareLaunchArgument("publish_debug_visualizations", default_value="false"),
         DeclareLaunchArgument("filter_high_columns", default_value="false"),
+        DeclareLaunchArgument("dog_resolution_xy", default_value="0.05",
+                              description="DOG XY voxel size; 0 follows PGM; startup-only"),
         DeclareLaunchArgument("high_column_min_z", default_value="0.30",
                               description="Absolute map Z threshold (metres), not local ground height"),
         OpaqueFunction(function=_setup),
