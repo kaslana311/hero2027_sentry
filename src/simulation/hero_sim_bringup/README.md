@@ -3,6 +3,16 @@
 This package is a simulation-only entry point. It does not start real Livox,
 serial, Odin, or Zenoh drivers and does not change the real-robot launch path.
 
+2026-10-20: algorithm branch `codex/split-static-planning` adds opt-in
+`costmap_mode:=split`. Both normal Nav2 maps and MINCO's map input remain
+identical to `dynamic_only`. Smac alone uses an independent original-PGM plus
+inflation map through `hero_static_prior_planner`; there is no DOG subscription
+on that prior. The other three modes keep their pre-split parameter snapshots.
+Build, exact topic routing, commands, limitations and acceptance are documented
+in [SPLIT_MODE.md](./SPLIT_MODE.md). Gazebo, Point-LIO, DOG filtering, MINCO/MPC
+algorithms, existing rates and Docker images are unchanged. This is not a
+collision-safety or full-route acceptance claim.
+
 2026-10-14: the main `hero_sim.rviz` enables `Smoothed trajectory (MPC reference)`
 and `Registered point cloud` by default in all three costmap modes. The former
 subscribes to `FollowPath/reference_path`, the MPC horizon sampled from MINCO,

@@ -21,6 +21,7 @@
   <depend>visualization_msgs</depend>
 
   <exec_depend>hero2025_nav_bringup</exec_depend>
+  <exec_depend>hero_static_prior_planner</exec_depend>
   <exec_depend>point_lio</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
@@ -28,6 +29,9 @@
   <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>dog_map</test_depend>
   <test_depend>rclpy</test_depend>
+  <test_depend>action_msgs</test_depend>
+  <test_depend>lifecycle_msgs</test_depend>
+  <test_depend>nav2_msgs</test_depend>
   <test_depend>rosgraph_msgs</test_depend>
   <test_depend>tf2_msgs</test_depend>
   <test_depend>python3-pytest</test_depend>

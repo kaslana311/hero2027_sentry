@@ -1,5 +1,14 @@
 # 仿真真值定位过洞基线
 
+最新算法实验（2026-10-20）：从 `codex/rmuc-2027-field` 的 `1c04855` 创建
+`codex/split-static-planning`。新增第四种 `costmap_mode:=split`：A星使用独立PGM
+先验图，Nav2全局/局部地图保持 dynamic_only 组成，MINCO仍用全局动态图。
+仿真仓库保持 `codex/rmuc-2027-field` / `e22c5ce`，不改模型或镜像。
+旧三模式参数保持基线一致，不修改滤波、优化器、控制器或行为树。
+实现说明、命令与待验收项目见
+[SPLIT_MODE.md](src/simulation/hero_sim_bringup/SPLIT_MODE.md)。
+本段记录新的地图职责实验；下文保留各历史阶段，不代表已完成新模式实车/过洞验收。
+
 当前算法迭代（2026-10-11）：从 `codex/point-lio-navigation` 的 `e3607f8` 创建
 `codex/perception-navigation-iteration`，优先验证默认关闭、可指定高度的 DOG
 高处整列输出过滤。旧分支/标签保留，仿真实现不变；未宣称四洞通过或合并稳定分支。

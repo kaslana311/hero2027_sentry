@@ -1,0 +1,7 @@
+<library path="hero_static_prior_planner">
+  <class name="hero_static_prior_planner/StaticPriorPlanner"
+         type="hero_static_prior_planner::StaticPriorPlanner"
+         base_class_type="nav2_core::GlobalPlanner">
+    <description>Unchanged Smac Hybrid A* on a private PGM-plus-inflation map, never the supplied dynamic global costmap.</description>
+  </class>
+</library>

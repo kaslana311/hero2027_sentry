@@ -1,3 +1,4 @@
+import copy
 import math
 import os
 import tempfile
@@ -12,7 +13,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, PushRosNamespace, SetRemap
 
 
-VALID_COSTMAP_MODES = ("combined", "static_only", "dynamic_only")
+VALID_COSTMAP_MODES = ("combined", "static_only", "dynamic_only", "split")
 VALID_LIDAR_MODES = ("single", "dual")
 VALID_FIELDS = ("rmuc_2025", "rmuc_2026", "rmuc_2027")
 
@@ -160,6 +161,7 @@ def _make_sim_params(
         "combined": ["static_layer", "fast_layer", "inflation_layer"],
         "static_only": ["static_layer", "inflation_layer"],
         "dynamic_only": ["boundary_layer", "fast_layer", "inflation_layer"],
+        "split": ["boundary_layer", "fast_layer", "inflation_layer"],
     }
 
     topic_root = f"/{namespace.strip('/')}" if namespace.strip("/") else ""
@@ -181,7 +183,7 @@ def _make_sim_params(
         costmap.setdefault("fast_layer", {})["pointcloud_topic"] = robot_topic(
             "rog_map/inf_occ"
         )
-        if mode == "dynamic_only":
+        if mode in ("dynamic_only", "split"):
             # Standard Nav2 static layer, not the team's mutable static layer.
             # Only the generated free-interior/boundary map is served in this mode.
             costmap["boundary_layer"] = {
@@ -194,11 +196,37 @@ def _make_sim_params(
 
     # Original PGM interior pixels never enter dynamic-only navigation.
     # BoundaryLayer adds only the arena rim; FastLayer supplies sensed obstacles.
-    if mode == "dynamic_only":
+    if mode in ("dynamic_only", "split"):
         global_costmap = params["global_costmap"]["global_costmap"]["ros__parameters"]
         global_costmap.update(_dynamic_global_geometry(map_yaml))
         global_costmap["rolling_window"] = False
         global_costmap["track_unknown_space"] = False
+
+    if mode == "split":
+        # Both normal Nav2 maps stay identical to dynamic_only. Only Smac's
+        # input changes: a private, read-only PGM + inflation map. The standard
+        # StaticLayer does not clear PGM walls using DOG free-space data.
+        prior = copy.deepcopy(params["global_costmap"]["global_costmap"]["ros__parameters"])
+        for unused in ("static_layer", "fast_layer", "boundary_layer"):
+            prior.pop(unused, None)
+        prior.update(
+            plugins=["prior_static_layer", "inflation_layer"],
+            track_unknown_space=True,
+            prior_static_layer={
+                "plugin": "nav2_costmap_2d::StaticLayer",
+                "map_topic": robot_topic("planning_prior/map"),
+                "map_subscribe_transient_local": True,
+                "subscribe_to_updates": False,
+                "footprint_clearing_enabled": False,
+            },
+        )
+        params["static_prior_costmap"] = {"static_prior_costmap": {"ros__parameters": prior}}
+        params["planner_server"]["ros__parameters"]["GridBased"]["plugin"] = (
+            "hero_static_prior_planner/StaticPriorPlanner"
+        )
+        params["smoother_server"]["ros__parameters"]["costmap_topic"] = (
+            "global_costmap/costmap_raw"
+        )
 
     def force_sim_time(value):
         if isinstance(value, dict):
@@ -274,7 +302,8 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         high_column_min_z,
     )
     navigation_map_yaml = (
-        _make_dynamic_boundary_map(map_yaml) if costmap_mode == "dynamic_only" else map_yaml
+        _make_dynamic_boundary_map(map_yaml)
+        if costmap_mode in ("dynamic_only", "split") else map_yaml
     )
 
     bridge = Node(
@@ -355,6 +384,26 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         # Global/Local Costmap displays still read the real navigation costmaps.
         reference_map_remappings = [("map", "visualization/static_map")]
 
+    if costmap_mode == "split":
+        # A planning input, NOT an RViz-only node: needed with use_rviz:=false.
+        # Its private map/load_map cannot overwrite the boundary-only /map.
+        prior_namespace = f"{namespace.rstrip('/')}/planning_prior"
+        reference_map_nodes = [
+            Node(
+                package="nav2_map_server", executable="map_server",
+                namespace=prior_namespace, name="static_prior_map_server", output="screen",
+                parameters=[{"use_sim_time": True, "yaml_filename": map_yaml,
+                             "frame_id": "map"}],
+            ),
+            Node(
+                package="nav2_lifecycle_manager", executable="lifecycle_manager",
+                namespace=prior_namespace, name="lifecycle_manager_static_prior", output="screen",
+                parameters=[{"use_sim_time": True, "autostart": True,
+                             "node_names": ["static_prior_map_server"]}],
+            ),
+        ]
+        reference_map_remappings = [("map", "planning_prior/map")]
+
     navigation = GroupAction(
         actions=[
             PushRosNamespace(namespace),
@@ -432,7 +481,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "costmap_mode",
                 default_value="combined",
-                description="combined, static_only, or dynamic_only",
+                description="combined, static_only, dynamic_only, or split (static Smac / dynamic MINCO)",
             ),
             DeclareLaunchArgument(
                 "lidar_mode",
