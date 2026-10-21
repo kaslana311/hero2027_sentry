@@ -5,6 +5,7 @@ The only launched executables are planner_server and smoother_server. Synthetic
 map/TF/cloud publishers replace Gazebo, DOG and the robot; no cmd_vel is created.
 """
 import importlib.util
+import json
 import os
 from pathlib import Path
 import signal
@@ -23,7 +24,9 @@ from lifecycle_msgs.srv import ChangeState
 from nav2_msgs.action import ComputePathToPose
 from nav2_msgs.msg import Costmap
 from nav_msgs.msg import OccupancyGrid
+from rcl_interfaces.srv import SetParameters
 from rclpy.action import ActionClient
+from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from sensor_msgs.msg import PointCloud2, PointField
 from tf2_msgs.msg import TFMessage
@@ -124,22 +127,41 @@ def test_static_prior_is_independent_of_live_dynamic_master(tmp_path, remap_tf):
         my = int((y - info.origin.position.y) / info.resolution)
         return msg.data[my * info.size_x + mx]
 
-    def plan():
+    def set_parameter(name, value, accepted=True):
+        client = node.create_client(SetParameters, "planner_server/set_parameters")
+        assert client.wait_for_service(timeout_sec=10.)
+        request = SetParameters.Request()
+        request.parameters = [Parameter("GridBased."+name, value=value).to_parameter_msg()]
+        try:
+            results = future_result(client.call_async(request)).results
+            assert len(results) == 1 and results[0].successful is accepted
+        finally:
+            node.destroy_client(client)
+
+    def plan(start=(1., 1.), destination=(5., 1.), status=GoalStatus.STATUS_SUCCEEDED):
         client = ActionClient(node, ComputePathToPose, "compute_path_to_pose")
         assert client.wait_for_server(timeout_sec=10.)
         goal = ComputePathToPose.Goal()
         goal.planner_id = "GridBased"
         goal.use_start = True
-        for pose, x in ((goal.start, 1.), (goal.goal, 5.)):
+        for pose, xy in ((goal.start, start), (goal.goal, destination)):
             pose.header.frame_id = "map"
             pose.header.stamp = node.get_clock().now().to_msg()
-            pose.pose.position.x, pose.pose.position.y = x, 1.
+            pose.pose.position.x, pose.pose.position.y = xy
             pose.pose.orientation.w = 1.
         try:
             handle = future_result(client.send_goal_async(goal))
             assert handle.accepted
             result = future_result(handle.get_result_async())
-            assert result.status == GoalStatus.STATUS_SUCCEEDED
+            if result.status != status:
+                for name, msg in maps.items():
+                    info = msg.metadata
+                    (tmp_path / (name+"_failure.json")).write_text(json.dumps(dict(
+                        width=info.size_x, height=info.size_y, resolution=info.resolution,
+                        origin=[info.origin.position.x, info.origin.position.y],
+                        start=start, goal=destination, costs=list(msg.data))))
+                print("Failed planning request", start, "->", destination)
+            assert result.status == status
             return [(p.pose.position.x, p.pose.position.y) for p in result.result.path.poses]
         finally:
             client.destroy()
@@ -176,6 +198,42 @@ def test_static_prior_is_independent_of_live_dynamic_master(tmp_path, remap_tf):
         before = plan()
         assert len(before) > 2
         assert any(y > 2.65 for x, y in before), "Smac ignored the prior wall"
+
+        # A previous goal may leave the real start inside only the PGM wall.
+        # It must retain its actual first pose and reconnect, never erase PGM.
+        for destination in ((5., 1.), (1., 1.), (5., 1.)):
+            recovered = plan(start=(3., 1.), destination=destination)
+            assert recovered[0] == pytest.approx((3., 1.))
+            assert recovered[-1] == pytest.approx(destination, abs=.08)
+            assert max(((b[0]-a[0])**2+(b[1]-a[1])**2)**.5
+                       for a, b in zip(recovered, recovered[1:])) < .10
+            spin_until(lambda: cost_at("static_prior_costmap", 3., 1.) >= 253)
+            assert bytes(maps["static_prior_costmap"].data) == original_prior
+        assert [v for p in plan() for v in p] == pytest.approx([v for p in before for v in p])
+
+        # Radius/disable are checked on each request, not silently ignored at runtime.
+        set_parameter("start_recovery_radius", .10)
+        assert not plan(start=(3., 1.), status=GoalStatus.STATUS_ABORTED)
+        set_parameter("start_recovery_radius", 0., accepted=False)
+        set_parameter("start_recovery_radius", .60)
+        set_parameter("start_recovery_enabled", False)
+        assert not plan(start=(3., 1.), status=GoalStatus.STATUS_ABORTED)
+        set_parameter("start_recovery_enabled", True)
+        assert plan(start=(3., 1.))[0] == pytest.approx((3., 1.))
+
+        # A genuinely occupied dynamic start must still fail. Restore the full
+        # synthetic map afterwards; do not introduce empty-cloud clearing.
+        blocked = list(boundary_data)
+        for y in range(18, 23):
+            for x in range(58, 63):
+                blocked[y*nx+x] = 100
+        boundary_pub.publish(occupancy(blocked))
+        spin_until(lambda: cost_at("global_costmap", 3., 1.) >= 253)
+        assert not plan(start=(3., 1.), status=GoalStatus.STATUS_ABORTED)
+        boundary_pub.publish(occupancy(boundary_data))
+        spin_until(lambda: cost_at("global_costmap", 3., 1.) == 0)
+        assert plan(start=(3., 1.))[0] == pytest.approx((3., 1.))
+        assert bytes(maps["static_prior_costmap"].data) == original_prior
 
         # The configured MINCO really subscribes to the normal dynamic master,
         # not the wrapper's static map. It stays inactive: no trajectory is run.

@@ -2,6 +2,6 @@
   <class name="hero_static_prior_planner/StaticPriorPlanner"
          type="hero_static_prior_planner::StaticPriorPlanner"
          base_class_type="nav2_core::GlobalPlanner">
-    <description>Unchanged Smac Hybrid A* on a private PGM-plus-inflation map, never the supplied dynamic global costmap.</description>
+    <description>Smac Hybrid A* on an unchanged private PGM-plus-inflation map; bounded dynamic-checked start connector only for a prior-occupied start.</description>
   </class>
 </library>

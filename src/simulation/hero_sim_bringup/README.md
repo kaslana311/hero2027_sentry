@@ -3,6 +3,13 @@
 This package is a simulation-only entry point. It does not start real Livox,
 serial, Odin, or Zenoh drivers and does not change the real-robot launch path.
 
+2026-10-21: split alone can reconnect a prior-occupied start through a bounded,
+dynamic-checked holonomic connector (default 0.60 m). The actual start is retained;
+the PGM is never cleared, and the main Smac search remains static-only. Normal
+starts, other modes, BT, MINCO/MPC and images are unchanged. Safe-build and restart
+the algorithm, keeping the original command. Parameters, limits and verification:
+[SPLIT_START_RECOVERY.md](./SPLIT_START_RECOVERY.md).
+
 2026-10-20 follow-up: at the user's request, all simulation navigation entries
 now default to `dog_resolution_xy:=0.05`. Only DOG's XY occupancy grid changes;
 DOG Z remains 0.03 m, and PGM/Nav2 geometry, filtering rules and thresholds stay

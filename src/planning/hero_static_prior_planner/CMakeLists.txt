@@ -13,6 +13,8 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 add_library(${PROJECT_NAME} SHARED src/static_prior_planner.cpp)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
@@ -22,7 +24,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   $<INSTALL_INTERFACE:include>)
 ament_target_dependencies(${PROJECT_NAME}
   geometry_msgs lifecycle_msgs nav2_core nav2_costmap_2d nav2_smac_planner
-  nav2_util nav_msgs pluginlib rclcpp rclcpp_lifecycle tf2_ros)
+  nav2_util nav_msgs pluginlib rclcpp rclcpp_lifecycle tf2_ros tf2 tf2_geometry_msgs)
 pluginlib_export_plugin_description_file(nav2_core plugins.xml)
 
 install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME}

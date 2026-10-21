@@ -2,6 +2,11 @@
 
 日期：2026-10-20，UTC+08:00。
 
+2026-10-21后续：当前split插件增加[静态起点冲突恢复](./SPLIT_START_RECOVERY.md)。
+正常起点原样Smac搜索；仅先验拒绝起点时，默认0.60 m内用动态碰撞检查的短连接
+接回静态路线，不改PGM，不把全局A星切回动态地图。原入口不变，需安全编译并
+重启算法，不需重建镜像；另外三种模式、行为树和MINCO/MPC不改。
+
 同日后续（父提交 `815b666`）：用户要求 DOG X/Y 恢复 5 厘米，现仿真入口默认
 `dog_resolution_xy:=0.05`，四模式一致；Z、PGM、Nav2 地图及过滤规则/阈值不变。
 `dog_resolution_xy:=0.0` 可重现本文件最初提交的 PGM 跟随行为。该变更不属于
@@ -25,12 +30,14 @@ split 的地图职责分离，详见 [DOG_XY_RESOLUTION.md](./DOG_XY_RESOLUTION.
 | 消费者 | 地图/数据 | 组成 |
 |---|---|---|
 | Smac Hybrid A* | 独立 `static_prior_costmap` | 原PGM + 标准只读StaticLayer + InflationLayer |
+| 异常起点短连接 | `global_costmap` | 只在静态起点碰撞时启用，默认最多0.60 m |
 | MINCO两阶段 | `global_costmap/costmap_raw` | 与dynamic_only完全相同：边界底图 + FastLayer + InflationLayer |
 | 局部检查/脱困 | `local_costmap` | 同dynamic_only，仍为5×5米滚动地图 |
 
 `planner_server` 和 `GridBased` ID不变。新薄适配插件
 `hero_static_prior_planner/StaticPriorPlanner` 原样调用Nav2的
-`nav2_smac_planner::SmacPlannerHybrid`，只替换传给Smac的地图；不复制/重写A星。
+`nav2_smac_planner::SmacPlannerHybrid`；不复制/重写A星。2026-10-21起，异常起点
+可在动态检查通过后先拼一小段连接，Smac本身仍只读取先验图。
 它不把host提供的动态global_costmap传给Smac。原 `GridBased.*` 搜索参数全部保留。
 
 独立先验图由插件管理configure/activate/deactivate/cleanup及执行线程：
