@@ -101,7 +101,8 @@ def ros_context():
 
 
 class DogHarness:
-    def __init__(self, tmp_path, enabled, threshold, map_resolution=.1, resolution_xy=0.):
+    def __init__(self, tmp_path, enabled, threshold, map_resolution=.1, resolution_xy=0.,
+                 ground_threshold=None):
         self.namespace = "/high_column_test_" + uuid.uuid4().hex[:10]
         self.node = rclpy.create_node("high_column_probe", namespace=self.namespace)
         self.messages = []
@@ -125,6 +126,8 @@ class DogHarness:
         params.update(map_yaml_path=str(map_yaml), cloud_topic="input", use_sim_time=False,
                       filter_high_columns=enabled, high_column_min_z=float(threshold),
                       resolution_xy=resolution_xy)
+        if ground_threshold is not None:
+            params["heighter_than_ground_threshold"] = float(ground_threshold)
         params_yaml = tmp_path / "params.yaml"
         params_yaml.write_text(yaml.safe_dump({"/**": {"ros__parameters": params}}))
         executable = os.environ.get("DOG_MAP_EXECUTABLE") or str(
@@ -219,6 +222,29 @@ def test_actual_dog_does_not_remove_ground_connected_column(dog):
         if dog.points():
             break
     assert dog.points(), "a column containing low occupied voxels must not be removed"
+
+
+@pytest.mark.parametrize("enabled,ground_threshold,expected_thin", [
+    (False, .05, True), (False, .091, False), (True, .05, False),
+])
+def test_actual_dog_keeps_raised_thin_columns_subject_to_remaining_filters(
+    tmp_path, ros_context, enabled, ground_threshold, expected_thin
+):
+    probe = DogHarness.__new__(DogHarness)
+    try:
+        probe.__init__(tmp_path, enabled, .30, ground_threshold=ground_threshold)
+        # Four occupied layers span 9 cm at map Z >= 0.37 m. The old fixed
+        # high/thin rule rejected these even with the optional filter disabled.
+        # Use 5 cm ground threshold only in the first/third synthetic cases
+        # to isolate that rule; production's unchanged 9.1 cm gate still rejects.
+        thin = [(1.21, .81, .37 + .03*k) for k in range(4)]
+        for _ in range(15):
+            probe.feed(thin + LOW)
+        points = probe.points()
+        assert any(p[1] < 0 for p in points), "low-wall control was lost"
+        assert any(p[1] > 0 for p in points) is expected_thin
+    finally:
+        probe.close()
 
 
 def test_actual_dog_preserves_nonempty_only_publication(dog):

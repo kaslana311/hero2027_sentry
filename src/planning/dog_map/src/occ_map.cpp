@@ -157,9 +157,12 @@ void OccMap::PubRes(pcl::PointCloud<pcl::PointXYZI>& pub_pc) {
                         }
                 double rate =1.0*occ_count/dzf_i;
                 // if(rate<0.5 &&dzf<0.12) continue;
-                if (dzf < 0.12 &&
-                    (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
-                    continue;  //过高过滤
+                // Temporarily disabled (2026-10-21): absolute-height thin-layer
+                // rejection can also discard real obstacles on raised terrain.
+                // Keep ground-span, optional high-column and hole filters intact.
+                // if (dzf < 0.12 &&
+                //     (min_z_occ_index - fake_layer_z) * resolution_z > 0.2)
+                //     continue;  // 高处薄层过滤（暂时停用）
                 // 计算最大空洞大小
                 int max_hole_size = 0;
                 int curr_hole_size = 0;

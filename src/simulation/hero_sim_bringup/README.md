@@ -3,6 +3,12 @@
 This package is a simulation-only entry point. It does not start real Livox,
 serial, Odin, or Zenoh drivers and does not change the real-robot launch path.
 
+2026-10-21 follow-up: at the user's request, DOG's legacy fixed-height thin-layer
+rejection is temporarily commented out in shared `OccMap::PubRes`. Ground-span,
+maximum-hole and optional `filter_high_columns` rules remain unchanged; this
+shared DOG change is not split-only. See [DOG_THIN_LAYER_FILTER.md](./DOG_THIN_LAYER_FILTER.md)
+for the exact condition, remaining limits and build/test record.
+
 2026-10-21: split alone can reconnect a prior-occupied start through a bounded,
 dynamic-checked holonomic connector (default 0.60 m). The actual start is retained;
 the PGM is never cleared, and the main Smac search remains static-only. Normal
