@@ -391,6 +391,21 @@ void h_model_IMU_output(state_output& s,
             ekfom_data.z_IMU(5) = 0.0;
         }
     }
+    // Debug-only consumed-sample evidence. Observes the existing measurement
+    // update; does not change gains, measurements, saturation, or state.
+    if (runtime_lio_diagnostics) {
+        RCLCPP_DEBUG(rclcpp::get_logger("laserMapping"),
+            "[LIO_IMU] t=%.6f acc=(%.9f,%.9f,%.9f) gyro=(%.9f,%.9f,%.9f) "
+            "sat=%d%d%d%d%d%d v=(%.9f,%.9f,%.9f) "
+            "omg=(%.9f,%.9f,%.9f) bg=(%.9f,%.9f,%.9f)",
+            time_update_last, acc_avr.x(), acc_avr.y(), acc_avr.z(),
+            angvel_avr.x(), angvel_avr.y(), angvel_avr.z(),
+            ekfom_data.satu_check[0], ekfom_data.satu_check[1],
+            ekfom_data.satu_check[2], ekfom_data.satu_check[3],
+            ekfom_data.satu_check[4], ekfom_data.satu_check[5],
+            s.vel.x(), s.vel.y(), s.vel.z(), s.omg.x(), s.omg.y(), s.omg.z(),
+            s.bg.x(), s.bg.y(), s.bg.z());
+    }
 }
 
 void pointBodyToWorld(PointType const* const pi, PointType* const po) {

@@ -200,6 +200,21 @@ def test_real_point_lio_initializes_from_synthetic_snapshots(harness_factory):
     assert h.registered[-1].width > 100
 
 
+def test_frontend_imu_history_and_scan_buffer_source_contract():
+    """Fast DDS discovery does not expose history depth. Guard the settings;
+    recorded-bag consumed-sample traces separately check runtime continuity.
+    """
+    import re
+    source = (Path(__file__).resolve().parents[3] /
+              "localization/point_lio/src/laserMapping.cpp").read_text()
+    assert re.search(r"imu_topic,\s*rclcpp::SensorDataQoS\(\)\.keep_last\(200\)", source)
+    assert "executor.spin_all(std::chrono::milliseconds(2));" in source
+    assert "executor.spin_some();" not in source
+    for name in ("crossmat_list", "pbody_list"):
+        assert f"{name}.resize(feats_down_size);" in source
+        assert f"{name}.reserve(feats_down_size);" not in source
+
+
 def test_sim_config_isolated_from_real_robot_defaults():
     import yaml
     root = Path(__file__).resolve().parents[1]

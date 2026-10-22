@@ -476,7 +476,10 @@ int main(int argc, char** argv) {
             });
     }
     auto sub_imu = nh->create_subscription<sensor_msgs::msg::Imu>(
-        imu_topic, rclcpp::SensorDataQoS(),
+        // Five samples cover only 25 ms at 200 Hz. Scan matching runs
+        // between callback-service windows, so retain a bounded one-second history
+        // instead of silently losing inertial samples during a busy scan.
+        imu_topic, rclcpp::SensorDataQoS().keep_last(200),
         [](const sensor_msgs::msg::Imu::ConstSharedPtr msg) { imu_cbk(msg); });
 
     auto pub_laser_cloud_full_res =
@@ -503,7 +506,11 @@ int main(int argc, char** argv) {
     rclcpp::Rate rate(500);
     while (rclcpp::ok()) {
         if (flg_exit) break;
-        executor.spin_some();
+        // spin_some collects each ready subscription only once. After a
+        // costly scan that leaves an IMU backlog, one sample per 500 Hz loop
+        // can fall behind even with a larger queue. Drain pending callbacks
+        // within a bounded budget, on the same thread, before synchronization.
+        executor.spin_all(std::chrono::milliseconds(2));
         if (sync_packages(Measures)) {
             if (flg_reset) {
                 RCLCPP_WARN(LOGGER, "reset when rosbag play back");
@@ -659,8 +666,10 @@ int main(int argc, char** argv) {
             t2 = omp_get_wtime();
 
             /*** iterated state estimation ***/
-            crossmat_list.reserve(feats_down_size);
-            pbody_list.reserve(feats_down_size);
+            // reserve() does not construct elements: indexed writes require
+            // size(), even when the backing allocation is large enough.
+            crossmat_list.resize(feats_down_size);
+            pbody_list.resize(feats_down_size);
             // pbody_ext_list.reserve(feats_down_size);
 
             for (size_t i = 0; i < feats_down_body->size(); i++) {
@@ -820,9 +829,22 @@ int main(int argc, char** argv) {
                             idx += time_seq[k];
                             continue;
                         }
+                        const auto before_lidar = kf_output.x_;
                         if (!kf_output.update_iterated_dyn_share_modified()) {
                             idx = idx + time_seq[k];
                             continue;
+                        }
+                        if (runtime_lio_diagnostics) {
+                            const V3D dp = kf_output.x_.pos - before_lidar.pos;
+                            const V3D dv = kf_output.x_.vel - before_lidar.vel;
+                            RCLCPP_DEBUG(LOGGER,
+                                "[LIO_SCAN] t=%.6f dp=(%.9f,%.9f,%.9f) "
+                                "dv=(%.9f,%.9f,%.9f) "
+                                "omg=(%.9f,%.9f,%.9f) bg=(%.9f,%.9f,%.9f)",
+                                time_current, dp.x(), dp.y(), dp.z(),
+                                dv.x(), dv.y(), dv.z(),
+                                kf_output.x_.omg.x(), kf_output.x_.omg.y(), kf_output.x_.omg.z(),
+                                kf_output.x_.bg.x(), kf_output.x_.bg.y(), kf_output.x_.bg.z());
                         }
                         solve_start = omp_get_wtime();
 
