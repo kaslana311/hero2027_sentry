@@ -183,8 +183,9 @@ of this field import. It is not a claim of successful 2027 tunnel traversal.
 On 2026-10-15 the rim increased from 0.20 m by another 0.15 m on each side;
 map geometry and inflation settings are unchanged. Restart the algorithm to regenerate it.
 On 2026-10-22, `dynamic_only` and `split` additionally move only the two long
-edges inward by 0.23 m, snapped to the nearest cell (0.225 m per side for the
-2027 map; 0.25 m for the 5 cm maps). Short edges retain the 0.35 m base rim.
+edges inward by 0.15 m, snapped to the nearest cell (0.15 m per side for both
+the 2027 and 5 cm maps). This moves each 2027 long edge outward by 0.075 m
+from the preceding revision. Short edges retain the 0.35 m base rim.
 Original PGM pixels, map origin/extents, inflation, and split's static planner
 prior are unchanged. This adjustment is in the shared boundary-map generator.
 Original PGM interior occupancy values are NOT merged; FastLayer still supplies

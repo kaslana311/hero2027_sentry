@@ -66,7 +66,7 @@ def _make_dynamic_boundary_map(map_yaml, boundary_width=0.35, output_directory=N
     Keep the original arena's cell bounds, not the rounded costmap's edges:
     the extra positive-X/Y padding must never become a route off the floor.
     The default rim adds 0.15 m inward on every side to the original 0.20 m.
-    The two long edges additionally move inward by 0.23 m, snapped to the
+    The two long edges additionally move inward by 0.15 m, snapped to the
     nearest cell. The short edges, original extent and origin stay unchanged.
     """
     metadata, cells_x, cells_y = _dynamic_map_info(map_yaml)
@@ -75,7 +75,7 @@ def _make_dynamic_boundary_map(map_yaml, boundary_width=0.35, output_directory=N
         raise ValueError("Boundary width must be finite and positive")
     rim = math.ceil(boundary_width / resolution)
     rim_x, rim_y = rim, rim
-    long_edge_inset = round(0.23 / resolution)
+    long_edge_inset = round(0.15 / resolution)
     if cells_x >= cells_y:
         rim_y += long_edge_inset
     else:

@@ -222,8 +222,8 @@ def test_boundary_map_preserves_originals_has_free_interior_and_occupied_padding
     assert rim == (14 if field == "rmuc_2027" else 7)
     assert rim * metadata["resolution"] == pytest.approx(.35)
     assert (rim - math.ceil(.20 / metadata["resolution"])) * metadata["resolution"] == pytest.approx(.15)
-    extra = 9 if field == "rmuc_2027" else 5
-    assert extra * metadata["resolution"] == pytest.approx(.225 if field == "rmuc_2027" else .25)
+    extra = 6 if field == "rmuc_2027" else 3
+    assert extra * metadata["resolution"] == pytest.approx(.15)
     for y in range(height):
         for x in range(width):
             free = rim <= x < arena_x - rim and rim + extra <= y < arena_y - rim - extra
@@ -232,7 +232,7 @@ def test_boundary_map_preserves_originals_has_free_interior_and_occupied_padding
     assert (original.read_bytes(), original_image.read_bytes()) == before
 
 
-@pytest.mark.parametrize("cells, rims", [((40, 26), (4, 6)), ((26, 40), (6, 4))])
+@pytest.mark.parametrize("cells, rims", [((40, 26), (4, 5)), ((26, 40), (5, 4))])
 def test_boundary_map_moves_only_long_edges(tmp_path, cells, rims):
     image = tmp_path / "field.pgm"
     image.write_bytes(f"P5\n{cells[0]} {cells[1]}\n255\n".encode() + bytes([255]) * math.prod(cells))
