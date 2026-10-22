@@ -66,21 +66,29 @@ def _make_dynamic_boundary_map(map_yaml, boundary_width=0.35, output_directory=N
     Keep the original arena's cell bounds, not the rounded costmap's edges:
     the extra positive-X/Y padding must never become a route off the floor.
     The default rim adds 0.15 m inward on every side to the original 0.20 m.
+    The two long edges additionally move inward by 0.23 m, snapped to the
+    nearest cell. The short edges, original extent and origin stay unchanged.
     """
     metadata, cells_x, cells_y = _dynamic_map_info(map_yaml)
     resolution = float(metadata["resolution"])
     if not math.isfinite(boundary_width) or boundary_width <= 0:
         raise ValueError("Boundary width must be finite and positive")
     rim = math.ceil(boundary_width / resolution)
-    if cells_x <= 2 * rim or cells_y <= 2 * rim:
+    rim_x, rim_y = rim, rim
+    long_edge_inset = round(0.23 / resolution)
+    if cells_x >= cells_y:
+        rim_y += long_edge_inset
+    else:
+        rim_x += long_edge_inset
+    if cells_x <= 2 * rim_x or cells_y <= 2 * rim_y:
         raise ValueError("Arena is too small for the occupied boundary rim")
     geometry = _dynamic_global_geometry(map_yaml)
     padded_x = math.ceil(geometry["width"] / resolution)
     padded_y = math.ceil(geometry["height"] / resolution)
     pixels = bytearray(padded_x * padded_y)  # Occupied rim and padding: black.
-    free_row = bytes([255]) * (cells_x - 2 * rim)
-    for y in range(rim, cells_y - rim):
-        start = (padded_y - 1 - y) * padded_x + rim
+    free_row = bytes([255]) * (cells_x - 2 * rim_x)
+    for y in range(rim_y, cells_y - rim_y):
+        start = (padded_y - 1 - y) * padded_x + rim_x
         pixels[start:start + len(free_row)] = free_row
 
     directory = output_directory or tempfile.mkdtemp(prefix="hero_dynamic_boundary_")

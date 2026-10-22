@@ -222,12 +222,29 @@ def test_boundary_map_preserves_originals_has_free_interior_and_occupied_padding
     assert rim == (14 if field == "rmuc_2027" else 7)
     assert rim * metadata["resolution"] == pytest.approx(.35)
     assert (rim - math.ceil(.20 / metadata["resolution"])) * metadata["resolution"] == pytest.approx(.15)
+    extra = 9 if field == "rmuc_2027" else 5
+    assert extra * metadata["resolution"] == pytest.approx(.225 if field == "rmuc_2027" else .25)
     for y in range(height):
         for x in range(width):
-            free = rim <= x < arena_x - rim and rim <= y < arena_y - rim
+            free = rim <= x < arena_x - rim and rim + extra <= y < arena_y - rim - extra
             assert pixels[(height - 1 - y) * width + x] == (255 if free else 0)
     assert set(pixels) == {0, 255}  # No unknown gray, no original interior walls.
     assert (original.read_bytes(), original_image.read_bytes()) == before
+
+
+@pytest.mark.parametrize("cells, rims", [((40, 26), (4, 6)), ((26, 40), (6, 4))])
+def test_boundary_map_moves_only_long_edges(tmp_path, cells, rims):
+    image = tmp_path / "field.pgm"
+    image.write_bytes(f"P5\n{cells[0]} {cells[1]}\n255\n".encode() + bytes([255]) * math.prod(cells))
+    metadata = tmp_path / "field.yaml"
+    metadata.write_text(yaml.safe_dump({"image": image.name, "resolution": .1,
+                                       "origin": [-2., -1., 0.]}))
+    result = factory()._make_dynamic_boundary_map(str(metadata), output_directory=tmp_path / "out")
+    width, height, pixels = read_generated_pgm(yaml.safe_load(Path(result).read_text())["image"])
+    for y in range(height):
+        for x in range(width):
+            free = rims[0] <= x < cells[0] - rims[0] and rims[1] <= y < cells[1] - rims[1]
+            assert pixels[(height - 1 - y) * width + x] == (255 if free else 0)
 
 
 @pytest.mark.parametrize("magic", ["P2", "P5"])

@@ -182,6 +182,11 @@ of this field import. It is not a claim of successful 2027 tunnel traversal.
 (origin and resolution), with a free interior and a 0.35 m inward occupied rim.
 On 2026-10-15 the rim increased from 0.20 m by another 0.15 m on each side;
 map geometry and inflation settings are unchanged. Restart the algorithm to regenerate it.
+On 2026-10-22, `dynamic_only` and `split` additionally move only the two long
+edges inward by 0.23 m, snapped to the nearest cell (0.225 m per side for the
+2027 map; 0.25 m for the 5 cm maps). Short edges retain the 0.35 m base rim.
+Original PGM pixels, map origin/extents, inflation, and split's static planner
+prior are unchanged. This adjustment is in the shared boundary-map generator.
 Original PGM interior occupancy values are NOT merged; FastLayer still supplies
 the detected interior obstacles. Humble requires
 integer-metre width/height parameters, so each extent is rounded up: RMUC 2026
