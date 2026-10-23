@@ -39,6 +39,10 @@
       satu_gyro: 35.0
       acc_norm: 9.8  # Match measured world gravity; preserve SI acceleration.
       lidar_meas_cov: 0.005
+      # Snapshot replay: allow lidar to correct velocity after an impact whose
+      # acceleration observation was saturated. This is process uncertainty,
+      # not a speed multiplier; real-robot configs retain the default 20.0.
+      vel_cov: 200.0
       acc_cov_output: 500.0
       gyr_cov_output: 1000.0
       b_acc_cov: 0.001
