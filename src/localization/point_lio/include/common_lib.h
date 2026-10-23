@@ -11,6 +11,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <queue>
 #include <sensor_msgs/msg/imu.hpp>
+#include "plane_fit.h"
 
 using namespace std;
 using namespace Eigen;
@@ -176,32 +177,13 @@ template <typename T>
 bool esti_plane(Matrix<T, 4, 1>& pca_result, const PointVector& point,
                 const T& threshold) {
     Matrix<T, NUM_MATCH_POINTS, 3> A;
-    Matrix<T, NUM_MATCH_POINTS, 1> b;
-    A.setZero();
-    b.setOnes();
-    b *= -1.0f;
-
+    if (point.size() < NUM_MATCH_POINTS) return false;
     for (int j = 0; j < NUM_MATCH_POINTS; j++) {
         A(j, 0) = point[j].x;
         A(j, 1) = point[j].y;
         A(j, 2) = point[j].z;
     }
-
-    Matrix<T, 3, 1> normvec = A.colPivHouseholderQr().solve(b);
-
-    T n = normvec.norm();
-    pca_result(0) = normvec(0) / n;
-    pca_result(1) = normvec(1) / n;
-    pca_result(2) = normvec(2) / n;
-    pca_result(3) = 1.0 / n;
-
-    for (int j = 0; j < NUM_MATCH_POINTS; j++) {
-        if (fabs(pca_result(0) * point[j].x + pca_result(1) * point[j].y +
-                 pca_result(2) * point[j].z + pca_result(3)) > threshold) {
-            return false;
-        }
-    }
-    return true;
+    return point_lio::fit_plane(A, threshold, pca_result);
 }
 
 inline double get_time_sec(const builtin_interfaces::msg::Time& time) {

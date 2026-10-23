@@ -837,6 +837,15 @@ int main(int argc, char** argv) {
                         if (runtime_lio_diagnostics) {
                             const V3D dp = kf_output.x_.pos - before_lidar.pos;
                             const V3D dv = kf_output.x_.vel - before_lidar.vel;
+                            const V3D dr = SO3ToEuler(before_lidar.rot.transpose() * kf_output.x_.rot);
+                            RCLCPP_DEBUG(LOGGER,
+                                "[LIO_STATE] t=%.6f dr=(%.9f,%.9f,%.9f) "
+                                "vpre=(%.9f,%.9f,%.9f) bgpre=(%.9f,%.9f,%.9f) "
+                                "ba=(%.9f,%.9f,%.9f)",
+                                time_current, dr.x(), dr.y(), dr.z(),
+                                before_lidar.vel.x(), before_lidar.vel.y(), before_lidar.vel.z(),
+                                before_lidar.bg.x(), before_lidar.bg.y(), before_lidar.bg.z(),
+                                kf_output.x_.ba.x(), kf_output.x_.ba.y(), kf_output.x_.ba.z());
                             RCLCPP_DEBUG(LOGGER,
                                 "[LIO_SCAN] t=%.6f dp=(%.9f,%.9f,%.9f) "
                                 "dv=(%.9f,%.9f,%.9f) "

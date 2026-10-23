@@ -130,6 +130,8 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_kalman_update test/test_kalman_update.cpp)
   target_link_libraries(test_kalman_update Eigen3::Eigen)
+  ament_add_gtest(test_plane_fit test/test_plane_fit.cpp)
+  target_link_libraries(test_plane_fit Eigen3::Eigen)
 endif()
 
 ament_package()

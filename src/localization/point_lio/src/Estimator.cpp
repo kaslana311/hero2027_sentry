@@ -241,6 +241,10 @@ void h_model_input(state_input& s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R,
 void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
                     Eigen::Matrix3d cov_R,
                     esekfom::dyn_share_modified<double>& ekfom_data) {
+    const bool trace_matches = runtime_lio_diagnostics &&
+        rcutils_logging_logger_is_enabled_for("laserMapping", RCUTILS_LOG_SEVERITY_DEBUG);
+    int near_line_matches = 0;
+    int ground_matches = 0;
     bool match_in_map = false;
     VF(4) pabcd;
     pabcd.setZero();
@@ -294,6 +298,19 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
                     // }
                     if (p_norm > match_s * pd2 * pd2) {
                         // point_selected_surf[i] = true;
+                        if (trace_matches) {
+                            V3D center = V3D::Zero();
+                            for (const auto& p : points_near) center += V3D(p.x, p.y, p.z);
+                            center /= points_near.size();
+                            M3D scatter = M3D::Zero();
+                            for (const auto& p : points_near) {
+                                const V3D delta = V3D(p.x, p.y, p.z) - center;
+                                scatter.noalias() += delta * delta.transpose();
+                            }
+                            const auto eigenvalues = Eigen::SelfAdjointEigenSolver<M3D>(scatter).eigenvalues().eval();
+                            if (eigenvalues[1] <= 0.001 * eigenvalues[2]) ++near_line_matches;
+                            if (std::abs(pabcd[2]) > 0.8) ++ground_matches;
+                        }
                         point_selected_surf[idx + j + 1] = true;
                         normvec->points[j].x = pabcd(0);
                         normvec->points[j].y = pabcd(1);
@@ -348,6 +365,19 @@ void h_model_output(state_output& s, Eigen::Matrix3d cov_p,
 
             m++;
         }
+    }
+    if (trace_matches) {
+        const M3D normal_information = ekfom_data.h_x.leftCols(3).transpose() *
+                                      ekfom_data.h_x.leftCols(3);
+        const Eigen::SelfAdjointEigenSolver<M3D> info(normal_information);
+        const V3D weak = info.eigenvectors().col(0);
+        RCLCPP_DEBUG(rclcpp::get_logger("laserMapping"),
+            "[LIO_MATCH] t=%.6f matched=%d line=%d ground=%d rms=%.9f "
+            "info=(%.9f,%.9f,%.9f) weak=(%.9f,%.9f,%.9f)",
+            time_current, effect_num_k, near_line_matches, ground_matches,
+            ekfom_data.z.norm() / std::sqrt(effect_num_k),
+            info.eigenvalues()[0], info.eigenvalues()[1], info.eigenvalues()[2],
+            weak.x(), weak.y(), weak.z());
     }
     effct_feat_num += effect_num_k;
 }
