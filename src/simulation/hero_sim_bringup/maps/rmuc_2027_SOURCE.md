@@ -1,11 +1,11 @@
-# RMUC 2027 multilevel support-surface map (applied 2026-10-16)
+# RMUC 2027 multilevel support-surface map (applied 2026-10-24)
 
 The active `rmuc_2027.pgm` is the user's manually edited version of the redrawn
 map from the paired simulator. The unchanged generated baseline remains at
 `maps/candidates/rmuc_2027/rmuc_2027_surface_candidate.pgm`; it is no longer
 byte-identical to the active map. Do not copy/regenerate it over the manual edits.
 
-- Active PGM SHA-256: `e98bc31e0719deb36bdcf2acb876bfa1d4ff3758dc782553563e49590db4c204`.
+- Active PGM SHA-256: `0a8a6740905f2e53ec917c5beb41154ef60873c3b2270a911b1bc1ed8f336ca7`.
 - Generated baseline SHA-256: `43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3`.
 - Size: 1120x642; resolution: 0.025 m/cell; extent: 28x16.05 m.
 - YAML origin: (-4.6,-6.4,0), where the third component is yaw, not height.
@@ -52,11 +52,26 @@ only file/coordinate/configuration checks were performed here.
 
 The user revised the source PGM again. Compared with first-edit commit `451ea7e`
 (SHA-256 `ed7331d69bc59231752468a962c9b9ecfaf9e8927f0cd1fa9209fa133e5c4a58`),
-14615 pixels changed: 2367 white-to-black and 12248 black-to-white. Current totals
-are 161804 occupied and 557236 free pixels. Dimensions, resolution, origin,
+14615 pixels changed: 2367 white-to-black and 12248 black-to-white. Second-edit totals
+were 161804 occupied and 557236 free pixels. Dimensions, resolution, origin,
 20 cm rims and the existing central check pixels remain unchanged; the image
 still contains only 0/255 values. This revision is installed without rewriting
 the user's PGM, changing algorithm logic, or rebuilding the simulator image.
+
+## Third user edit applied on 2026-10-24
+
+Source: `/home/apocalypse_linux_00/Downloads/rmuc_2027.pgm`, copied byte-for-byte.
+Compared with algorithm commit `ff9421e` (previous active SHA-256
+`e98bc31e0719deb36bdcf2acb876bfa1d4ff3758dc782553563e49590db4c204`),
+3824 pixels changed, all white-to-black. Current totals are 165628 occupied and
+553412 free pixels (345.8825 square metres). Size, YAML bytes, resolution,
+origin, 20 cm occupied rims and central check pixels are unchanged.
+No geometry, spawn, TF, filter, planner or costmap-mode logic is changed.
+This is an asset-only deployment: the source PGM and installed PGM are replaced
+with the exact same user bytes; provenance documents are synchronized as well.
+No code compilation or Docker rebuild is needed. The existing safe build
+script's `--verify-only` mode audits the installation without a cold rebuild.
+Restart the algorithm to reload the map; the simulator need not restart.
 
 The simulator model/spawn are unchanged by this map deployment:
 scale=1; world translation=(-0.14910008013248444,-0.06378698348999023,
@@ -96,10 +111,13 @@ change algorithm implementations/parameters, or alter the 2026 assets.
   uses the existing free-interior + 0.35 m rim map and sensed FastLayer obstacles.
   The global window stays 28x17 m, with occupied positive-Y padding; its raster
   becomes 1120x680 at 2.5 cm. No interior PGM walls are merged in this mode.
-- DOG map reads XY resolution from this same YAML: 5 cm becomes 2.5 cm, with
-  approximately four times as many XY cells. Its +/-10 m processing range,
-  Z resolution, decay, high-column filters and all code/thresholds are unchanged.
-  This is an inherent map-resolution effect, NOT an independent tuning change.
+- `split`: A* uses the prior static PGM, while the smoother retains the existing
+  dynamic-only global costmap composition. This edit changes the prior map and
+  RViz reference, not the dynamic obstacle pipeline or mode configuration.
+- DOG XY voxel resolution is independently selected by `dog_resolution_xy`
+  (default 0.05 m on this branch); only an explicit value of 0 follows the PGM
+  resolution. The PGM remains 0.025 m/cell. Neither value is changed by this
+  deployment. Processing range, Z resolution, decay and filters are unchanged.
 - Point-LIO, planner, MINCO/ESDF/MPC and behavior-tree implementations are unchanged.
   Nav2 retains footprint/inflation processing; the PGM contains no inflation.
 
