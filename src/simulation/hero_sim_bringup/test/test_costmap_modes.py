@@ -34,7 +34,7 @@ def test_2027_applied_surface_map_and_spawn_share_coordinates():
     assert report["map_origin"] == metadata["origin"]
     assert report["model_translation"][2] + report["raw_min_xyz"][2] + report["spawn_floor_above_bottom"] == pytest.approx(0.)
     digest = hashlib.sha256((PACKAGE / "maps/rmuc_2027.pgm").read_bytes()).hexdigest()
-    assert digest == report["pgm_sha256"] == "c53fc95b7ad4154078cc216f5c2d4a567d67a13e2847b63adb2d9261a4e88e45"
+    assert digest == report["pgm_sha256"] == "74b51fae88be5fa43313d20f03849aa41d7a2a9e9be5fa5af3ebe5c0822afa88"
 
 
 def test_2027_manual_map_preserves_binary_cells_and_edit_provenance():
@@ -43,13 +43,13 @@ def test_2027_manual_map_preserves_binary_cells_and_edit_provenance():
     assert header.startswith(b"P5\n") and b"1120 642" in header
     assert len(pixels) == 1120 * 642 and set(pixels) == {0, 255}
     report = json.loads((PACKAGE / "maps/rmuc_2027_projection.json").read_text())
-    assert pixels.count(0) == report["occupied_cells"] == 168112
-    assert pixels.count(255) == report["free_cells"] == 550928
+    assert pixels.count(0) == report["occupied_cells"] == 189543
+    assert pixels.count(255) == report["free_cells"] == 529497
     assert report["free_area_m2"] == pytest.approx(report["free_cells"] * report["resolution"] ** 2)
     edit = report["manual_edit"]
-    assert edit["revision"] == 6 and edit["base_algorithm_commit"] == "b488c9d"
-    assert edit["base_pgm_sha256"] == "426eefebfa9fd594f2de7ff9665f2c7a791ff22d65238c9b7ff76431e11b4dde"
-    assert edit["changed_cells"] == edit["free_to_occupied_cells"] + edit["occupied_to_free_cells"] == 488
+    assert edit["revision"] == 7 and edit["base_algorithm_commit"] == "0842bcf"
+    assert edit["base_pgm_sha256"] == "c53fc95b7ad4154078cc216f5c2d4a567d67a13e2847b63adb2d9261a4e88e45"
+    assert edit["changed_cells"] == edit["free_to_occupied_cells"] + edit["occupied_to_free_cells"] == 21431
     assert report["occupied_cells"] == edit["base_occupied_cells"] + edit["free_to_occupied_cells"] - edit["occupied_to_free_cells"]
     assert report["free_cells"] + report["occupied_cells"] == len(pixels)
 
