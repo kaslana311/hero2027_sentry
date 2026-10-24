@@ -180,16 +180,43 @@ nav_msgs::msg::Path StaticPriorPlanner::createPlan(
     std::fmod(std::round(yaw/(2.0*M_PI/bins))+bins, bins));
   auto * prior = prior_costmap_->getCostmap();
   // Match Smac's own pose validity test, including radius/footprint and the
-  // configured heading bin. A normal valid start takes the original path.
+  // configured heading bin. A successful original plan is never replaced.
   std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> prior_lock(*prior->getMutex());
   nav2_smac_planner::GridCollisionChecker prior_checker(prior, bins, node);
   prior_checker.setFootprint(prior_costmap_->getRobotFootprint(),
     prior_costmap_->getUseRadius(), nav2_smac_planner::findCircumscribedCost(prior_costmap_));
+  // Reuse the existing anchor clearance check to distinguish a blocked local
+  // departure from failures elsewhere in the map. This is NOT a new obstacle
+  // cost or a reason to replace an otherwise successful Smac route.
+  const double margin = std::max(2.0*prior->getResolution(),
+    node->get_parameter(name_+".minimum_turning_radius").as_double()+prior->getResolution());
+  const auto prior_free = [&](double x, double y) {
+      if (!freeAt(*prior, prior_checker, x, y, yaw_bin, false)) {return false;}
+      for (int i = 0; i < 8; ++i) {
+        const double a = i*M_PI/4.0;
+        if (!freeAt(*prior, prior_checker, x+margin*std::cos(a),
+          y+margin*std::sin(a), yaw_bin, false)) {return false;}
+      }
+      return true;
+    };
   if (freeAt(*prior, prior_checker, start.pose.position.x, start.pose.position.y,
     yaw_bin, node->get_parameter(name_+".allow_unknown").as_bool()))
   {
     prior_lock.unlock();
-    return planner_->createPlan(start, goal);
+    auto original = planner_->createPlan(start, goal);
+    if (!original.poses.empty()) {
+      return original;
+    }
+    prior_lock.lock();
+    if (prior_free(start.pose.position.x, start.pose.position.y)) {
+      // A locally manoeuvrable start does not justify bypassing a disconnected
+      // static route, an occupied goal, or the original search limits.
+      return original;
+    }
+    RCLCPP_WARN(node->get_logger(),
+      "SPLIT start recovery: collision-free start (%.3f, %.3f) has no Smac route "
+      "and lacks local manoeuvring clearance; checking bounded connector",
+      start.pose.position.x, start.pose.position.y);
   }
   if (start.header.frame_id != prior_costmap_->getGlobalFrameID() ||
     goal.header.frame_id != prior_costmap_->getGlobalFrameID() ||
@@ -205,20 +232,6 @@ nav_msgs::msg::Path StaticPriorPlanner::createPlan(
     dynamic_costmap_->getUseRadius(), nav2_smac_planner::findCircumscribedCost(dynamic_costmap_));
   const auto dynamic_free = [&](double x, double y) {
       return freeAt(*dynamic, dynamic_checker, x, y, yaw_bin, false);
-    };
-  // A merely non-lethal cell can still face a wall so closely that Dubin has
-  // no valid first primitive (it cannot reverse). Reserve a small manoeuvring
-  // margin rather than changing Smac's original motion model or search budget.
-  const double margin = std::max(2.0*prior->getResolution(),
-    node->get_parameter(name_+".minimum_turning_radius").as_double()+prior->getResolution());
-  const auto prior_free = [&](double x, double y) {
-      if (!freeAt(*prior, prior_checker, x, y, yaw_bin, false)) {return false;}
-      for (int i = 0; i < 8; ++i) {
-        const double a = i*M_PI/4.0;
-        if (!freeAt(*prior, prior_checker, x+margin*std::cos(a),
-          y+margin*std::sin(a), yaw_bin, false)) {return false;}
-      }
-      return true;
     };
   const double step = .5*std::min(prior->getResolution(), dynamic->getResolution());
   const detail::Point actual{start.pose.position.x, start.pose.position.y};
@@ -237,8 +250,9 @@ nav_msgs::msg::Path StaticPriorPlanner::createPlan(
   auto anchor = start;
   anchor.pose.position.x = connector->back().x;
   anchor.pose.position.y = connector->back().y;
-  // Exactly one unchanged Smac search: preserve its time budget, heuristic and
-  // static obstacle semantics. A disconnected anchor/goal still fails normally.
+  // One recovery search, with unchanged Smac budget, heuristic and static
+  // obstacles. A valid-but-trapped start may first have tried its original
+  // search; there is no loop over alternative full-map searches.
   auto path = planner_->createPlan(anchor, goal);
   if (path.poses.empty()) {
     RCLCPP_WARN(node->get_logger(),

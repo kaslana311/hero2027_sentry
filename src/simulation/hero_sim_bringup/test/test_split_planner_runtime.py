@@ -221,6 +221,49 @@ def test_static_prior_is_independent_of_live_dynamic_master(tmp_path, remap_tf):
         set_parameter("start_recovery_enabled", True)
         assert plan(start=(3., 1.))[0] == pytest.approx((3., 1.))
 
+        # Regression: a collision-free start can still have no valid Dubin
+        # departure. At cell 52 the next forward/turning primitives hit the
+        # inflated prior wall. Use its centre, not the float32 cell boundary.
+        # The old "start is free" early return got stuck.
+        trapped_start = (2.625, 1.)
+        # A nearby goal can still use Smac's valid analytic shortcut, which
+        # must remain successful and unchanged. Farther goals exercise the
+        # blocked lattice departure rather than that separate shortcut.
+        trapped_goals = ((.60, 3.30), (5., 3.20))
+        for destination in trapped_goals:
+            assert sum((a-b)**2 for a, b in zip(trapped_start, destination))**.5 > (
+                params["planner_server"]["ros__parameters"]["GridBased"]["analytic_expansion_max_length"])
+        assert 0 < cost_at("static_prior_costmap", *trapped_start) < 253
+        assert cost_at("global_costmap", *trapped_start) == 0
+        set_parameter("start_recovery_enabled", False)
+        assert not plan(start=trapped_start, destination=trapped_goals[0],
+                        status=GoalStatus.STATUS_ABORTED)
+        set_parameter("start_recovery_enabled", True)
+        for destination in (*trapped_goals, trapped_goals[0]):
+            recovered = plan(start=trapped_start, destination=destination)
+            assert recovered[0] == pytest.approx(trapped_start)
+            assert recovered[-1] == pytest.approx(destination, abs=.08)
+            assert max(((b[0]-a[0])**2+(b[1]-a[1])**2)**.5
+                       for a, b in zip(recovered, recovered[1:])) < .10
+            assert bytes(maps["static_prior_costmap"].data) == original_prior
+        assert [v for p in plan() for v in p] == pytest.approx([v for p in before for v in p])
+
+        # The new trigger must not bypass a real dynamic collision at this
+        # otherwise prior-valid start. Restore the map normally, never by an
+        # artificial empty point cloud or by changing the static prior.
+        blocked_departure = list(boundary_data)
+        for y in range(18, 23):
+            for x in range(49, 55):
+                blocked_departure[y*nx+x] = 100
+        boundary_pub.publish(occupancy(blocked_departure))
+        spin_until(lambda: cost_at("global_costmap", *trapped_start) >= 253)
+        assert not plan(start=trapped_start, destination=trapped_goals[0],
+                        status=GoalStatus.STATUS_ABORTED)
+        boundary_pub.publish(occupancy(boundary_data))
+        spin_until(lambda: cost_at("global_costmap", *trapped_start) == 0)
+        assert plan(start=trapped_start, destination=trapped_goals[0])[0] == pytest.approx(trapped_start)
+        assert bytes(maps["static_prior_costmap"].data) == original_prior
+
         # A genuinely occupied dynamic start must still fail. Restore the full
         # synthetic map afterwards; do not introduce empty-cloud clearing.
         blocked = list(boundary_data)

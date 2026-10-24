@@ -11,7 +11,8 @@ namespace hero_static_prior_planner
 {
 
 // Smac searches the unchanged static prior. A bounded dynamic-checked connector
-// may precede it only when that prior rejects the actual start. Split mode only.
+// may precede it when the prior rejects the actual start, or the original plan
+// fails and the start lacks local manoeuvring clearance. Split mode only.
 class StaticPriorPlanner : public nav2_core::GlobalPlanner
 {
 public:

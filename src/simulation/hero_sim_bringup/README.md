@@ -3,6 +3,12 @@
 This package is a simulation-only entry point. It does not start real Livox,
 serial, Odin, or Zenoh drivers and does not change the real-robot launch path.
 
+2026-10-24: split start recovery also covers a collision-free start when its
+original Smac plan fails and nearby static obstacles leave insufficient local
+manoeuvring clearance. Successful original plans, other modes and dynamic
+collision checks are unchanged; no map clearing or extra control node is added.
+See [SPLIT_START_RECOVERY.md](./SPLIT_START_RECOVERY.md) for evidence and limits.
+
 2026-10-21 follow-up: at the user's request, DOG's legacy fixed-height thin-layer
 rejection is temporarily commented out in shared `OccMap::PubRes`. Ground-span,
 maximum-hole and optional `filter_high_columns` rules remain unchanged; this
