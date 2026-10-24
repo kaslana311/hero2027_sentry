@@ -152,6 +152,12 @@ def _make_sim_params(
     # cannot flood the smoother and RViz. The real-robot behavior tree remains
     # unchanged.
     bt_navigator["default_nav_to_pose_bt_xml"] = behavior_tree_xml
+    # Only the simulation entry loads this v3 BT plugin. Keep the real-robot
+    # YAML/tree and all costmap modes' planning/control parameters unchanged.
+    plugins = list(bt_navigator.get("plugin_lib_names", []))
+    if "hero_goal_update_reset_bt_node" not in plugins:
+        plugins.append("hero_goal_update_reset_bt_node")
+    bt_navigator["plugin_lib_names"] = plugins
     # Be explicit in generated files and discard the historical misspelling.
     bt_navigator.pop("default_server_timfeout", None)
     bt_navigator["default_server_timeout"] = 100

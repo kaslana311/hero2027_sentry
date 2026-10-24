@@ -52,6 +52,12 @@ LEGACY_HASHES = {
 def test_legacy_modes_match_every_pre_split_parameter(field, mode):
     with generated(mode, field) as params:
         assert params["dog_map_node"]["ros__parameters"].pop("resolution_xy") == .05
+        # The common simulation BT now loads exactly one goal-isolation plugin.
+        # Keep all historical hashes: only this explicitly allowed addition is
+        # removed before comparing every remaining pre-split parameter.
+        plugins = params["bt_navigator"]["ros__parameters"]["plugin_lib_names"]
+        assert plugins.pop() == "hero_goal_update_reset_bt_node"
+        assert "hero_goal_update_reset_bt_node" not in plugins
         text = yaml.safe_dump(params).replace(
             str(PACKAGE / "maps" / f"{field}.yaml"), "<map_yaml>")
         canonical = json.dumps(yaml.safe_load(text), sort_keys=True, separators=(",", ":"))

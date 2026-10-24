@@ -9,6 +9,7 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>behaviortree_cpp_v3</depend>
   <depend>geometry_msgs</depend>
   <depend>livox_ros_driver2</depend>
   <depend>nav_msgs</depend>
@@ -27,6 +28,9 @@
   <exec_depend>nav2_map_server</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>ament_index_python</test_depend>
+  <test_depend>nav2_behavior_tree</test_depend>
+  <test_depend>rclcpp_action</test_depend>
   <test_depend>dog_map</test_depend>
   <test_depend>rclpy</test_depend>
   <test_depend>action_msgs</test_depend>

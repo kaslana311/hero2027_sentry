@@ -3,22 +3,25 @@
   <BehaviorTree ID="MainTree">
     <!-- Restore tolerance lost in fd84a3b; transient clouds must not rapidly abort a goal. -->
     <RecoveryNode name="NavigateRecovery" number_of_retries="150">
-      <PipelineSequence name="NavigateWithReplanning">
-        <!-- The real-robot tree remains at 15 Hz; the simulator replans at 3 Hz. -->
-        <RateController hz="3.0">
-          <RecoveryNode name="ComputePathToPose" number_of_retries="1">
-            <Sequence>
-              <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
-              <SmoothPath unsmoothed_path="{path}" smoothed_path="{path}" smoother_id="minco_smoother"/>
-            </Sequence>
-            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+      <!-- A new destination cannot inherit the old FollowPath success. -->
+      <ResetOnGoalUpdate goal="{goal}">
+        <PipelineSequence name="NavigateWithReplanning">
+          <!-- The real-robot tree remains at 15 Hz; the simulator replans at 3 Hz. -->
+          <RateController hz="3.0">
+            <RecoveryNode name="ComputePathToPose" number_of_retries="1">
+              <Sequence>
+                <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+                <SmoothPath unsmoothed_path="{path}" smoothed_path="{path}" smoother_id="minco_smoother"/>
+              </Sequence>
+              <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+            </RecoveryNode>
+          </RateController>
+          <RecoveryNode name="FollowPath" number_of_retries="10">
+            <FollowPath path="{path}" controller_id="FollowPath"/>
+            <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
           </RecoveryNode>
-        </RateController>
-        <RecoveryNode name="FollowPath" number_of_retries="10">
-          <FollowPath path="{path}" controller_id="FollowPath"/>
-          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
-        </RecoveryNode>
-      </PipelineSequence>
+        </PipelineSequence>
+      </ResetOnGoalUpdate>
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
         <Sequence name="StuckRecovery">

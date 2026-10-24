@@ -6,6 +6,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(behaviortree_cpp_v3 REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(livox_ros_driver2 REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -16,6 +17,15 @@ find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(visualization_msgs REQUIRED)
+
+add_library(hero_goal_update_reset_bt_node SHARED src/reset_on_goal_update.cpp)
+target_compile_features(hero_goal_update_reset_bt_node PRIVATE cxx_std_17)
+target_compile_definitions(hero_goal_update_reset_bt_node PRIVATE BT_PLUGIN_EXPORT)
+target_include_directories(hero_goal_update_reset_bt_node PRIVATE include)
+ament_target_dependencies(hero_goal_update_reset_bt_node behaviortree_cpp_v3 geometry_msgs)
+install(TARGETS hero_goal_update_reset_bt_node LIBRARY DESTINATION lib)
+ament_export_libraries(hero_goal_update_reset_bt_node)
+install(DIRECTORY include/ DESTINATION include)
 
 add_executable(sim_ground_truth_bridge src/sim_ground_truth_bridge.cpp)
 ament_target_dependencies(
@@ -61,6 +71,21 @@ install(DIRECTORY behavior_trees config launch maps rviz
 
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
+  find_package(nav2_msgs REQUIRED)
+  find_package(rclcpp_action REQUIRED)
+  add_executable(goal_update_reset_actions test/test_goal_update_reset_actions.cpp)
+  target_compile_features(goal_update_reset_actions PRIVATE cxx_std_17)
+  ament_target_dependencies(goal_update_reset_actions
+    behaviortree_cpp_v3 geometry_msgs nav_msgs nav2_msgs rclcpp rclcpp_action)
+  add_executable(goal_update_reset_control_flow test/test_goal_update_reset_control_flow.cpp)
+  target_compile_features(goal_update_reset_control_flow PRIVATE cxx_std_17)
+  ament_target_dependencies(goal_update_reset_control_flow behaviortree_cpp_v3 geometry_msgs nav_msgs)
+  ament_add_pytest_test(goal_update_reset test/test_goal_update_reset.py
+    TIMEOUT 90
+    ENV "GOAL_RESET_TEST_EXECUTABLE=$<TARGET_FILE:goal_update_reset_control_flow>"
+        "GOAL_RESET_PLUGIN=$<TARGET_FILE:hero_goal_update_reset_bt_node>"
+        "GOAL_RESET_ACTIONS_EXECUTABLE=$<TARGET_FILE:goal_update_reset_actions>"
+  )
   ament_add_pytest_test(cloud_registration test/test_cloud_registration.py
     TIMEOUT 120
     ENV "BRIDGE_EXECUTABLE=$<TARGET_FILE:sim_ground_truth_bridge>"
