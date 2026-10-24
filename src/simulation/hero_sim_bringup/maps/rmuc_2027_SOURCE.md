@@ -5,7 +5,7 @@ map from the paired simulator. The unchanged generated baseline remains at
 `maps/candidates/rmuc_2027/rmuc_2027_surface_candidate.pgm`; it is no longer
 byte-identical to the active map. Do not copy/regenerate it over the manual edits.
 
-- Active PGM SHA-256: `74b51fae88be5fa43313d20f03849aa41d7a2a9e9be5fa5af3ebe5c0822afa88`.
+- Active PGM SHA-256: `f01f86a85db9367c539a9899995230046106be2a5495e6403ab7acb6ce23e4f6`.
 - Generated baseline SHA-256: `43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3`.
 - Size: 1120x642; resolution: 0.025 m/cell; extent: 28x16.05 m.
 - YAML origin: (-4.6,-6.4,0), where the third component is yaw, not height.
@@ -119,12 +119,27 @@ File/configuration checks are not a driving or shortest-route acceptance test.
 Source: `/home/apocalypse_linux_00/Downloads/rmuc_2027.pgm`, copied byte-for-byte
 to the source and installed map. Relative to commit `0842bcf` (previous SHA-256
 `c53fc95b7ad4154078cc216f5c2d4a567d67a13e2847b63adb2d9261a4e88e45`),
-21431 pixels changed, all white-to-black. Current totals are 189543 occupied and
+21431 pixels changed, all white-to-black. Seventh-edit totals were 189543 occupied and
 529497 free pixels (330.935625 square metres). The 1120x642 dimensions, binary
 0/255 values, YAML bytes, origin, resolution, 20 cm occupied rims and existing
 central check pixels are unchanged. Only the image, provenance and matching
 checksum/count tests change; the split departure-recovery fix in `0842bcf`,
 planner/perception parameters, launch logic and simulator assets are preserved.
+This is a data-only deployment; restart the algorithm with the original command
+to reload the map. No code compilation or Docker rebuild is required.
+File/configuration checks do not certify physical clearances or route reachability.
+
+## Eighth user edit applied on 2026-10-24
+
+Source: `/home/apocalypse_linux_00/Downloads/rmuc_2027.pgm`, copied byte-for-byte
+to the source and installed map. Relative to commit `00941b4` (previous SHA-256
+`74b51fae88be5fa43313d20f03849aa41d7a2a9e9be5fa5af3ebe5c0822afa88`),
+5083 pixels changed, all black-to-white. Current totals are 184460 occupied and
+534580 free pixels (334.1125 square metres). The 1120x642 dimensions, binary
+0/255 values, YAML bytes, origin, resolution, 20 cm occupied rims and existing
+central check pixels are unchanged. Only the image, provenance and matching
+checksum/count tests change; the split start/departure recovery, Point-LIO,
+planning/perception parameters, launch logic and simulator assets are preserved.
 This is a data-only deployment; restart the algorithm with the original command
 to reload the map. No code compilation or Docker rebuild is required.
 File/configuration checks do not certify physical clearances or route reachability.
