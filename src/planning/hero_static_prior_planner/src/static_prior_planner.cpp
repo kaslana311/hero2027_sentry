@@ -10,6 +10,7 @@
 
 #include "lifecycle_msgs/msg/state.hpp"
 #include "nav2_core/exceptions.hpp"
+#include "nav2_smac_planner/node_hybrid.hpp"
 #include "nav2_smac_planner/utils.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "pluginlib/class_list_macros.hpp"
@@ -35,6 +36,46 @@ bool freeAt(
 bool validRadius(double radius)
 {
   return std::isfinite(radius) && radius > 0.0 && radius <= 2.0;
+}
+
+// Check actual Smac primitives, not an extra isotropic footprint dilation.
+// Two distinct expansions reject the one-step cul-de-sac seen on 2026-10-24,
+// while a narrow corridor only needs clearance in a traversable direction.
+bool hasLocalDeparture(
+  nav2_costmap_2d::Costmap2D & map, nav2_smac_planner::GridCollisionChecker & checker,
+  nav2_smac_planner::HybridMotionTable & motions, double x, double y, float yaw_bin)
+{
+  using Node = nav2_smac_planner::NodeHybrid;
+  unsigned int mx, my;
+  if (!map.worldToMap(x, y, mx, my)) {return false;}
+  Node root(0);
+  root.setPose({static_cast<float>(mx), static_cast<float>(my), yaw_bin});
+  const auto valid = [&](const nav2_smac_planner::MotionPose & p) {
+      return std::isfinite(p._x) && std::isfinite(p._y) && std::isfinite(p._theta) &&
+             p._x >= 0 && p._y >= 0 && p._x < map.getSizeInCellsX() &&
+             p._y < map.getSizeInCellsY() && p._theta >= 0 &&
+             p._theta < motions.num_angle_quantization &&
+             !checker.inCollision(p._x, p._y, p._theta, false);
+    };
+  const auto index = [&](float px, float py, float heading) {
+      return Node::getIndex(static_cast<unsigned int>(px), static_cast<unsigned int>(py),
+        static_cast<unsigned int>(heading), map.getSizeInCellsX(),
+        motions.num_angle_quantization);
+    };
+  const auto origin = index(root.pose.x, root.pose.y, root.pose.theta);
+  for (const auto & first : motions.getProjections(&root)) {
+    if (!valid(first)) {continue;}
+    const auto first_index = index(first._x, first._y, first._theta);
+    if (first_index == origin) {continue;}
+    Node next(first_index);
+    next.setPose({first._x, first._y, first._theta});
+    for (const auto & second : motions.getProjections(&next)) {
+      if (!valid(second)) {continue;}
+      const auto second_index = index(second._x, second._y, second._theta);
+      if (second_index != origin && second_index != first_index) {return true;}
+    }
+  }
+  return false;
 }
 }  // namespace
 
@@ -185,19 +226,31 @@ nav_msgs::msg::Path StaticPriorPlanner::createPlan(
   nav2_smac_planner::GridCollisionChecker prior_checker(prior, bins, node);
   prior_checker.setFootprint(prior_costmap_->getRobotFootprint(),
     prior_costmap_->getUseRadius(), nav2_smac_planner::findCircumscribedCost(prior_costmap_));
-  // Reuse the existing anchor clearance check to distinguish a blocked local
-  // departure from failures elsewhere in the map. This is NOT a new obstacle
-  // cost or a reason to replace an otherwise successful Smac route.
-  const double margin = std::max(2.0*prior->getResolution(),
-    node->get_parameter(name_+".minimum_turning_radius").as_double()+prior->getResolution());
+  // A corridor may be traversable without room on all eight sides. Lazily
+  // build a private Smac primitive table; never modify NodeHybrid's shared
+  // search table or run another full-map planner to select an anchor.
+  std::unique_ptr<nav2_smac_planner::HybridMotionTable> departure_model;
   const auto prior_free = [&](double x, double y) {
       if (!freeAt(*prior, prior_checker, x, y, yaw_bin, false)) {return false;}
-      for (int i = 0; i < 8; ++i) {
-        const double a = i*M_PI/4.0;
-        if (!freeAt(*prior, prior_checker, x+margin*std::cos(a),
-          y+margin*std::sin(a), yaw_bin, false)) {return false;}
+      if (!departure_model) {
+        departure_model = std::make_unique<nav2_smac_planner::HybridMotionTable>();
+        departure_model->num_angle_quantization = 0;
+        departure_model->min_turning_radius = 0;
+        nav2_smac_planner::SearchInfo search{};
+        search.minimum_turning_radius =
+          node->get_parameter(name_+".minimum_turning_radius").as_double()/prior->getResolution();
+        auto width = prior->getSizeInCellsX(), height = prior->getSizeInCellsY();
+        auto quantizations = static_cast<unsigned int>(bins);
+        const auto model = node->get_parameter(name_+".motion_model_for_search").as_string();
+        if (model == "DUBIN") {
+          departure_model->initDubin(width, height, quantizations, search);
+        } else if (model == "REEDS_SHEPP") {
+          departure_model->initReedsShepp(width, height, quantizations, search);
+        } else {
+          throw nav2_core::PlannerException("Split recovery requires a supported Smac motion model");
+        }
       }
-      return true;
+      return hasLocalDeparture(*prior, prior_checker, *departure_model, x, y, yaw_bin);
     };
   if (freeAt(*prior, prior_checker, start.pose.position.x, start.pose.position.y,
     yaw_bin, node->get_parameter(name_+".allow_unknown").as_bool()))
@@ -215,7 +268,7 @@ nav_msgs::msg::Path StaticPriorPlanner::createPlan(
     }
     RCLCPP_WARN(node->get_logger(),
       "SPLIT start recovery: collision-free start (%.3f, %.3f) has no Smac route "
-      "and lacks local manoeuvring clearance; checking bounded connector",
+      "and has no local Smac departure; checking bounded connector",
       start.pose.position.x, start.pose.position.y);
   }
   if (start.header.frame_id != prior_costmap_->getGlobalFrameID() ||
@@ -244,7 +297,7 @@ nav_msgs::msg::Path StaticPriorPlanner::createPlan(
   prior_lock.unlock();
   if (!connector) {
     throw nav2_core::PlannerException(
-      "SPLIT start recovery: no dynamic-free connector to the static prior within " +
+      "SPLIT start recovery: no locally traversable prior anchor with a dynamic-free connector within " +
       std::to_string(radius) + " m; maps unchanged");
   }
   auto anchor = start;

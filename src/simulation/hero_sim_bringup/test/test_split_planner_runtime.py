@@ -6,6 +6,7 @@ map/TF/cloud publishers replace Gazebo, DOG and the robot; no cmd_vel is created
 """
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -138,7 +139,8 @@ def test_static_prior_is_independent_of_live_dynamic_master(tmp_path, remap_tf):
         finally:
             node.destroy_client(client)
 
-    def plan(start=(1., 1.), destination=(5., 1.), status=GoalStatus.STATUS_SUCCEEDED):
+    def plan(start=(1., 1.), destination=(5., 1.), status=GoalStatus.STATUS_SUCCEEDED,
+             heading=0.):
         client = ActionClient(node, ComputePathToPose, "compute_path_to_pose")
         assert client.wait_for_server(timeout_sec=10.)
         goal = ComputePathToPose.Goal()
@@ -148,7 +150,8 @@ def test_static_prior_is_independent_of_live_dynamic_master(tmp_path, remap_tf):
             pose.header.frame_id = "map"
             pose.header.stamp = node.get_clock().now().to_msg()
             pose.pose.position.x, pose.pose.position.y = xy
-            pose.pose.orientation.w = 1.
+            pose.pose.orientation.z = math.sin(heading/2.)
+            pose.pose.orientation.w = math.cos(heading/2.)
         try:
             handle = future_result(client.send_goal_async(goal))
             assert handle.accepted
@@ -277,6 +280,46 @@ def test_static_prior_is_independent_of_live_dynamic_master(tmp_path, remap_tf):
         spin_until(lambda: cost_at("global_costmap", 3., 1.) == 0)
         assert plan(start=(3., 1.))[0] == pytest.approx((3., 1.))
         assert bytes(maps["static_prior_costmap"].data) == original_prior
+
+        # Narrow legal lanes must not be rejected by extra eight-way clearance.
+        # The real robot can reconnect by a short holonomic move, then Smac
+        # can advance along the lane even though it cannot move toward either wall.
+        for vertical in (False, True):
+            narrow_data = [100 if (x if vertical else y) in (18, 27) else 0
+                           for y in range(ny) for x in range(nx)]
+            start = (1., 2.5) if vertical else (2.5, 1.)
+            lane = (1.125, 2.5) if vertical else (2.5, 1.125)
+            destination = (1.125, 3.2) if vertical else (5.2, 1.125)
+            heading = math.pi/2 if vertical else 0.
+            prior_pub.publish(occupancy(narrow_data))
+            spin_until(lambda: cost_at("static_prior_costmap", *start) >= 253 and
+                       cost_at("static_prior_costmap", *lane) < 253)
+            narrow_prior = bytes(maps["static_prior_costmap"].data)
+            assert cost_at("global_costmap", *start) == 0
+            set_parameter("start_recovery_enabled", False)
+            assert not plan(start=start, destination=destination, heading=heading,
+                            status=GoalStatus.STATUS_ABORTED)
+            set_parameter("start_recovery_enabled", True)
+            for _ in range(2):
+                recovered = plan(start=start, destination=destination, heading=heading)
+                assert recovered[0] == pytest.approx(start)
+                assert recovered[-1] == pytest.approx(destination, abs=.08)
+                assert max(math.dist(a,b) for a,b in zip(recovered,recovered[1:])) < .10
+                assert bytes(maps["static_prior_costmap"].data) == narrow_prior
+            blocked_narrow = list(boundary_data)
+            sx, sy = (int(v/resolution) for v in start)
+            for yy in range(sy-2,sy+3):
+                for xx in range(sx-2,sx+3):
+                    blocked_narrow[yy*nx+xx] = 100
+            boundary_pub.publish(occupancy(blocked_narrow))
+            spin_until(lambda: cost_at("global_costmap", *start) >= 253)
+            assert not plan(start=start, destination=destination, heading=heading,
+                            status=GoalStatus.STATUS_ABORTED)
+            boundary_pub.publish(occupancy(boundary_data))
+            spin_until(lambda: cost_at("global_costmap", *start) == 0)
+            assert plan(start=start, destination=destination, heading=heading)
+        prior_pub.publish(occupancy(prior_data))
+        spin_until(lambda: bytes(maps["static_prior_costmap"].data) == original_prior)
 
         # The configured MINCO really subscribes to the normal dynamic master,
         # not the wrapper's static map. It stays inactive: no trajectory is run.
