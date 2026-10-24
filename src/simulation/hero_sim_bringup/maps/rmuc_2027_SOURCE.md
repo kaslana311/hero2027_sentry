@@ -5,7 +5,7 @@ map from the paired simulator. The unchanged generated baseline remains at
 `maps/candidates/rmuc_2027/rmuc_2027_surface_candidate.pgm`; it is no longer
 byte-identical to the active map. Do not copy/regenerate it over the manual edits.
 
-- Active PGM SHA-256: `75aac7aa13987a13995cd09157fec25ee8b03d2d6bde817306bac2163978bf9d`.
+- Active PGM SHA-256: `426eefebfa9fd594f2de7ff9665f2c7a791ff22d65238c9b7ff76431e11b4dde`.
 - Generated baseline SHA-256: `43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3`.
 - Size: 1120x642; resolution: 0.025 m/cell; extent: 28x16.05 m.
 - YAML origin: (-4.6,-6.4,0), where the third component is yaw, not height.
@@ -78,14 +78,28 @@ Restart the algorithm to reload the map; the simulator need not restart.
 The user widened the passages and requested another exact-byte deployment of
 `/home/apocalypse_linux_00/Downloads/rmuc_2027.pgm`. Relative to commit `cf04c36`
 (SHA-256 `0a8a6740905f2e53ec917c5beb41154ef60873c3b2270a911b1bc1ed8f336ca7`),
-1655 pixels changed, all black-to-white. Current totals are 163973 occupied and
+1655 pixels changed, all black-to-white. Fourth-edit totals were 163973 occupied and
 555067 free pixels (346.916875 square metres). The two reviewed passage
-cross-sections at raster rows 520 and 120 are now 0.60 m and 0.625 m wide,
+cross-sections at raster rows 520 and 120 were 0.60 m and 0.625 m wide,
 respectively; these are sampled widths, not a full navigation acceptance test.
 Dimensions, YAML bytes, origin, resolution, 20 cm occupied rims and central
 check pixels remain unchanged. Source and installed assets are synchronized;
 no planner weights, robot radius, inflation, TF, filters, simulator geometry or
 launch commands are changed. Restart only the algorithm to reload this map.
+
+## Fifth user edit applied on 2026-10-24
+
+Source: `/home/apocalypse_linux_00/Downloads/rmuc_2027.pgm`, copied byte-for-byte
+to the source and installed map. Relative to commit `5c66f18` (previous SHA-256
+`75aac7aa13987a13995cd09157fec25ee8b03d2d6bde817306bac2163978bf9d`),
+3651 pixels changed, all white-to-black. Current totals are 167624 occupied and
+551416 free pixels (344.635 square metres). The map remains binary 0/255 at
+1120x642; YAML bytes, origin, resolution, 20 cm occupied rims and existing
+central check pixels are unchanged. Provenance and checksum tests follow the
+new user image; no planning, perception, simulator, or mode parameters change.
+This is a data-only deployment: restart the algorithm using the original
+command to reload it; no compilation or Docker rebuild is required.
+File/configuration checks do not certify physical passage clearance or routing.
 
 The simulator model/spawn are unchanged by this map deployment:
 scale=1; world translation=(-0.14910008013248444,-0.06378698348999023,
