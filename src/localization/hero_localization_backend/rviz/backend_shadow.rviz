@@ -1,0 +1,121 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: map
+    Background Color: 48; 48; 48
+    Frame Rate: 15
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Metric grid - 1 m
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 60
+      Alpha: 0.2
+    - Class: rviz_default_plugins/Axes
+      Name: Map origin - nominal spawn XY
+      Enabled: true
+      Reference Frame: map
+      Length: 1
+      Radius: 0.025
+    - Class: rviz_default_plugins/PointCloud2
+      Name: GRAY - immutable 3-D prior (not PGM)
+      Enabled: true
+      Topic:
+        Value: backend/prior_map
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        Depth: 1
+      Color Transformer: FlatColor
+      Color: 160; 160; 160
+      Style: Points
+      Size (Pixels): 2
+      Alpha: 0.4
+      Decay Time: 0
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Backend corrected scan (height colors)
+      Enabled: true
+      Topic:
+        Value: cloud_registered_map
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 1
+      Color Transformer: AxisColor
+      Axis: Z
+      Style: Points
+      Size (Pixels): 2
+      Alpha: 0.8
+      Decay Time: 0
+    - Class: rviz_default_plugins/Path
+      Name: GREEN - truth chassis (observer only)
+      Enabled: true
+      Topic:
+        Value: comparison/truth_path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 1
+      Color: 25; 255; 51
+      Line Style: Billboards
+      Line Width: 0.04
+      Buffer Length: 1
+    - Class: rviz_default_plugins/Path
+      Name: BLUE - frontend without backend correction
+      Enabled: true
+      Topic:
+        Value: comparison/frontend_path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 1
+      Color: 25; 128; 255
+      Line Style: Billboards
+      Line Width: 0.025
+      Buffer Length: 1
+    - Class: rviz_default_plugins/Path
+      Name: CYAN - backend trusted chassis trajectory
+      Enabled: true
+      Topic:
+        Value: comparison/backend_path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 1
+      Color: 0; 255; 255
+      Line Style: Billboards
+      Line Width: 0.035
+      Buffer Length: 1
+    - Class: rviz_default_plugins/PoseWithCovariance
+      Name: Backend chassis pose and uncertainty
+      Enabled: true
+      Topic:
+        Value: backend/localization_pose
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 1
+    - Class: rviz_default_plugins/MarkerArray
+      Name: SHADOW status - not used by navigation
+      Enabled: true
+      Topic:
+        Value: comparison/markers
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        Depth: 1
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 45
+      Pitch: 1.25
+      Yaw: 0
+      Target Frame: map
+      Focal Point: {X: 9.4, Y: 1.6, Z: 0}
+Window Geometry:
+  Width: 1400
+  Height: 900
+  Hide Left Dock: false
+  Hide Right Dock: false

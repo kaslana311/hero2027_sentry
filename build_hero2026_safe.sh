@@ -22,6 +22,7 @@ VERIFY_ONLY=false
 # snapshots shipped by this repository.
 BLASFEO_COMMIT="22b5a67753781879c1d2d61969ac28c87e00e3ff"
 HPIPM_COMMIT="57c5dba41909787ea5460aebf7fa03f384f871be"
+GTSAM_COMMIT="4f66a491ffc83cf092d0d818b11dc35135521612"
 
 usage() {
   cat <<'EOF'
@@ -307,6 +308,26 @@ configure_build_install() {
 build_third_party() {
   local nlopt_install="$WS_ROOT/src/planning/Bstyle_smoother/third_party/nlopt/install"
 
+  # Optional localization backend: never replace a system GTSAM installation.
+  if [[ -f "$STAGE_SRC/localization/z_localization/src/backend/package.xml" ]]; then
+    local gtsam_source="$STAGE_BASE/vendor_cache/gtsam-$GTSAM_COMMIT"
+    if [[ ! -f "$gtsam_source/CMakeLists.txt" ]]; then
+      local gtsam_fetch="$STAGE_BASE/vendor_cache/gtsam-$GTSAM_COMMIT.fetching"
+      [[ ! -e "$gtsam_fetch" ]] || die "Incomplete GTSAM download: $gtsam_fetch (inspect before retrying)"
+      info "Fetching pinned GTSAM 4.2 ($GTSAM_COMMIT) into the protected build cache"
+      git clone --depth 1 --branch 4.2 https://github.com/borglab/gtsam.git "$gtsam_fetch"
+      [[ "$(git -C "$gtsam_fetch" rev-parse HEAD)" == "$GTSAM_COMMIT" ]] || die "Unexpected GTSAM tag revision"
+      mv "$gtsam_fetch" "$gtsam_source"
+    fi
+    [[ "$(git -C "$gtsam_source" rev-parse HEAD)" == "$GTSAM_COMMIT" ]] || die "GTSAM cache revision mismatch"
+    configure_build_install gtsam "$gtsam_source" "$BUILD_ROOT/gtsam" "$INSTALL_ROOT/gtsam" \
+      -DBUILD_SHARED_LIBS=ON -DGTSAM_USE_SYSTEM_EIGEN=ON \
+      -DGTSAM_BUILD_TESTS=OFF -DGTSAM_BUILD_EXAMPLES_ALWAYS=OFF \
+      -DGTSAM_BUILD_UNSTABLE=OFF -DGTSAM_BUILD_PYTHON=OFF \
+      -DGTSAM_WITH_TBB=OFF -DGTSAM_BUILD_WITH_MARCH_NATIVE=OFF
+    add_prefix "$INSTALL_ROOT/gtsam"
+  fi
+
   configure_build_install \
     nlopt \
     "$STAGE_SRC/planning/Bstyle_smoother/third_party/nlopt" \
@@ -376,7 +397,7 @@ build_workspace_packages() {
     )
 
     case "$package_name" in
-      interfaces|serial_interfaces|fast_lio)
+      interfaces|serial_interfaces|localization_interfaces|fast_lio)
         extra_args+=(-DCMAKE_SKIP_RPATH=TRUE)
         ;;
     esac
@@ -416,7 +437,9 @@ generate_colcon_metadata() {
   local package_name prefix marker dependency_file
 
   # Recreate package.dsv files for plain CMake packages.
-  for package_name in acados livox_sdk2 small_gicp align_cloud; do
+  local -a plain_packages=(acados livox_sdk2 small_gicp align_cloud)
+  if [[ -d "$INSTALL_ROOT/gtsam" ]]; then plain_packages+=(gtsam); fi
+  for package_name in "${plain_packages[@]}"; do
     mkdir -p "$INSTALL_ROOT/$package_name/share/$package_name"
     : >"$INSTALL_ROOT/$package_name/share/$package_name/package.dsv"
   done
@@ -427,6 +450,10 @@ generate_colcon_metadata() {
   write_pure_cmake_hook small_gicp CMAKE_PREFIX_PATH '' cmake_prefix_path
   write_pure_cmake_hook small_gicp LD_LIBRARY_PATH lib ld_library_path_lib
   write_pure_cmake_hook align_cloud PATH bin path_bin
+  if [[ -d "$INSTALL_ROOT/gtsam" ]]; then
+    write_pure_cmake_hook gtsam CMAKE_PREFIX_PATH '' cmake_prefix_path
+    write_pure_cmake_hook gtsam LD_LIBRARY_PATH lib ld_library_path_lib
+  fi
 
   # Direct CMake installation does not create colcon package markers. The
   # top-level setup utility reads these markers dynamically.
@@ -492,6 +519,9 @@ verify_install() {
     Bstyle_smoother pb_minco_smoother hero_mpc_controller
     relocalization fast_lio point_lio fast_livo
   )
+  if [[ -f "$WS_ROOT/src/localization/z_localization/src/backend/package.xml" ]]; then
+    key_packages+=(backend localization_interfaces hero_localization_backend)
+  fi
   for package_name in "${key_packages[@]}"; do
     prefix="$(ros2 pkg prefix "$package_name" 2>/dev/null || true)"
     [[ "$prefix" == "$INSTALL_ROOT/$package_name" ]] || \

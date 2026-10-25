@@ -81,3 +81,6 @@ doc/_build/
 *.pcd
 src/planning/map_server/map/map.pgm
 src/common/point_cloud_files/odin_file/odin_map
+
+# Reproducible, separately versioned 3-D localization priors (not the hand-edited PGM).
+/localization_maps/

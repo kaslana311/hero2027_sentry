@@ -1,0 +1,39 @@
+# Overrides of the pinned upstream backend.yaml, NOT a replacement frontend config.
+common:
+  body:
+    frame: z_backend_chassis
+    rotation: {roll_deg: 0.0, pitch_deg: 0.0, yaw_deg: 0.0}
+    # sensor origin -> chassis origin, expressed in chassis coordinates.
+    # Inverse of chassis -> virtual IMU [0, -0.167, +0.121].
+    offset: {x: 0.0, y: 0.167, z: -0.121}
+  odom_cloud_sync:
+    subscription_queue_depth: 50
+    synchronizer_queue_depth: 50
+    max_interval: 0.001  # Current snapshot emits identical scan-end stamps.
+  scan_context:
+    max_radius: 20.0
+    downsample: 0.1
+    lidar_height: 0.197
+prior_map:
+  voxel_resolution: 0.1
+registration:
+  # A 40-cm leaf would erase too much of this low-profile simulated field.
+  voxel_resolution: 0.1
+recovery:
+  parallel_candidates: 4
+startup_hint:
+  # Surveyed nominal SPAWN, not a live truth subscription. Start before driving.
+  # Only the initial epoch uses this hint; prior registration must still accept it.
+  enabled: true
+  force_until_matched: true
+  x: 0.0
+  y: 0.0
+  z: 0.076
+  yaw_deg: 0.0
+visualization:
+  enabled: true
+  publish_prior_map: true
+  publish_runtime_map: false
+  publish_map_axes: false
+  publish_paths: true
+  publish_debug_registration: false

@@ -23,6 +23,7 @@
 
   <exec_depend>hero2025_nav_bringup</exec_depend>
   <exec_depend>hero_static_prior_planner</exec_depend>
+  <exec_depend>hero_localization_backend</exec_depend>
   <exec_depend>point_lio</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
