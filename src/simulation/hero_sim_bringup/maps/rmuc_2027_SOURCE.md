@@ -5,7 +5,7 @@ map from the paired simulator. The unchanged generated baseline remains at
 `maps/candidates/rmuc_2027/rmuc_2027_surface_candidate.pgm`; it is no longer
 byte-identical to the active map. Do not copy/regenerate it over the manual edits.
 
-- Active PGM SHA-256: `f7408e8470de82b2d5356ef38701e499a8794c3a54a211ea9b107dd43189689a`.
+- Active PGM SHA-256: `650be768ca3eda4655856be5c407707ab6b553eed8f5c34ed9381427ec86e1ba`.
 - Generated baseline SHA-256: `43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3`.
 - Size: 1120x642; resolution: 0.025 m/cell; extent: 28x16.05 m.
 - YAML origin: (-4.6,-6.4,0), where the third component is yaw, not height.
@@ -166,7 +166,7 @@ File/configuration checks do not certify physical clearances or route reachabili
 Source: `/home/apocalypse_linux_00/Downloads/rmuc_2027.pgm`, copied byte-for-byte
 to the source and installed map. Relative to commit `1713614` (previous SHA-256
 `59c36166875bc6e82ed97507d3a3e9363a3d5249224e520e47ecb4579005a40d`),
-5633 pixels changed: 5622 white-to-black and 11 black-to-white. Current totals
+5633 pixels changed: 5622 white-to-black and 11 black-to-white. Tenth-edit totals
 are 188149 occupied and 530891 free pixels (331.806875 square metres). The
 1120x642 dimensions, binary 0/255 values, YAML bytes, origin, resolution,
 20 cm occupied rims and existing central check pixels remain unchanged.
@@ -177,6 +177,20 @@ Reload the algorithm with the original command. If the vehicle has moved since
 spawn, restart the simulator at spawn before restarting the algorithm so the
 existing initial-odometry zeroing remains aligned with the PGM origin.
 File/configuration checks do not certify physical clearances or route reachability.
+
+## Eleventh user edit applied on 2026-10-25
+
+Source: `/home/apocalypse_linux_00/Downloads/rmuc_2027.pgm`, copied byte-for-byte
+to source and install. Relative to `007c92b` (previous PGM SHA-256
+`f7408e8470de82b2d5356ef38701e499a8794c3a54a211ea9b107dd43189689a`),
+5928 pixels changed, all black-to-white. Current totals are 182221 occupied and
+536819 free pixels (335.511875 square metres). Size 1120x642, binary 0/255,
+YAML bytes, 0.025 m resolution, origin (-4.6,-6.4,0) and the 20 cm black rim
+remain unchanged. Only the map asset, provenance and matching checks change;
+no planner, perception, lidar calibration, simulator or launch logic changes.
+No code compilation or Docker rebuild is needed. Restart the algorithm to
+reload; if the robot has moved, restart the simulator at spawn first to keep
+initial-odometry zeroing aligned with the PGM. File checks are not driving acceptance.
 
 The simulator model/spawn are unchanged by this map deployment:
 scale=1; world translation=(-0.14910008013248444,-0.06378698348999023,
