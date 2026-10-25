@@ -1,11 +1,11 @@
-# RMUC 2027 multilevel support-surface map (applied 2026-10-24)
+# RMUC 2027 multilevel support-surface map (applied 2026-10-25)
 
 The active `rmuc_2027.pgm` is the user's manually edited version of the redrawn
 map from the paired simulator. The unchanged generated baseline remains at
 `maps/candidates/rmuc_2027/rmuc_2027_surface_candidate.pgm`; it is no longer
 byte-identical to the active map. Do not copy/regenerate it over the manual edits.
 
-- Active PGM SHA-256: `59c36166875bc6e82ed97507d3a3e9363a3d5249224e520e47ecb4579005a40d`.
+- Active PGM SHA-256: `f7408e8470de82b2d5356ef38701e499a8794c3a54a211ea9b107dd43189689a`.
 - Generated baseline SHA-256: `43d2a27e52b85fe8e5e0b19794fc022f65b5f9eff84fff6a7bb8c677ae8802d3`.
 - Size: 1120x642; resolution: 0.025 m/cell; extent: 28x16.05 m.
 - YAML origin: (-4.6,-6.4,0), where the third component is yaw, not height.
@@ -149,7 +149,7 @@ File/configuration checks do not certify physical clearances or route reachabili
 Source: `/home/apocalypse_linux_00/Downloads/rmuc_2027.pgm`, copied byte-for-byte
 to the source and installed map. Relative to commit `f7fcfdd` (previous SHA-256
 `f01f86a85db9367c539a9899995230046106be2a5495e6403ab7acb6ce23e4f6`),
-1922 pixels changed, all black-to-white. Current totals are 182538 occupied and
+1922 pixels changed, all black-to-white. Ninth-edit totals were 182538 occupied and
 536502 free pixels (335.31375 square metres). The 1120x642 dimensions, binary
 0/255 values, YAML bytes, origin, resolution, 20 cm occupied rims and existing
 central check pixels are unchanged. Only the image, provenance and matching
@@ -159,6 +159,23 @@ This is a data-only deployment; no code compilation or Docker rebuild is needed.
 Reload the algorithm with the original command. If restarting at a new robot
 position, first restart the simulator at spawn: the existing initial-odometry
 zeroing must remain aligned with the PGM origin.
+File/configuration checks do not certify physical clearances or route reachability.
+
+## Tenth user edit applied on 2026-10-25
+
+Source: `/home/apocalypse_linux_00/Downloads/rmuc_2027.pgm`, copied byte-for-byte
+to the source and installed map. Relative to commit `1713614` (previous SHA-256
+`59c36166875bc6e82ed97507d3a3e9363a3d5249224e520e47ecb4579005a40d`),
+5633 pixels changed: 5622 white-to-black and 11 black-to-white. Current totals
+are 188149 occupied and 530891 free pixels (331.806875 square metres). The
+1120x642 dimensions, binary 0/255 values, YAML bytes, origin, resolution,
+20 cm occupied rims and existing central check pixels remain unchanged.
+Only the image, provenance and matching checksum/count tests change; navigation
+goal isolation in `1713614`, planning/perception logic and simulator assets are
+preserved. No image re-encoding, code compilation or Docker rebuild is needed.
+Reload the algorithm with the original command. If the vehicle has moved since
+spawn, restart the simulator at spawn before restarting the algorithm so the
+existing initial-odometry zeroing remains aligned with the PGM origin.
 File/configuration checks do not certify physical clearances or route reachability.
 
 The simulator model/spawn are unchanged by this map deployment:
