@@ -1,6 +1,7 @@
 """Explicit input/output contracts for the pinned upstream backend."""
 from copy import deepcopy
 from pathlib import Path
+import shutil
 import re
 
 
@@ -42,3 +43,17 @@ def parameters(base, overrides, namespace, prior_map):
     # No implementation exists in Point-LIO: never target another stack's reset service.
     config['reset']['service'] = f'/{robot}/z_backend/unsupported_frontend_reset'
     return config
+
+
+def debugger_prefix(enabled):
+    """Opt-in crash capture; no respawn, no exception suppression or estimator fallback."""
+    if enabled not in ('true', 'false'):
+        raise ValueError('backend_debug must be true or false')
+    if enabled == 'false':
+        return ''
+    if shutil.which('gdb') is None:
+        raise ValueError('backend_debug=true requires gdb; install it or use backend_debug=false')
+    return ("gdb --batch --return-child-result -iex 'set debuginfod enabled off' "
+            "-ex 'set pagination off' -ex 'set print thread-events off' "
+            "-ex 'handle SIGINT nostop noprint pass' -ex run "
+            "-ex 'thread apply all bt full' --args")

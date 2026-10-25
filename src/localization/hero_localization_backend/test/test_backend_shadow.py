@@ -10,7 +10,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from hero_localization_backend.configuration import merge, parameters
+from hero_localization_backend.configuration import merge, parameters, debugger_prefix
 
 
 def load_script(name):
@@ -66,6 +66,20 @@ def test_merge_preserves_unrelated_upstream_defaults():
     assert merge({'a': {'x': 1, 'y': 2}}, {'a': {'x': 3}}) == {'a': {'x': 3, 'y': 2}}
 
 
+def test_debugger_is_opt_in_and_cannot_hide_fatal_exit(monkeypatch):
+    assert debugger_prefix('false') == ''
+    with pytest.raises(ValueError):
+        debugger_prefix('yes')
+    monkeypatch.setattr('hero_localization_backend.configuration.shutil.which', lambda _: '/usr/bin/gdb')
+    command = debugger_prefix('true')
+    assert '--return-child-result' in command and 'thread apply all bt full' in command
+    assert 'SIGINT nostop noprint pass' in command and command.endswith('--args')
+    assert 'SIGSEGV nostop' not in command
+    monkeypatch.setattr('hero_localization_backend.configuration.shutil.which', lambda _: None)
+    with pytest.raises(ValueError, match='requires gdb'):
+        debugger_prefix('true')
+
+
 def test_monitor_time_interpolation_not_latest_and_bounded():
     module = load_script('backend_shadow_monitor')
     assert module.interpolate_position([(100, (0., 0., 0.)), (200, (2., 4., 6.))], 150) == (1., 2., 3.)
@@ -75,6 +89,24 @@ def test_monitor_time_interpolation_not_latest_and_bounded():
     source = (ROOT/'scripts/backend_shadow_monitor.py').read_text()
     assert 'maxlen=2000' in source
     assert 'TransformBroadcaster' not in source and 'cmd_vel' not in source
+
+
+def test_monitor_never_calls_cached_normal_a_current_healthy_pose():
+    module = load_script('backend_shadow_monitor')
+    normal = {'status': 'NORMAL', 'pose_trusted': 'true'}
+    assert module.display_health(normal, 10_000_000_000, 20_000_000_000,
+                                  10_100_000_000, 20_100_000_000) == ('NORMAL', True, .1)
+    # The simulation clock can keep running after the backend process exits.
+    status, trusted, age = module.display_health(normal, 10_000_000_000, 20_000_000_000,
+                                                  13_000_000_000, 23_000_000_000)
+    assert status.startswith('STALE') and not trusted and age == 3.
+    # A paused /clock must not suspend the observer's wall-clock watchdog.
+    assert module.display_health(normal, 10_000_000_000, 20_000_000_000,
+                                  10_000_000_000, 26_000_000_000)[0].startswith('STALE')
+    assert module.display_health(normal, 0, 0, 10_000_000_000, 20_000_000_000)[0] == 'WAITING_FOR_BACKEND'
+    assert not module.display_health({'status': 'LOST', 'pose_trusted': 'false'},
+                                      10_000_000_000, 20_000_000_000,
+                                      10_100_000_000, 20_100_000_000)[1]
 
 
 def test_surface_sampling_preserves_slope_and_binary_map_format(tmp_path):

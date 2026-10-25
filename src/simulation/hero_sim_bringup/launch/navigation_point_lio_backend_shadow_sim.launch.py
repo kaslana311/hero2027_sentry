@@ -25,6 +25,7 @@ def setup(context):
             get_package_share_directory('hero_localization_backend'), 'launch', 'point_lio_backend_shadow.launch.py')),
             launch_arguments={'namespace': LaunchConfiguration('namespace'),
                               'prior_map': LaunchConfiguration('prior_map'),
+                              'backend_debug': LaunchConfiguration('backend_debug'),
                               'backend_rviz': LaunchConfiguration('backend_rviz'), 'use_sim_time': 'true'}.items()),
     ]
 
@@ -34,5 +35,6 @@ def generate_launch_description():
         *(DeclareLaunchArgument(name, default_value=value) for name, value in DEFAULTS.items()),
         DeclareLaunchArgument('prior_map', description='Absolute 3-D prior bundle path, not the PGM'),
         DeclareLaunchArgument('backend_rviz', default_value='true'),
+        DeclareLaunchArgument('backend_debug', default_value='false'),
         OpaqueFunction(function=setup),
     ])

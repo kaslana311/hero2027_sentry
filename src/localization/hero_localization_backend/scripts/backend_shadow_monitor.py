@@ -5,10 +5,12 @@ from collections import deque
 import copy
 import json
 import math
+import time
 from urllib.parse import unquote
 
 import rclpy
 from rclpy.node import Node
+from rclpy.clock import Clock, ClockType
 from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry, Path
@@ -36,6 +38,17 @@ def interpolate_position(samples, stamp, max_gap_ns=150000000):
     return tuple(a + ratio*(b-a) for a, b in zip(samples[index-1][1], samples[index][1]))
 
 
+def display_health(state, stamp, received, ros_now, steady_now):
+    """Cached NORMAL is historical once either acquisition or receipt stops advancing."""
+    if stamp <= 0 or received <= 0:
+        return 'WAITING_FOR_BACKEND', False, None
+    age = max(0., (ros_now-stamp)/1e9)
+    fresh = 0 <= ros_now-stamp < 2000000000 and 0 <= steady_now-received < 5000000000
+    if not fresh:
+        return 'STALE - NO FRESH BACKEND POSE', False, age
+    return state.get('status', 'UNKNOWN'), state.get('pose_trusted') == 'true', age
+
+
 class Monitor(Node):
     def __init__(self):
         super().__init__('backend_shadow_monitor')
@@ -49,6 +62,7 @@ class Monitor(Node):
         self.last_pose = None
         self.last_clock = 0
         self.last_pose_received_ns = 0
+        self.last_health = None
         durable = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.path_pub = self.create_publisher(Path, 'comparison/backend_path', 1)
         self.marker_pub = self.create_publisher(MarkerArray, 'comparison/markers', durable)
@@ -58,7 +72,8 @@ class Monitor(Node):
         self.create_subscription(Odometry, self.declare_parameter('truth_topic',
                                  '/red_standard_robot1/odometry/truth_3d').value,
                                  self.on_truth, qos_profile_sensor_data)
-        self.create_timer(0.2, self.tick)
+        # Keep the watchdog alive even if /clock or the complete estimator stops.
+        self.create_timer(0.2, self.tick, clock=Clock(clock_type=ClockType.STEADY_TIME))
 
     def on_state(self, msg):
         self.state = parse_state(msg.data)
@@ -77,12 +92,12 @@ class Monitor(Node):
         stamp = ns(msg.header.stamp)
         if msg.header.frame_id != 'map' or stamp <= self.last_stamp:
             return
-        self.last_stamp = stamp
-        self.last_pose = msg
-        self.last_pose_received_ns = self.get_clock().now().nanoseconds
         p = msg.pose.pose.position
         if not all(math.isfinite(v) for v in (p.x, p.y, p.z)):
             return
+        self.last_stamp = stamp
+        self.last_pose = msg
+        self.last_pose_received_ns = time.monotonic_ns()
         if self.state.get('pose_trusted') != 'true':
             return  # Frozen/untrusted outputs are not credited as successful localization.
         point = PoseStamped(header=msg.header, pose=msg.pose.pose)
@@ -98,6 +113,7 @@ class Monitor(Node):
             self.last_stamp = 0
             self.last_error = None
             self.last_pose = None
+            self.last_pose_received_ns = 0
             self.state = {'status': 'RESTART_REQUIRED', 'pose_trusted': 'false'}
             self.get_logger().error('Simulation time reset: restart the complete launch, including backend.')
         self.last_clock = now.nanoseconds
@@ -125,18 +141,35 @@ class Monitor(Node):
             marker.pose.position = copy.deepcopy(self.last_pose.pose.pose.position)
         marker.pose.position.z += 1.1
         marker.scale.z, marker.color.a = 0.25, 1.0
-        fresh = self.last_pose_received_ns > 0 and now.nanoseconds-self.last_pose_received_ns < 2000000000
-        trusted = self.state.get('pose_trusted') == 'true' and fresh
+        steady_now = time.monotonic_ns()
+        health, trusted, age = display_health(self.state, self.last_stamp,
+                                              self.last_pose_received_ns, now.nanoseconds, steady_now)
         marker.color.r, marker.color.g, marker.color.b = ((0.0, 1.0, 1.0) if trusted else (1.0, 0.3, 0.1))
-        marker.text = 'BACKEND SHADOW (NOT NAVIGATION)\n' + self.state.get('status', 'WAITING_FOR_BACKEND')
-        if self.last_pose is not None and not fresh:
-            marker.text += ' | STALE POSE'
+        marker.text = 'BACKEND SHADOW (NOT NAVIGATION)\n' + health
+        if health.startswith('STALE'):
+            marker.text += (f"\nlast received state: {self.state.get('status', 'UNKNOWN')} (HISTORICAL)"
+                            f"\npose acquisition age: {age:.1f} sim s; receipt age: "
+                            f"{(steady_now-self.last_pose_received_ns)/1e9:.1f} wall s"
+                            '\nbackend stalled/exited OR simulation paused; old path is HISTORY')
         if self.last_error is not None:
-            marker.text += f"\nlast trusted XY error: {self.last_error['xy_m']:.3f} m"
-        self.marker_pub.publish(MarkerArray(markers=[marker]))
-        if now.nanoseconds-self.last_log_ns >= 5000000000:
-            self.last_log_ns = now.nanoseconds
+            marker.text += (f"\nHISTORICAL same-time XY error: {self.last_error['xy_m']:.3f} m"
+                            f" @ {self.last_error['stamp_ns']/1e9:.2f} sim s")
+        arrow = Marker()
+        arrow.header, arrow.ns, arrow.id = marker.header, 'backend_shadow_pose', 1
+        arrow.type = Marker.ARROW
+        arrow.action = Marker.ADD if trusted else Marker.DELETE
+        if trusted:
+            arrow.pose = copy.deepcopy(self.last_pose.pose.pose)
+            arrow.scale.x, arrow.scale.y, arrow.scale.z = .65, .12, .12
+            arrow.color.g, arrow.color.b, arrow.color.a = 1., 1., 1.
+        self.marker_pub.publish(MarkerArray(markers=[marker, arrow]))
+        if health != self.last_health and health.startswith('STALE'):
+            self.get_logger().error(marker.text.replace('\n', ' | '))
+        elif steady_now-self.last_log_ns >= 5000000000:
             self.get_logger().info(marker.text.replace('\n', ' | '))
+        if health != self.last_health or steady_now-self.last_log_ns >= 5000000000:
+            self.last_log_ns = steady_now
+        self.last_health = health
 
 
 def main():

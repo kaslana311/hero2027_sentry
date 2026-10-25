@@ -7,7 +7,7 @@ from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from hero_localization_backend.configuration import parameters
+from hero_localization_backend.configuration import parameters, debugger_prefix
 
 
 def setup(context):
@@ -24,6 +24,7 @@ def setup(context):
                     'NO cmd_vel, NO navigation pose replacement, private TF. UWB disabled. '
                     'Start at the normal 2027 spawn before driving; full frontend-reset integration is NOT implemented.'),
         Node(package='backend', executable='backend_node', name='backend', namespace=namespace,
+             prefix=debugger_prefix(LaunchConfiguration('backend_debug').perform(context)),
              output='screen', parameters=[config, {'use_sim_time': LaunchConfiguration('use_sim_time')}],
              remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static')]),
         Node(package='hero_localization_backend', executable='backend_shadow_monitor.py',
@@ -46,5 +47,7 @@ def generate_launch_description():
         DeclareLaunchArgument('prior_map', description='Absolute path to generated 3-D map bundle, NOT a PGM'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('backend_rviz', default_value='true'),
+        DeclareLaunchArgument('backend_debug', default_value='false',
+                             description='Run only the shadow backend under gdb; fatal stacks enter launch.log'),
         OpaqueFunction(function=setup),
     ])

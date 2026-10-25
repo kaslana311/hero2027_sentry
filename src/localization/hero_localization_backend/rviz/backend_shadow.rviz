@@ -49,7 +49,7 @@ Visualization Manager:
       Style: Points
       Size (Pixels): 2
       Alpha: 0.8
-      Decay Time: 0
+      Decay Time: 2
     - Class: rviz_default_plugins/Path
       Name: GREEN - truth chassis (observer only)
       Enabled: true
@@ -87,8 +87,8 @@ Visualization Manager:
       Line Width: 0.035
       Buffer Length: 1
     - Class: rviz_default_plugins/PoseWithCovariance
-      Name: Backend chassis pose and uncertainty
-      Enabled: true
+      Name: RAW last pose and uncertainty (may be stale - optional)
+      Enabled: false
       Topic:
         Value: backend/localization_pose
         Reliability Policy: Reliable

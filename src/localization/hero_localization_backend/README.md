@@ -139,3 +139,86 @@ INITIALIZING/SUSPECT/LOST 不累计为可信轨迹；错误状态会在 RViz 橙
 - 测试证据保存于本任务 visualizations 目录的 z_backend_20261025/，
   包含 contracts.xml、runtime_metrics.json、runtime_backend.log。
 - 没有启动实际 Gazebo 测试，没有合并 main，没有创建“过洞通过”里程碑标签。
+
+## 2026-10-25 现场退出排查与显示修复
+
+### 已确认的故障链路
+
+本次现场算法启动目录为
+`~/.ros/log/2026-10-25-21-08-45-525648-Legion-R9000P-ADR10-88087/`。
+其 `launch.log` 记录 backend_node PID 88128 于 21:10:51 以 -11 退出，即 SIGSEGV。
+这不是正常的定位降级，更不是已经确认的“匹配错了几米”。
+
+后端最后一个轨迹点的仿真时刻约 58.65 s，位置为
+[6.995205, 8.659209, 0.119297] m；现场取样时仿真已到 164.35 s。
+此时真值约 [0.316040, 8.191104, 0.145324] m，原 Point-LIO 同刻 XY 误差约
+0.0863 m。把已经停止的旧后端位置和现在的真值比较，就会看见约 6.7 m 的差距，
+但两点并不是同一个时刻。旧比较器仍显示缓存的 NORMAL 和约 1 mm 的历史误差，
+而 RViz 的原生 PoseWithCovariance 箭头也不会随发布进程退出自动消失。
+
+最后一条匹配日志是一次 NIS 冲突、进入 OBS_DEGRADED；它发生在退出前约两秒。
+没有崩溃调用栈，不能据此认定该冲突、固定窗口、GTSAM 或某一个函数就是段错误根因。
+系统未保留本次 core，无法事后还原任意线程的现场内存。
+
+### 本次实际修改及边界
+
+1. 比较器同时检查位姿的采集时间和墙钟接收时间。采集落后 2 仿真秒或
+   5 墙钟秒没有新位姿时显示 `STALE - NO FRESH BACKEND POSE`，不再把缓存的
+   NORMAL 当作当前健康状态；暂停仿真也可能触发，提示明确保留这个区别。
+2. 看门狗使用独立稳态时钟，即使 `/clock` 停了也能告警。
+   误差始终标明 HISTORICAL 及原采集时间，不把历史小误差重标为当前误差。
+3. 当前车位改用比较器控制的青色箭头，不可信或过期即发 DELETE；
+   原生“最后一次位姿及协方差”显示保留但默认关闭，供手动诊断使用。
+   青色历史轨迹不删除；后端扫描显示 2 秒后过期。
+4. 增加可选启动参数 `backend_debug:=true`，只让旁路后端运行在 GDB 下。
+   SIGSEGV 时所有线程调用栈进入该次 `launch.log`；保留非零退出状态，
+   没有自动重启、没有吞掉异常、没有切换到真值或假定位。默认 false。
+
+没有修改上游估计器、Point-LIO、噪声/匹配/固定窗口参数、导航、PGM、模型或 TF 归属。
+修复的是已经有证据的失效显示问题；**原 SIGSEGV 根因仍未定位、未修复验收**。
+
+### 验证与可复现性
+
+- 13 项包装接口与显示健康判断测试通过，包括：缓存 NORMAL 过期、仿真时间停止、
+  LOST 不可信和调试器缺失/错误退出合同。
+- 独立 C++ 图测试：40 个固定随机种子、每组 500 个节点，转弯/起伏/噪声/绝对校正/
+  降秩观测/30 秒窗口淘汰；20,000 个里程计节点通过，未复现 SIGSEGV。
+- 完整移动 CAD 场景测试运行到约 66 仿真秒，后端仍输出 NORMAL，无段错误；
+  但观察端末尾接收滞后导致“最新输出时刻”断言失败，故不把整项测试记为通过。
+- 临时 AddressSanitizer + UndefinedBehaviorSanitizer 编译版，使用旧录包的 683 组
+  雷达/里程计重建输入，并在前面增加 30 秒静止段，运行至 74.1 仿真秒，
+  经历 NORMAL/OBS_DEGRADED/SUSPECT/重新匹配，没有非法内存报告或段错误。
+  没有公共 TF、导航位姿或速度消息泄漏。使用旧包的 0.217 m 外参，未修改现行外参。
+  **这不是原事故的精确回放**：旧包缺少配准点云，重建没有复原 Point-LIO 的逐点去畸变。
+- GDB 开关另用一个故意 SIGSEGV 的小程序验证：得到 SIGSEGV 和线程调用栈，
+  退出码非零。这个小程序测试不冒充真实后端事故复现。
+- 已安装的 `backend_debug:=true` 入口通过 15 秒独立 ROS 合成输入测试，
+  逐渐注入 0.30 m 原始里程计偏差，末尾同刻 XY 误差约 0.0276 m；
+  公共 TF、导航位姿、速度消息为 0。它仍只是隔离接口测试，不是 Gazebo 验收。
+- 加上既有代价地图和 split 模式，合计 207 项测试通过；真实 ROS 冻结时钟测试
+  也确认：停止 /clock 和新位姿后 5 秒左右报警，当前箭头被删除。
+- 本次安全脚本 --jobs 12 编译成功，47 个安装目录、143 个 ELF，
+  缺失库、断链、临时 RPATH 均为 0；原 PGM SHA256 未变。
+
+现场证据在本任务 visualizations 目录的 `z_backend_live_failure_20261025/`；
+后续排查证据在相邻 `z_backend_fix_20261025/`。临时诊断源、ASAN 构建不进入生产安装。
+
+### 下次运行捕获真实堆栈（仍为两个终端）
+
+安全编译需先关闭算法，使用 `./build_hero2026_safe.sh --jobs 12`。
+仿真入口维持不变，算法用下面一条替换旧启动命令：
+
+    cd "/home/apocalypse_linux_00/hero2026_-sentry (to_compile_not_develop))"
+    source /opt/ros/humble/setup.bash
+    source install/setup.bash
+    ros2 launch hero_sim_bringup navigation_point_lio_backend_shadow_sim.launch.py \
+      field:=rmuc_2027 lidar_mode:=dual costmap_mode:=split \
+      relay_cmd_vel:=true publish_debug_visualizations:=false \
+      point_lio_rviz:=false backend_rviz:=true backend_debug:=true \
+      filter_high_columns:=false high_column_min_z:=0.20 \
+      prior_map:="$PWD/localization_maps/rmuc_2027_sim_v1"
+
+若再次出现 STALE，请保留该次终端和 `~/.ros/log`，查看是否有
+`received signal SIGSEGV` 及后续 `#0` 等调用帧。仅 STALE 也可能是暂停或输入中断，
+不能单凭它断言进程崩溃。调试运行增加进程和少量调试开销，不作为实时性能验收。
+没有合并 main，没有创建“后端已修好”的里程碑标签。
