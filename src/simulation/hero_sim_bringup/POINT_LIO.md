@@ -138,7 +138,7 @@ pose 对照，twist 不作为 map-frame 速度接口使用。原二维 `odometry
 ```text
 T_map_lio = T_map_chassis_truth(t0) × T_chassis_imu × inverse(T_lio_imu(t0))
 T_map_chassis_est(t) = T_map_lio × T_lio_imu(t) × inverse(T_chassis_imu)
-T_chassis_imu = translation(0, -0.217, 0.121) m，旋转为 identity
+T_chassis_imu = translation(0, -0.167, 0.121) m，旋转为 identity（2026-10-25 内移后的安装）
 ```
 
 因此 t0 误差为零是人为初始化对齐，**不证明绝对定位精度或自动地图重定位成功**。

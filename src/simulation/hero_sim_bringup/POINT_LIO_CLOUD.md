@@ -132,7 +132,7 @@ LIO 输出已经在固定局部世界系，不是雷达/底盘系，不能再套
 ```text
 T_map_lio = T_map_chassis_truth(t0) × T_chassis_imu × inverse(T_lio_imu(t0))
 p_map(t) = T_map_lio × p_lio(t)
-T_chassis_imu = translation(0, -0.217, 0.121) m，旋转 identity
+T_chassis_imu = translation(0, -0.167, 0.121) m，旋转 identity（2026-10-25 内移后的安装）
 ```
 
 新入口显式开启 `publish_cloud_alignment`，通过持久化的

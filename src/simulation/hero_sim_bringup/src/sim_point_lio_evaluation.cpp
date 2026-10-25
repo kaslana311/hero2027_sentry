@@ -36,7 +36,7 @@ public:
   SimPointLioEvaluation() : Node("sim_point_lio_evaluation")
   {
     const auto offset = declare_parameter<std::vector<double>>(
-      "chassis_to_virtual_imu", {0., -0.217, 0.121});
+      "chassis_to_virtual_imu", {0., -0.167, 0.121});
     if (offset.size() != 3 || !std::all_of(offset.begin(), offset.end(),
         [](double v) {return std::isfinite(v);}))
     {throw std::runtime_error("chassis_to_virtual_imu needs three finite coordinates");}

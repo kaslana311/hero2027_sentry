@@ -91,7 +91,7 @@ class NavigationHarness:
         m = Odometry()
         m.header.stamp, m.header.frame_id, m.child_frame_id = stamp(seconds), "pointlio_odom", "pointlio_imu"
         rot = rotation(chassis[3:])
-        offset = (0., -.217, .121)
+        offset = (0., -.167, .121)
         imu = tuple(chassis[i] + sum(rot[i][j]*offset[j] for j in range(3)) for i in range(3))
         set_pose(m.pose.pose, (*imu, *chassis[3:]))
         if negative:

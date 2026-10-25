@@ -27,16 +27,19 @@ def ros_context():
 
 
 class InputHarness:
-    def __init__(self, frontend=False):
+    def __init__(self, frontend=False, production_mounts=False):
         ns = "/lio_test_" + uuid.uuid4().hex[:10]
         self.node = rclpy.create_node("probe", namespace=ns)
         left = [0., 0., 0., 0., 0., 0.] if frontend else [.1, .2, .3, 0., 0., math.pi / 2]
         right = [0., 0., 0., 0., 0., 0.] if frontend else [-.1, -.2, .3, 0., 0., -math.pi / 2]
         self.processes = []
-        self.processes.append(subprocess.Popen([
+        args = [
             os.environ["POINT_LIO_INPUT_EXECUTABLE"], "--ros-args", "-r", f"__ns:={ns}",
-            "-p", f"left_lidar_pose:={left}", "-p", f"right_lidar_pose:={right}",
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        ]
+        if not production_mounts:
+            args += ["-p", f"left_lidar_pose:={left}", "-p", f"right_lidar_pose:={right}"]
+        self.processes.append(subprocess.Popen(
+            args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
         self.clouds, self.imus, self.odoms, self.registered = [], [], [], []
         self.node.create_subscription(CustomMsg, "input/fused_cloud", self.clouds.append, 10)
         self.node.create_subscription(Imu, "input/imu", self.imus.append, 100)
@@ -114,6 +117,33 @@ def harness_factory():
     yield make
     for item in harnesses:
         item.close()
+
+
+def test_inset_default_mounts_fuse_one_wall_and_rotate_imu(harness_factory):
+    from test_cloud_registration import inverse_point
+    from test_lidar_mount_contract import EXPECTED_LEFT, EXPECTED_RIGHT
+    h = harness_factory(production_mounts=True)
+    wall = (2., 1., .2)
+    for side, mount in enumerate((EXPECTED_LEFT, EXPECTED_RIGHT)):
+        raw = inverse_point(wall, mount)
+        # Scan coordinates originate 3 cm above the MID360/IMU link.
+        h.scan(10., side, points=((raw[0], raw[1], raw[2] - .03),))
+    h.until(lambda: bool(h.clouds))
+    msg = h.clouds[-1]
+    expected = tuple(wall[i] - EXPECTED_RIGHT[i] for i in range(3))
+    assert msg.point_num == 2
+    for point in msg.points:
+        assert (point.x, point.y, point.z) == pytest.approx(expected, abs=1e-6)
+    assert msg.header.stamp == stamp(10.) and msg.header.frame_id == "pointlio_imu"
+    orientation_only = (0., 0., 0., *EXPECTED_RIGHT[3:])
+    h.imu(10.01, acc=inverse_point((0., 0., 9.8), orientation_only),
+          gyro=inverse_point((.1, .2, .3), orientation_only))
+    h.until(lambda: bool(h.imus))
+    imu = h.imus[-1]
+    assert (imu.linear_acceleration.x, imu.linear_acceleration.y,
+            imu.linear_acceleration.z) == pytest.approx((0., 0., 9.8), abs=1e-8)
+    assert (imu.angular_velocity.x, imu.angular_velocity.y,
+            imu.angular_velocity.z) == pytest.approx((.1, .2, .3), abs=1e-8)
 
 
 def test_dual_snapshot_static_mounts_and_exact_stamp(harness_factory):

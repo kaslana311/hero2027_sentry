@@ -93,6 +93,7 @@ if(BUILD_TESTING)
   )
   ament_add_pytest_test(recovery_contract test/test_recovery_contract.py TIMEOUT 30)
   ament_add_pytest_test(costmap_modes test/test_costmap_modes.py TIMEOUT 30)
+  ament_add_pytest_test(lidar_mount_contract test/test_lidar_mount_contract.py TIMEOUT 30)
   ament_add_pytest_test(split_mode test/test_split_mode.py TIMEOUT 30)
   ament_add_pytest_test(start_connector test/test_start_connector.py TIMEOUT 30)
   ament_add_pytest_test(split_planner_runtime test/test_split_planner_runtime.py

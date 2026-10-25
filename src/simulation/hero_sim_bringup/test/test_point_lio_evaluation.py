@@ -113,7 +113,7 @@ def test_alignment_is_once_and_both_outputs_are_chassis_positions(harness):
     transform = harness.transforms[0].transforms[0]
     assert transform.header.frame_id == "map"
     assert transform.child_frame_id == "pointlio_odom"
-    assert transform.transform.translation.x == pytest.approx(5.217)
+    assert transform.transform.translation.x == pytest.approx(5.167)
     assert transform.transform.translation.z == pytest.approx(.321)
     harness.pair(11., (5., 3., .2, 0., 0., math.pi / 2), (1., 0., 0., 0., 0., 0.))
     assert xyz(harness.estimates[-1]) == pytest.approx((5., 3., .2))
@@ -133,8 +133,8 @@ def test_alignment_is_once_and_both_outputs_are_chassis_positions(harness):
 def test_delayed_truth_is_interpolated_at_estimator_stamp(harness):
     harness.pair(10., (0., 0., .2, 0., 0., 0.), (0.,) * 6)
     # IMU offset rotates as chassis turns; a direct IMU/chassis comparison is wrong.
-    harness.send(10.05, (.05 + .217 * math.sin(.2),
-                        .217 * (1 - math.cos(.2)), 0., 0., 0., .2))
+    harness.send(10.05, (.05 + .167 * math.sin(.2),
+                        .167 * (1 - math.cos(.2)), 0., 0., 0., .2))
     harness.spin_for(.1)
     assert len(harness.estimates) == 1
     harness.send(10.1, (.1, 0., .2, 0., 0., .4), truth=True)

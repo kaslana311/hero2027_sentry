@@ -348,14 +348,14 @@ def test_observer_seed_is_once_latched_and_drift_is_not_corrected():
         adapter.pub.publish(cloud(10.1))
         adapter.until(lambda: bool(adapter.clouds))
         assert struct.unpack_from("<fff", adapter.clouds[-1].data) == pytest.approx(
-            (5.217, 3., .321), abs=1e-6)
+            (5.167, 3., .321), abs=1e-6)
         observer.pair(11., (5., 3., .2, 0., 0., math.pi/2), (1.3, 0., 0., 0., 0., 0.))
         observer.until(lambda: len(observer.errors) == 2)
         assert observer.errors[-1]["xy_error_m"] == pytest.approx(.3)
         adapter.pub.publish(cloud(11., ((1.3, 0., 0., 42.),)))
         adapter.until(lambda: len(adapter.clouds) == 2)
         assert struct.unpack_from("<fff", adapter.clouds[-1].data) == pytest.approx(
-            (5.217, 3.3, .321), abs=1e-6)
+            (5.167, 3.3, .321), abs=1e-6)
     finally:
         adapter.close()
         observer.close()

@@ -45,7 +45,7 @@ LIO；对照窗口绿色真值、蓝色 LIO、黄色 map/odom 原点。
 - `pointlio/odometry`（pointlio_odom→pointlio_imu）经过新增导航适配，输出
   `odometry/filtered`（odom→base_link），只此一个导航里程计发布者。
 - `T_map_chassis = T_map_lio × T_lio_imu × inverse(T_chassis_imu)`；固定安装
-  偏移 `(0, -0.217, 0.121) m`。定位与点云使用同一个持久化初始对齐。
+  偏移 `(0, -0.167, 0.121) m`（2026-10-25 两侧雷达各内移 5 cm 后）。定位与点云使用同一个持久化初始对齐。
 - `map→odom` 恒等；`odom→base_footprint` XY/yaw；`base_footprint→base_link`
   动态保留高度、roll/pitch。采样时间戳不被现在时间替换。
 - 真值桥改发 `odometry/truth_planar`，TF 隔离到 `truth/tf[_static]`，关闭

@@ -71,9 +71,9 @@ public:
 
     const auto left_lidar_pose = declare_parameter<std::vector<double>>(
       "left_lidar_pose",
-      {-0.031029689, 0.207956386, 0.103822859, 0.004491681, 0.593489259, 1.574538158});
+      {-0.031029689, 0.157956386, 0.103822859, 0.004491681, 0.593489259, 1.574538158});
     const auto right_lidar_pose = declare_parameter<std::vector<double>>(
-      "right_lidar_pose", {0.0, -0.217, 0.121, 0.0, 0.61086, -1.57079});
+      "right_lidar_pose", {0.0, -0.167, 0.121, 0.0, 0.61086, -1.57079});
     left_lidar_to_target_ = poseToTransform(left_lidar_pose, "left_lidar_pose");
     right_lidar_to_target_ = poseToTransform(right_lidar_pose, "right_lidar_pose");
     // Gazebo's ray origin is 3 cm above the MID360 link origin. Its frame_id

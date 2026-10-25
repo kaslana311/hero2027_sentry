@@ -26,10 +26,10 @@ public:
   SimPointLioInputBridge() : Node("sim_point_lio_input_bridge")
   {
     const auto left = pose(declare_parameter<std::vector<double>>(
-      "left_lidar_pose", {-0.031029689, 0.207956386, 0.103822859,
+      "left_lidar_pose", {-0.031029689, 0.157956386, 0.103822859,
         0.004491681, 0.593489259, 1.574538158}));
     const auto right = pose(declare_parameter<std::vector<double>>(
-      "right_lidar_pose", {0., -0.217, 0.121, 0., 0.61086, -1.57079}));
+      "right_lidar_pose", {0., -0.167, 0.121, 0., 0.61086, -1.57079}));
     const auto ray = pose(declare_parameter<std::vector<double>>(
       "lidar_sensor_pose", {0., 0., 0.03, 0., 0., 0.}));
     // Origin is the right IMU; axes are chassis-aligned. Rotating measured

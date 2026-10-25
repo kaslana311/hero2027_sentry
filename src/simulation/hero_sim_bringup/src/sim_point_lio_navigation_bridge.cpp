@@ -39,7 +39,7 @@ public:
       cmd_timeout_ <= 0. || !std::isfinite(max_velocity_dt_) || max_velocity_dt_ <= 0.)
     {throw std::runtime_error("Timeouts must be finite and positive");}
     const auto offset = declare_parameter<std::vector<double>>(
-      "chassis_to_virtual_imu", {0., -0.217, 0.121});
+      "chassis_to_virtual_imu", {0., -0.167, 0.121});
     if (offset.size() != 3 || !std::all_of(offset.begin(), offset.end(),
         [](double v) {return std::isfinite(v);}))
     {throw std::runtime_error("chassis_to_virtual_imu requires three finite coordinates");}

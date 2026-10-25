@@ -296,6 +296,12 @@ Full contract, limitations, tests and pending runtime checks are in
 
 ## Acquisition-time cloud registration (2026-09-30)
 
+Current dual-lidar mounts were inset 5 cm per side on 2026-10-25; the four
+simulation registration/IMU-to-chassis defaults change together. Heights and
+orientations are preserved. Rebuild the paired simulator and restart both
+processes before using the new algorithm; do not mix it with an old image.
+See [LIDAR_MOUNTS.md](./LIDAR_MOUNTS.md) for exact transforms and checks.
+
 The old bridge forwarded single-lidar scans in the sensor frame and merged
 dual scans in `chassis`. DOG map then used the latest TF, not the scan's TF.
 Moreover, the upstream `MecanumDrive2` publishes only X/Y/yaw on its original
