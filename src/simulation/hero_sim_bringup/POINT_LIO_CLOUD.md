@@ -179,6 +179,14 @@ ros2 launch hero_sim_bringup perception_truth_sim.launch.py \
 上述 QoS 修复及两项新增回归后，当前算法回归总数为 42。
 “联合回归”是让实际 Point-LIO 与新适配节点连起来检查新旧功能，不是 Git 回退。
 
+## 2026-10-25 输入接收可靠性修正
+
+点云桥输入由 SensorDataQoS 改为 RELIABLE / KeepLast(5)，与已核对的 Point-LIO
+`cloud_registered` 可靠发布契约一致；导航桥读取地图系云的健康检查也请求可靠传输。
+输出、点云内容/时间戳及全部感知算法不变。历史章节的“输入仍为 SensorDataQoS”
+描述的是当时版本，不再代表现行版本。详情与限制见 `POINT_LIO_NAVIGATION.md`
+末尾的 2026-10-25 断流停车记录。
+
 回归覆盖真实 Point-LIO 输出接入、XYZ/法线变换、字段/时间保留、缺失/过期对齐、
 一次对齐后保留漂移、非法布局/NaN、时间重置、无真值/电机接口，以及生成的
 导航配置除 DOG 点云来源之外完全一致。构建与测试实际结果见仿真侧

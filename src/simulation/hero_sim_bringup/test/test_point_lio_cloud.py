@@ -38,7 +38,8 @@ class CloudHarness:
         self.node = rclpy.create_node("cloud_probe", namespace=self.namespace)
         self.clouds, self.statuses = [], []
         self.durable = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.pub = self.node.create_publisher(PointCloud2, "cloud_registered", qos_profile_sensor_data)
+        # Match the installed Point-LIO publisher, not an incompatible best-effort stand-in.
+        self.pub = self.node.create_publisher(PointCloud2, "cloud_registered", QoSProfile(depth=20))
         self.align_pub = self.node.create_publisher(TransformStamped, "evaluation/cloud_alignment",
                                                     self.durable)
         self.node.create_subscription(PointCloud2, "cloud_registered_map", self.clouds.append,
@@ -157,6 +158,42 @@ def test_output_delivers_to_reliable_consumers_and_best_effort_probes(harness):
     harness.until(lambda: reliable_clouds and harness.clouds)
     assert reliable_clouds[-1] == harness.clouds[-1]
     assert reliable_clouds[-1].header.stamp == msg.header.stamp
+
+
+def test_raw_cloud_input_requests_reliable_retransmission(harness):
+    topic = harness.namespace + "/cloud_registered"
+    endpoints = harness.node.get_subscriptions_info_by_topic(topic)
+    inputs = [e for e in endpoints if e.node_name == "sim_point_lio_cloud_bridge"]
+    assert len(inputs) == 1
+    assert inputs[0].qos_profile.reliability == ReliabilityPolicy.RELIABLE
+
+
+def test_large_registered_scan_stream_keeps_original_stamps_and_freshness(harness):
+    """Exercise fragmented-size messages; not a reproduction of the original DDS outage."""
+    harness.align()
+    harness.spin_for(.2)
+    # Real PointXYZINormal scans use a padded 48-byte layout. 5000 points = 240 KB.
+    msg = PointCloud2()
+    msg.header.frame_id = "pointlio_odom"
+    msg.height, msg.width, msg.point_step = 1, 5000, 48
+    msg.row_step, msg.is_dense = msg.width*48, True
+    msg.fields = [PointField(name=name,offset=offset,datatype=PointField.FLOAT32,count=1)
+                  for name,offset in (("x",0),("y",4),("z",8),("normal_x",16),
+                                      ("normal_y",20),("normal_z",24),("intensity",32),
+                                      ("curvature",36))]
+    point = bytearray(48)
+    struct.pack_into("<fff",point,0,1.,0.,0.)
+    msg.data = bytes(point)*msg.width
+    for index in range(60):
+        msg.header.stamp = stamp(10.1+index*.05)
+        harness.pub.publish(msg)
+        harness.spin_for(.05)
+    harness.until(lambda: harness.clouds and harness.clouds[-1].header.stamp == msg.header.stamp)
+    assert harness.clouds[-1].width == 5000
+    assert harness.clouds[-1].point_step == 48
+    assert harness.clouds[-1].header.frame_id == "map"
+    assert harness.statuses[-1]["state"] == "publishing"
+    assert harness.statuses[-1]["dropped"] == 0
 
 
 def test_actual_dog_map_receives_cloud_and_publishes_nonempty_occupancy(harness, tmp_path):

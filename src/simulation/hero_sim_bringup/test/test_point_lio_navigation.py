@@ -14,7 +14,7 @@ import pytest
 import rclpy
 from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
-from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy, qos_profile_sensor_data
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import String
@@ -40,7 +40,7 @@ class NavigationHarness:
             "pointlio/evaluation/cloud_alignment", durable)
         self.odom_pub = self.node.create_publisher(Odometry, "pointlio/odometry", qos_profile_sensor_data)
         self.cloud_pub = self.node.create_publisher(PointCloud2,
-            "pointlio/cloud_registered_map", qos_profile_sensor_data)
+            "pointlio/cloud_registered_map", QoSProfile(depth=10))
         self.cmd_pub = self.node.create_publisher(Twist, "cmd_vel_nav2_result", 10)
         self.clock_pub = self.node.create_publisher(Clock, "/clock", 10)
         self.node.create_subscription(Odometry, "odometry/filtered", self.odoms.append, 10)
@@ -356,3 +356,11 @@ def test_actual_cloud_bridge_and_navigation_share_alignment_and_acquisition_stam
         assert harness.statuses[-1]["pose_stamp_ns"] == harness.statuses[-1]["cloud_stamp_ns"]
     finally:
         c.close()
+
+
+def test_cloud_freshness_interlock_requests_reliable_delivery(harness):
+    endpoints = harness.node.get_subscriptions_info_by_topic(
+        harness.namespace + "/pointlio/cloud_registered_map")
+    inputs = [e for e in endpoints if e.node_name == "sim_point_lio_navigation_bridge"]
+    assert len(inputs) == 1
+    assert inputs[0].qos_profile.reliability == ReliabilityPolicy.RELIABLE

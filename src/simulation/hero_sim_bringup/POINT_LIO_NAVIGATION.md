@@ -76,3 +76,59 @@ LIO；对照窗口绿色真值、蓝色 LIO、黄色 map/odom 原点。
 仿真仓库详细流程和配对记录：`docs/POINT_LIO_NAVIGATION.md`、
 `experiments/2026-10-08_point-lio-navigation.md`。版本标签是固定提交名，
 不是提交说明，也不是会随新提交前进的分支。
+
+## 2026-10-25：目标已接收、控制器有速度，但最终底盘速度为零
+
+现场使用 `navigation_point_lio_backend_shadow_sim.launch.py`，2027/dual/split。
+这里的后端是旁路，导航仍读取原 Point-LIO，不读取 z_backend 的错误重定位结果。
+
+被动采样 7 秒确认：`cmd_vel_controller` 342 条、`cmd_vel_nav2_result` 122 条，
+全部非零；最终 `cmd_vel` 122 条，全部为零。规划和平滑继续成功，FollowPath 活跃，
+控制器随后因车不移动报告 `Failed to make progress`，进入恢复重试。
+这不是 A 星服务卡死、目标未接收或底盘没有驱动力。
+
+直接停车原因是 C2 导航桥的 `stale_cloud` 安全门控。
+例如位姿 stamp=528.75 s，最后有效云仍为 511.35 s；之后位姿到 584.50 s，
+云仍停在 511.35 s。点云桥持续发布状态，dropped=0、queued=0，且无 reset/layout
+错误；Point-LIO 的 body 云和位姿继续更新，原始 registered 云及地图系云却收不到。
+
+实际原始云发布者是 RELIABLE，而两段关键输入原来都是 BEST_EFFORT：
+
+    Point-LIO registered [RELIABLE] -> 点云桥 [原 BEST_EFFORT]
+    地图系云             [RELIABLE] -> 导航健康门控 [原 BEST_EFFORT]
+
+这种组合在 ROS 2 是兼容的，**不是** 2026-10-02 的 QoS 不兼容故障，不能混淆。
+但是 BEST_EFFORT 接收不请求丢失样本的重传，不能据发布端 RELIABLE 就宣称接收可靠。
+现场新建可靠订阅测试期间两路云恢复、状态变成 ready；测试退出后短时观察继续正常。
+这一先后关系支持加强可靠接收，但不足以证明 Fast DDS 内部具体停更机制，也不是
+重演了原长时故障。主进程调试附加被系统 ptrace 策略拒绝，未拿到内部线程堆栈。
+
+本次仅把上述两个云输入改为 RELIABLE / KeepLast(5)，保留有限队列。
+原 Point-LIO 发布策略、位姿估计、一次对齐、消息时间戳、DOG/代价地图、
+A 星/MINCO/MPC、行为树、速度增益和所有超时门限不改。
+断云仍会停车，不缓存或重放旧速度、不发假空云、不回退真值。
+已有测试的模拟发布器同步改为 Point-LIO 实际使用的 RELIABLE 契约。
+
+验证包含两个实际接收端 QoS 断言、240 KB/帧的大点云流以及既有过期云/暂停/恢复
+不重放旧命令的隔离 ROS 测试。它们证明接口修正及保护保留，不代表长时实跑已验收。
+证据在本任务 visualizations 的 `nav_stall_20261025_2221/`。
+
+安装仍使用工作区根目录 `./build_hero2026_safe.sh --jobs 12`，必须先关闭算法；
+安装后重启完整算法入口再重新发目标。Gazebo 可以保留，不需要新镜像。
+若之后还出现 stale_cloud，应再次检查两段实际云输出，不应通过放宽/取消门控继续走。
+
+本轮实际验证结果：临时独立编译程序 17+14=31 项通过；安全安装后，使用
+`install/hero_sim_bringup/lib/hero_sim_bringup/` 下的正式程序重新运行同样两组，
+仍为 17+14=31 项通过。正式点云组 16.49 秒，导航桥组 9.40 秒，使用隔离
+ROS 域 180/183；没有向正在运行的 Gazebo 或底盘发目标、速度或服务请求。
+这里的“大点云测试”不注入网络丢包，也没有覆盖原现场长时 DDS 停更条件。
+
+`./build_hero2026_safe.sh --jobs 12` 成功：42 个包构建步骤、47 个安装前缀，
+检查 143 个 ELF；断链、缺失共享库、临时 RPATH 均为 0。完整构建日志、
+两次测试日志/XML 和现场数据存放在：
+`/home/apocalypse_linux_00/.codex/visualizations/2026/09/24/01a0d39c-2651-74c3-88fa-9206c221d0f1/nav_stall_20261025_2221/`。
+
+可靠接收不是“永不丢数据”的保证：传输拥塞仍可能增加排队/重传延迟，可靠
+发布也可能受到慢接收端的背压。保留深度 5 和原有采样年龄检查，延迟过大时仍
+停车；不通过扩大缓存或放宽超时掩盖问题。原现场尚需长时复测，不宣称彻底根治。
+后端旁路的对称场地错误重定位和 SIGSEGV 未在这次通信修正中解决，须分别处理。

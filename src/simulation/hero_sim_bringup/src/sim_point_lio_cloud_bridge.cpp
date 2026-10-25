@@ -43,8 +43,8 @@ public:
     {throw std::runtime_error("cloud_queue_size must be 1..20; alignment_wait_sec in (0,10]");}
     queue_size_ = static_cast<size_t>(depth);
     // DOG map requests reliable registered clouds, like the truth bridge output.
-    // A best-effort publisher cannot connect to that subscriber. Keep the raw
-    // Point-LIO input sensor QoS, but honor the downstream contract here.
+    // A best-effort publisher cannot connect to that subscriber. Both the raw
+    // Point-LIO input and this downstream output now request/offer reliability.
     cloud_pub_ = create_publisher<Cloud>(
       "cloud_registered_map", rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
     status_pub_ = create_publisher<std_msgs::msg::String>(
@@ -52,7 +52,11 @@ public:
     alignment_sub_ = create_subscription<Alignment>(
       "evaluation/cloud_alignment", rclcpp::QoS(1).transient_local(),
       [this](Alignment::ConstSharedPtr msg) {align(*msg);});
-    cloud_sub_ = create_subscription<Cloud>("cloud_registered", rclcpp::SensorDataQoS(),
+    // Point-LIO publishes this stream RELIABLE. Request retransmission on this
+    // navigation-critical link instead of silently accepting fragment loss.
+    // Keep the original bounded depth and acquisition stamps; no stale fallback.
+    cloud_sub_ = create_subscription<Cloud>("cloud_registered",
+      rclcpp::QoS(rclcpp::KeepLast(5)).reliable(),
       [this](Cloud::ConstSharedPtr msg) {receive(msg);});
     timer_ = create_wall_timer(std::chrono::milliseconds(100), [this]() {
         const auto now = get_clock()->now().nanoseconds();

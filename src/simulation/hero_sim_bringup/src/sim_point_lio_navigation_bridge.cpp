@@ -61,7 +61,9 @@ public:
     odom_sub_ = create_subscription<Odom>("pointlio/odometry", rclcpp::SensorDataQoS(),
       [this](Odom::ConstSharedPtr m) {odometry(*m);});
     cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-      "pointlio/cloud_registered_map", rclcpp::SensorDataQoS(),
+      // The deployment bridge offers RELIABLE; this freshness interlock must
+      // request retransmission too. Sensor odometry remains best effort.
+      "pointlio/cloud_registered_map", rclcpp::QoS(rclcpp::KeepLast(5)).reliable(),
       [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr m) {
         checkClock();
         const auto stamp = stampNs(m->header.stamp);
