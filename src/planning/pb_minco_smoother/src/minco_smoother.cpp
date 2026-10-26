@@ -48,12 +48,6 @@ void MincoSmoother::configure(
     costmap_sub_ = costmap_sub;
     footprint_sub_ = footprint_sub;
 
-    has_valid_trajectory_ = false;
-    {
-        std::lock_guard<std::mutex> lock(warm_start_mutex_);
-        warm_start_guard_.reset();
-    }
-
     // 加载参数
     loadParameters();
 
@@ -290,11 +284,6 @@ void MincoSmoother::cleanup() {
     stage1_trajectory_pub_.reset();
     minco_traj_pub_.reset();
     final_waypoints_marker_pub_.reset();
-    has_valid_trajectory_ = false;
-    {
-        std::lock_guard<std::mutex> lock(warm_start_mutex_);
-        warm_start_guard_.reset();
-    }
 }
 
 void MincoSmoother::activate() {
@@ -363,59 +352,65 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
         Eigen::Vector2d head_acc;  // S=3 热启动：加速度边界条件
         bool use_projection = false;
 
-        // Read position and velocity from the same timestamped odometry sample.
-        const auto now = clock_->now();
-        WarmStartBoundaryGuard::Observation measured;
+        // 1.1 获取当前机器人位置
+        Eigen::Vector2d robot_pos;
+        double pos_timestamp;
         {
-            std::lock_guard<std::mutex> lock(warm_start_mutex_);
-            measured = warm_start_guard_.observation(now.seconds());
+            std::lock_guard<std::mutex> lock(robot_pos_2d_mutex_);
+            robot_pos = current_robot_pos_2d_;
+            pos_timestamp = robot_pos_timestamp_;
         }
-        if (!measured.valid) {
-            has_valid_trajectory_ = false;
-            RCLCPP_WARN_THROTTLE(logger_, *clock_, 1000,
-                "MINCO 无有效里程计边界，拒绝使用旧轨迹或假定车辆静止");
-            return false;
-        }
+
+        // 检查位置数据是否有效（是否超时）
+        double current_time_sec = clock_->now().seconds();
+        bool position_valid =
+            (current_time_sec - pos_timestamp) < kPositionTimeout;
 
         // 1.2 尝试从历史轨迹获取投影点
-        WarmStartBoundaryGuard::Boundary projection;
-        if (has_valid_trajectory_) {
+        if (has_valid_trajectory_ && position_valid) {
+            rclcpp::Time now = clock_->now();
             double traj_age = (now - last_trajectory_time_).seconds();
 
-            if (traj_age >= 0.0 && traj_age < params_.trajectory_validity_duration) {
+            if (traj_age < params_.trajectory_validity_duration) {
                 TrajectoryProjectionResult proj = findProjectionOnTrajectory(
-                    last_trajectory_, measured.position, last_trajectory_time_, now);
-                projection.position = proj.position;
-                projection.velocity = proj.velocity;
-                projection.acceleration = proj.acceleration;
-                projection.valid = proj.valid;
+                    last_trajectory_, robot_pos, last_trajectory_time_, now);
+
+                if (proj.valid &&
+                    proj.distance < params_.trajectory_continuity_threshold) {
+                    head_pos = proj.position;
+                    head_vel = proj.velocity;
+                    head_acc = proj.acceleration;  // S=3 热启动：继承加速度
+                    use_projection = true;
+                    RCLCPP_DEBUG(logger_,
+                                 "使用投影点作为起点: pos=(%.2f, %.2f), "
+                                 "vel=(%.2f, %.2f), acc=(%.2f, %.2f)",
+                                 head_pos.x(), head_pos.y(), head_vel.x(),
+                                 head_vel.y(), head_acc.x(), head_acc.y());
+                }
             }
         }
 
-        WarmStartBoundaryGuard::Selection selection;
-        {
-            std::lock_guard<std::mutex> lock(warm_start_mutex_);
-            selection = warm_start_guard_.select(
-                projection, now.seconds(), params_.trajectory_continuity_threshold);
-        }
-        if (!selection.boundary.valid) {
-            has_valid_trajectory_ = false;
-            return false;
-        }
-        head_pos = selection.boundary.position;
-        head_vel = selection.boundary.velocity;
-        head_acc = selection.boundary.acceleration;
-        use_projection = selection.use_projection;
+        // 如果没有有效投影，退化为使用路径第一个点和零速、零加速
         if (!use_projection) {
-            has_valid_trajectory_ = false;
-            if (selection.reason == WarmStartBoundaryGuard::Reason::StationaryMismatch ||
-                selection.reason == WarmStartBoundaryGuard::Reason::VelocityMismatch) {
-                RCLCPP_WARN_THROTTLE(logger_, *clock_, 1000,
-                    "MINCO 旧轨迹持续偏离实际运动，重建起点: "
-                    "pos=(%.3f, %.3f), vel=(%.3f, %.3f), acc=(%.3f, %.3f)",
-                    head_pos.x(), head_pos.y(), head_vel.x(), head_vel.y(),
-                    head_acc.x(), head_acc.y());
-            }
+            const auto &start_pose = path.poses.front().pose.position;
+            head_pos = Eigen::Vector2d(start_pose.x, start_pose.y);
+            head_vel = Eigen::Vector2d::Zero();
+            head_acc = Eigen::Vector2d::Zero();  // 静止启动：加速度为零
+            RCLCPP_DEBUG(logger_, "使用零速边界条件: pos=(%.2f, %.2f)",
+                         head_pos.x(), head_pos.y());
+        }
+
+        if (use_projection &&
+            (!head_pos.allFinite() || !head_vel.allFinite() ||
+             !head_acc.allFinite())) {
+            const auto &start_pose = path.poses.front().pose.position;
+            head_pos = Eigen::Vector2d(start_pose.x, start_pose.y);
+            head_vel = Eigen::Vector2d::Zero();
+            head_acc = Eigen::Vector2d::Zero();
+            use_projection = false;
+            RCLCPP_WARN_THROTTLE(
+                logger_, *clock_, 1000,
+                "上一条 MINCO 轨迹投影包含非有限值，已退化为零速起点");
         }
 
         const double projected_speed = head_vel.norm();
@@ -1569,49 +1564,32 @@ void MincoSmoother::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
 
     geometry_msgs::msg::PoseStamped map_pose;
 
-    const double now = clock_->now().seconds();
-    const rclcpp::Time sample_time(msg->header.stamp, clock_->get_clock_type());
-    if (sample_time.nanoseconds() <= 0 || msg->header.frame_id.empty() ||
-        msg->child_frame_id.empty()) {
-        return;
-    }
-
-    // No waiting and no latest-pose substitution: pose and body-frame twist
-    // must refer to the same odometry sample.
+    // 尝试转换到 map 坐标系
+    // 我们需要确保与轨迹（通常在 map 系）一致
+    // 采用 TimePointZero 避免阻塞
     if (odom_pose.header.frame_id != "map" && tf_) {
         try {
             auto transform = tf_->lookupTransform(
-                "map", odom_pose.header.frame_id, sample_time);
+                "map", odom_pose.header.frame_id, tf2::TimePointZero);
             tf2::doTransform(odom_pose, map_pose, transform);
         } catch (const tf2::TransformException &ex) {
+            // 降级处理
             RCLCPP_WARN_THROTTLE(
                 logger_, *clock_, 2000,
-                "[MincoSmoother] 跳过无法按时间戳转换到 map 的里程计: %s",
+                "[MincoSmoother] 无法将机器人姿态转换到 map 坐标系: %s",
                 ex.what());
-            return;
+            map_pose = odom_pose;
         }
-    } else if (odom_pose.header.frame_id == "map") {
-        map_pose = odom_pose;
     } else {
-        return;
+        map_pose = odom_pose;
     }
 
-    const auto &q = map_pose.pose.orientation;
-    tf2::Quaternion rotation(q.x, q.y, q.z, q.w);
-    const auto &v = msg->twist.twist.linear;
-    if (!std::isfinite(rotation.length2()) || rotation.length2() < 1e-12 ||
-        !std::isfinite(v.x) || !std::isfinite(v.y) || !std::isfinite(v.z)) {
-        return;
-    }
-    rotation.normalize();
-    const tf2::Vector3 world_velocity =
-        tf2::quatRotate(rotation, tf2::Vector3(v.x, v.y, v.z));
+    // 更新 2D 位置缓存（供轨迹投影计算使用）
     {
-        std::lock_guard<std::mutex> lock(warm_start_mutex_);
-        warm_start_guard_.observe(
-            Eigen::Vector2d(map_pose.pose.position.x, map_pose.pose.position.y),
-            Eigen::Vector2d(world_velocity.x(), world_velocity.y()),
-            sample_time.seconds(), now, params_.max_acc);
+        std::lock_guard<std::mutex> lock(robot_pos_2d_mutex_);
+        current_robot_pos_2d_.x() = map_pose.pose.position.x;
+        current_robot_pos_2d_.y() = map_pose.pose.position.y;
+        robot_pos_timestamp_ = clock_->now().seconds();
     }
 }
 

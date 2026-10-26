@@ -104,9 +104,6 @@ install(FILES minco_smoother_plugin.xml
 
 # 测试
 if(BUILD_TESTING)
-  find_package(ament_cmake_gtest REQUIRED)
-  ament_add_gtest(test_warm_start_boundary test/test_warm_start_boundary.cpp)
-  target_include_directories(test_warm_start_boundary PRIVATE include ${EIGEN3_INCLUDE_DIRS})
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()

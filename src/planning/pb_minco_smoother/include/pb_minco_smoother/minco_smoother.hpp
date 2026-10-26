@@ -43,7 +43,6 @@
 #include "gcopter/trajectory.hpp"  // 使用 gcopter 的轨迹类
 #include "pb_minco_smoother/costmap_esdf_adapter.hpp"
 #include "pb_minco_smoother/minco_optimizer.hpp"
-#include "pb_minco_smoother/warm_start_boundary.hpp"
 
 namespace pb_minco {
 
@@ -364,10 +363,33 @@ class MincoSmoother : public nav2_core::Smoother {
     /// 当前机器人位姿（用于 ESDF 查询高度）
     std::mutex robot_state_mutex_;
 
-    // One coherent map-frame observation, from the existing raw odometry
-    // subscription (not Nav2's thresholded controller velocity).
-    WarmStartBoundaryGuard warm_start_guard_;
-    std::mutex warm_start_mutex_;
+    // ========== 速度缓存（用于重规划的边界条件） ==========
+    /**
+     * @brief 当前机器人速度（2D，在世界坐标系下）
+     *
+     * 用于在重规划时设置轨迹的初始速度边界条件，
+     * 避免生成"从静止开始"的轨迹导致的抖动。
+     */
+    Eigen::Vector2d current_velocity_{0.0, 0.0};
+    double velocity_timestamp_ = 0.0;  ///< 速度更新时间戳
+    std::mutex velocity_mutex_;        ///< 保护速度数据的互斥锁
+
+    /// 速度有效性超时时间（秒），超过此时间认为速度无效，使用零速度
+    static constexpr double kVelocityTimeout = 0.5;
+
+    // ========== 2D 位置缓存（用于轨迹投影计算） ==========
+    /**
+     * @brief 当前机器人 2D 位置（世界坐标系）
+     *
+     * 从里程计中提取，用于在历史轨迹上查找投影点。
+     * 与 current_robot_pos_ (3D) 不同，这里只存储 x, y。
+     */
+    Eigen::Vector2d current_robot_pos_2d_{0.0, 0.0};
+    double robot_pos_timestamp_ = 0.0;  ///< 位置更新时间戳
+    std::mutex robot_pos_2d_mutex_;     ///< 保护 2D 位置数据的互斥锁
+
+    /// 位置有效性超时时间（秒）
+    static constexpr double kPositionTimeout = 0.5;
 
     /**
      * @brief 里程计回调（更新机器人状态）
