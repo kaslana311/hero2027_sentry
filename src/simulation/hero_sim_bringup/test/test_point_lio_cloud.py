@@ -33,7 +33,7 @@ def ros_context():
 
 
 class CloudHarness:
-    def __init__(self, sim_time=False, namespace=None):
+    def __init__(self, sim_time=False, namespace=None, navigation_tf=False, tf_namespace=None):
         self.namespace = namespace or "/cloud_test_" + uuid.uuid4().hex[:10]
         self.node = rclpy.create_node("cloud_probe", namespace=self.namespace)
         self.clouds, self.statuses = [], []
@@ -47,12 +47,16 @@ class CloudHarness:
         self.node.create_subscription(String, "cloud_deployment/status",
                                       lambda m: self.statuses.append(json.loads(m.data)), self.durable)
         self.clock_pub = self.node.create_publisher(Clock, "/clock", 10)
+        tf_namespace = tf_namespace or self.namespace
+        self.tf_pub = self.node.create_publisher(TFMessage, tf_namespace + "/tf", 10)
         self.process = subprocess.Popen([
             os.environ["POINT_LIO_CLOUD_EXECUTABLE"], "--ros-args",
             "-r", f"__ns:={self.namespace}", "-p", f"use_sim_time:={str(sim_time).lower()}",
+            "-p", f"use_navigation_tf:={str(navigation_tf).lower()}",
+            "-r", f"/tf:={tf_namespace}/tf", "-r", f"/tf_static:={tf_namespace}/tf_static",
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.until(lambda: self.pub.get_subscription_count()
-                   and self.align_pub.get_subscription_count() and self.statuses)
+                   and (navigation_tf or self.align_pub.get_subscription_count()) and self.statuses)
         self.spin_for(.15)
 
     def until(self, predicate, timeout=5.):
@@ -106,9 +110,9 @@ def harness():
         probe.close()
 
 
-def cloud(seconds=10., rows=((1., 0., 0., 42.),)):
+def cloud(seconds=10., rows=((1., 0., 0., 42.),), frame="pointlio_odom"):
     msg = PointCloud2()
-    msg.header.stamp, msg.header.frame_id = stamp(seconds), "pointlio_odom"
+    msg.header.stamp, msg.header.frame_id = stamp(seconds), frame
     msg.height, msg.width = len(rows), 1
     msg.fields = [PointField(name=name, offset=i*4, datatype=PointField.FLOAT32, count=1)
                   for i, name in enumerate(("x", "y", "z", "intensity"))]

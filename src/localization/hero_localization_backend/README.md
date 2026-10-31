@@ -20,7 +20,10 @@ A 星、MINCO、MPC、速度及电机链保持不变。
 
 输入只有 /red_standard_robot1/pointlio/odometry 和
 /red_standard_robot1/pointlio/cloud_registered，均为扫描结束时间。
-前者是 pointlio_odom -> pointlio_imu，后者坐标为 pointlio_odom；
+前者是 odom -> pointlio_imu，后者坐标为 odom；
+2026-10-31 C2 统一主 TF 后只修改此输入坐标名，原生数值不变；后端仍是私有 TF
+旁路评估，未自动接管导航。主链路与交接说明见 hero_sim_bringup 的
+`UNIFIED_LOCALIZATION_TF.md`。
 input_cloud_in_local_frame=false 让后端按**同一帧位姿**还原传感器系点云。
 没有使用真值配准后的 cloud_registered_map，没有订阅真值来修正后端。
 同步容差 1 ms，避免把相邻 50 ms 的两次扫描配错。

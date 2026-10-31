@@ -11,6 +11,7 @@
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "std_msgs/msg/string.hpp"
@@ -21,7 +22,8 @@
 #include "tf2_ros/transform_broadcaster.h"
 
 // C2 adapter only: no truth subscription, no estimator/controller changes.
-// Pose and cloud share exactly the same frozen, explicitly truth-seeded alignment.
+// Point-LIO remains in odom. Only map->odom carries global alignment/correction;
+// body odometry/velocity must never contain that correction a second time.
 class SimPointLioNavigationBridge : public rclcpp::Node
 {
   using Odom = nav_msgs::msg::Odometry;
@@ -32,6 +34,29 @@ public:
   SimPointLioNavigationBridge() : Node("sim_point_lio_navigation_bridge")
   {
     relay_ = declare_parameter<bool>("relay_cmd_vel", true);
+    publish_map_to_odom_ = declare_parameter<bool>("publish_map_to_odom", true);
+    for (const auto * name : {"map_odom_offset_x", "map_odom_offset_y", "map_odom_offset_yaw"}) {
+      if (!std::isfinite(declare_parameter<double>(name, 0.))) {
+        throw std::runtime_error("Map/odom offsets must be finite");
+      }
+    }
+    parameter_callback_ = add_on_set_parameters_callback(
+      [](const std::vector<rclcpp::Parameter> & parameters) {
+        rcl_interfaces::msg::SetParametersResult result; result.successful = true;
+        for (const auto & p : parameters) {
+          if (p.get_name() == "publish_map_to_odom") {
+            result.successful = false;
+            result.reason = "TF ownership is startup-only: restart with publish_map_to_odom:=false";
+          } else if (p.get_name() == "map_odom_offset_x" || p.get_name() == "map_odom_offset_y" ||
+            p.get_name() == "map_odom_offset_yaw")
+          {
+            if (p.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE ||
+              !std::isfinite(p.as_double()))
+            {result.successful = false; result.reason = "Offsets require finite double values";}
+          }
+        }
+        return result;
+      });
     timeout_ = declare_parameter<double>("data_timeout_sec", 1.0);
     cmd_timeout_ = declare_parameter<double>("command_timeout_sec", 0.5);
     max_velocity_dt_ = declare_parameter<double>("velocity_max_dt_sec", 0.5);
@@ -51,13 +76,18 @@ public:
       "pointlio/navigation/status", rclcpp::QoS(1).transient_local());
     tf_pub_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
     static_tf_pub_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
-    Transform identity;
-    identity.header.frame_id = "map";
-    identity.child_frame_id = "odom";
-    identity.transform.rotation.w = 1.;
-    static_tf_pub_->sendTransform(identity);
-    alignment_sub_ = create_subscription<Transform>("pointlio/evaluation/cloud_alignment",
-      rclcpp::QoS(1).transient_local(), [this](Transform::ConstSharedPtr m) {align(*m);});
+    Transform sensor;
+    sensor.header.frame_id = "base_link"; sensor.child_frame_id = "pointlio_imu";
+    sensor.transform = tf2::toMsg(chassis_to_imu_);
+    static_tf_pub_->sendTransform(sensor);
+    if (publish_map_to_odom_) {
+      alignment_sub_ = create_subscription<Transform>("pointlio/evaluation/cloud_alignment",
+        rclcpp::QoS(1).transient_local(), [this](Transform::ConstSharedPtr m) {align(*m);});
+    } else {
+      // An external localization backend owns map->odom. No simulator seed is
+      // required by this adapter; the TF-based cloud bridge still gates motion.
+      aligned_ = true;
+    }
     odom_sub_ = create_subscription<Odom>("pointlio/odometry", rclcpp::SensorDataQoS(),
       [this](Odom::ConstSharedPtr m) {odometry(*m);});
     cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
@@ -76,6 +106,9 @@ public:
       [this](Twist::ConstSharedPtr m) {command(*m);});
     timer_ = create_wall_timer(std::chrono::milliseconds(50), [this]() {
         checkClock();
+        if (aligned_ && !failed_ && publish_map_to_odom_ && now().nanoseconds() > 0) {
+          publishMapTransform(now());
+        }
         const auto reason = health();
         if (reason != "ready" || (active_command_ &&
             elapsed(command_received_) > cmd_timeout_)) {stop();}
@@ -88,7 +121,8 @@ public:
         status.data = out.str(); status_pub_->publish(status);
       });
     RCLCPP_WARN(get_logger(), "C2: navigation uses Point-LIO pose + cloud; NO truth fallback. "
-      "One-time initial alignment, body-frame finite-difference velocity. "
+      "Unified map->odom->base_footprint->base_link->pointlio_imu TF; "
+      "global corrections do not enter local odometry or body velocity. "
       "Reset/alignment change requires restarting the whole algorithm launch.");
   }
 private:
@@ -142,25 +176,39 @@ private:
     }
     return "ready";
   }
+  void publishMapTransform(const rclcpp::Time & stamp)
+  {
+    tf2::Quaternion yaw;
+    yaw.setRPY(0., 0., get_parameter("map_odom_offset_yaw").as_double());
+    const tf2::Transform offset(yaw, tf2::Vector3(
+      get_parameter("map_odom_offset_x").as_double(),
+      get_parameter("map_odom_offset_y").as_double(), 0.));
+    Transform transform;
+    transform.header.stamp = stamp; transform.header.frame_id = "map";
+    transform.child_frame_id = "odom";
+    transform.transform = tf2::toMsg(offset * initial_map_to_odom_);
+    tf_pub_->sendTransform(transform);
+  }
   void align(const Transform & m)
   {
-    if (failed_ || m.header.frame_id != "map" || m.child_frame_id != "pointlio_odom") {return;}
+    if (failed_ || m.header.frame_id != "map" || m.child_frame_id != "odom") {return;}
     const auto stamp = stampNs(m.header.stamp);
     tf2::Transform transform;
     const auto & p = m.transform.translation;
     if (stamp <= 0 || !decode(p.x, p.y, p.z, m.transform.rotation, transform)) {return;}
     if (aligned_) {
-      const double distance = (transform.getOrigin() - map_to_lio_.getOrigin()).length();
-      const double angle = transform.getRotation().angleShortestPath(map_to_lio_.getRotation());
+      const double distance = (transform.getOrigin() - initial_map_to_odom_.getOrigin()).length();
+      const double angle = transform.getRotation().angleShortestPath(initial_map_to_odom_.getRotation());
       if (stamp != alignment_ns_ || distance > 1e-8 || angle > 1e-8) {fail();}
       return;
     }
-    map_to_lio_ = transform; alignment_ns_ = stamp; aligned_ = true;
+    initial_map_to_odom_ = transform; alignment_ns_ = stamp; aligned_ = true;
+    publishMapTransform(rclcpp::Time(m.header.stamp, get_clock()->get_clock_type()));
   }
   void odometry(const Odom & m)
   {
     checkClock();
-    if (failed_ || !aligned_ || m.header.frame_id != "pointlio_odom" ||
+    if (failed_ || !aligned_ || m.header.frame_id != "odom" ||
       m.child_frame_id != "pointlio_imu") {return;}
     const auto stamp = stampNs(m.header.stamp);
     tf2::Transform imu;
@@ -168,7 +216,7 @@ private:
     if (!decode(p.x, p.y, p.z, m.pose.pose.orientation, imu)) {return;}
     if (have_pose_ && stamp < pose_ns_ - 500000000) {fail(); return;}
     if (stamp < alignment_ns_ || stamp <= pose_ns_ || !freshStamp(stamp)) {return;}
-    const auto chassis = map_to_lio_ * imu * chassis_to_imu_.inverse();
+    const auto chassis = imu * chassis_to_imu_.inverse();
     Odom output;
     output.header.stamp = m.header.stamp; output.header.frame_id = "odom";
     output.child_frame_id = "base_link";
@@ -198,9 +246,15 @@ private:
     pose_ns_ = stamp; previous_pose_ = chassis;
     pose_received_ = Steady::now(); have_pose_ = true;
     odom_pub_->publish(output);
-    tf2::Quaternion yaw; yaw.setRPY(0., 0., tf2::getYaw(chassis.getRotation()));
-    const tf2::Transform footprint(yaw,
-      tf2::Vector3(chassis.getOrigin().x(), chassis.getOrigin().y(), 0.));
+    // Preserve the existing URDF ground anchor when odom's native origin is at
+    // the IMU, rather than silently moving the model vertically. These two
+    // factors still multiply to the RAW odom->body pose: the initialization
+    // ground-plane basis cancels, and no global correction enters odometry.
+    const auto ground_body = initial_map_to_odom_ * chassis;
+    tf2::Quaternion yaw; yaw.setRPY(0., 0., tf2::getYaw(ground_body.getRotation()));
+    const tf2::Transform ground_footprint(yaw,
+      tf2::Vector3(ground_body.getOrigin().x(), ground_body.getOrigin().y(), 0.));
+    const auto footprint = initial_map_to_odom_.inverse() * ground_footprint;
     Transform planar, body;
     planar.header = output.header; planar.child_frame_id = "base_footprint";
     planar.transform = tf2::toMsg(footprint);
@@ -219,11 +273,13 @@ private:
     if (!valid || health() != "ready") {cmd_pub_->publish(Twist()); active_command_ = false; return;}
     cmd_pub_->publish(m); command_received_ = Steady::now(); active_command_ = true;
   }
+  bool publish_map_to_odom_{true};
   bool relay_{true}, aligned_{false}, failed_{false}, have_pose_{false}, have_cloud_{false};
   bool velocity_ready_{false}, active_command_{false};
   double timeout_, cmd_timeout_, max_velocity_dt_;
   int64_t alignment_ns_{0}, pose_ns_{0}, cloud_ns_{0}, last_clock_ns_{0};
-  tf2::Transform chassis_to_imu_, map_to_lio_, previous_pose_;
+  tf2::Transform chassis_to_imu_, initial_map_to_odom_{tf2::Transform::getIdentity()}, previous_pose_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_;
   Steady::time_point pose_received_, cloud_received_, command_received_;
   rclcpp::Publisher<Odom>::SharedPtr odom_pub_;
   rclcpp::Publisher<Twist>::SharedPtr cmd_pub_;

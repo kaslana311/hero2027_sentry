@@ -14,16 +14,21 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
-def _setup(context, publish_cloud_alignment=False, rviz_argument="use_rviz"):
+def _setup(context, publish_cloud_alignment=False, rviz_argument="use_rviz", navigation_chain=False):
     robot = LaunchConfiguration("namespace").perform(context).strip("/")
     if not robot:
         raise RuntimeError("namespace must identify the simulated dual-lidar robot")
     share = get_package_share_directory("hero_sim_bringup")
     namespace = f"{robot}/pointlio"
-    # Separate TF topic and distinct frame IDs: no competing navigation TF.
-    tf_remaps = [("/tf", "tf"), ("/tf_static", "tf_static")]
+    # C0/C1 keep private shadow TF. C2 uses ONE navigation tree and suppresses
+    # the frontend's competing odom->IMU TF; its rigid adapter supplies that chain.
+    tf_remaps = ([("/tf", f"/{robot}/tf"), ("/tf_static", f"/{robot}/tf_static")]
+                 if navigation_chain else [("/tf", "tf"), ("/tf_static", "tf_static")])
+    frontend_overrides = ({"odometry.odom_frame_id": "odom", "publish.tf_send_en": False}
+                          if navigation_chain else {})
     return [
-        LogInfo(msg=f"Point-LIO estimator at /{namespace}; private TF, navigation source chosen by entry point"),
+        LogInfo(msg=f"Point-LIO estimator at /{namespace}; " +
+                ("unified navigation TF" if navigation_chain else "private shadow TF")),
         Node(
             package="hero_sim_bringup", executable="sim_point_lio_input_bridge",
             namespace=namespace, output="screen",
@@ -37,7 +42,7 @@ def _setup(context, publish_cloud_alignment=False, rviz_argument="use_rviz"):
         Node(
             package="point_lio", executable="pointlio_mapping",
             namespace=namespace, output="screen",
-            parameters=[os.path.join(share, "config", "point_lio_snapshot.yaml")],
+            parameters=[os.path.join(share, "config", "point_lio_snapshot.yaml"), frontend_overrides],
             remappings=tf_remaps + [("/odometry/filtered", "odometry")],
         ),
         Node(
@@ -47,6 +52,8 @@ def _setup(context, publish_cloud_alignment=False, rviz_argument="use_rviz"):
                 "use_sim_time": True,
                 "truth_topic": f"/{robot}/odometry/truth_3d",
                 "publish_cloud_alignment": publish_cloud_alignment,
+                "use_navigation_tf": navigation_chain,
+                "odom_frame": "odom" if navigation_chain else "pointlio_odom",
             }],
         ),
         Node(

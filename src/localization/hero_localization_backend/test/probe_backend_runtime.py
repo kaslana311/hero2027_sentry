@@ -87,7 +87,7 @@ def main():
             cloud_points = np.empty((len(scene), 4), dtype='<f4')
             cloud_points[:, :3], cloud_points[:, 3] = scene-sensor+reported, 1.
             odom = Odometry()
-            odom.header.stamp, odom.header.frame_id = stamp(seconds), 'pointlio_odom'
+            odom.header.stamp, odom.header.frame_id = stamp(seconds), 'odom'
             odom.child_frame_id, odom.pose.pose.orientation.w = 'pointlio_imu', 1.
             odom.pose.pose.position.x = float(reported[0])
             cloud = PointCloud2()

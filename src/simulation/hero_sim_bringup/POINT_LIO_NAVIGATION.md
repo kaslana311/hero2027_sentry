@@ -1,5 +1,10 @@
 # C2：Point-LIO 位姿和配准云共同接入导航
 
+> 2026-10-31 更新：当前 C2 已统一为主 `map → odom → base_link/传感器`
+> 链路，初始对齐改由 `map → odom` 承担，不再分别烘焙进导航位姿和点云。
+> 下文“一次冻结对齐、map/odom 恒等”为历史实现记录；当前接口、偏移测试和
+> 后端发布权交接以 [UNIFIED_LOCALIZATION_TF.md](UNIFIED_LOCALIZATION_TF.md) 为准。
+
 2026-10-08，两仓库 `codex/point-lio-navigation`，从配对标签
 `sim/point-lio-cloud-baseline-v1` 新建。旧 C1/真值/旁路入口保留；原标签不移动。
 C2 是新实验，尚未由用户实跑验收，不宣称过洞成功或真车定位完全复现。

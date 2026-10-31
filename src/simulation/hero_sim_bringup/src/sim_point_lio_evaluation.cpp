@@ -20,6 +20,8 @@
 #include "tf2/LinearMath/Transform.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tf2_ros/static_transform_broadcaster.h"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
 #include "visualization_msgs/msg/marker_array.hpp"
 
 // Default: display-only observer. The cloud-only experiment may explicitly export
@@ -35,6 +37,9 @@ class SimPointLioEvaluation : public rclcpp::Node
 public:
   SimPointLioEvaluation() : Node("sim_point_lio_evaluation")
   {
+    use_navigation_tf_ = declare_parameter<bool>("use_navigation_tf", false);
+    odom_frame_ = declare_parameter<std::string>(
+      "odom_frame", use_navigation_tf_ ? "odom" : "pointlio_odom");
     const auto offset = declare_parameter<std::vector<double>>(
       "chassis_to_virtual_imu", {0., -0.167, 0.121});
     if (offset.size() != 3 || !std::all_of(offset.begin(), offset.end(),
@@ -60,7 +65,12 @@ public:
       RCLCPP_WARN(get_logger(), "Cloud experiment: export ONE truth-seeded initial alignment. "
         "This is not autonomous map localization or ongoing truth correction.");
     }
-    static_tf_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
+    if (use_navigation_tf_) {
+      tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
+      tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_, this, true);
+    } else {
+      static_tf_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
+    }
     truth_sub_ = create_subscription<Odom>(
       declare_parameter<std::string>("truth_topic", "truth_3d"), rclcpp::SensorDataQoS(),
       [this](Odom::ConstSharedPtr msg) {truth(msg);});
@@ -107,7 +117,7 @@ private:
   {
     int64_t stamp;
     tf2::Transform pose;
-    if (msg->header.frame_id != "pointlio_odom" || msg->child_frame_id != "pointlio_imu" ||
+    if (msg->header.frame_id != odom_frame_ || msg->child_frame_id != "pointlio_imu" ||
       !decode(*msg, stamp, pose) || failed_) {return;}
     if (last_estimate_ && stamp < last_estimate_ - 500000000) {timeReset(); return;}
     if (stamp <= last_estimate_) {return;}
@@ -165,15 +175,29 @@ private:
         geometry_msgs::msg::TransformStamped transform;
         transform.header = msg->header;
         transform.header.frame_id = "map";
-        transform.child_frame_id = "pointlio_odom";
+        transform.child_frame_id = odom_frame_;
         transform.transform = tf2::toMsg(map_to_lio_);
         // Launch remaps /tf_static to the private pointlio/tf_static topic.
-        static_tf_->sendTransform(transform);
+        if (static_tf_) {static_tf_->sendTransform(transform);}
         if (alignment_pub_) {alignment_pub_->publish(transform);}
         RCLCPP_INFO(get_logger(), "Display alignment locked once at %.9f s; map/odom "
           "origin is unchanged. Initial pose error is zero by construction.", stamp * 1e-9);
       }
-      const auto estimate_chassis = map_to_lio_ * local_imu * chassis_to_imu_.inverse();
+      auto global_alignment = map_to_lio_;
+      if (use_navigation_tf_) {
+        try {
+          const auto transform = tf_buffer_->lookupTransform(
+            "map", odom_frame_, rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()),
+            rclcpp::Duration::from_seconds(0.));
+          tf2::fromMsg(transform.transform, global_alignment);
+        } catch (const tf2::TransformException &) {
+          if (Clock::now() - pending_.front().received > std::chrono::seconds(1)) {
+            pending_.pop_front();
+          }
+          return;  // No independent frozen map pose in C2's comparison window.
+        }
+      }
+      const auto estimate_chassis = global_alignment * local_imu * chassis_to_imu_.inverse();
       publishPair(*msg, map_chassis, estimate_chassis);
       pending_.pop_front();
     }
@@ -198,7 +222,8 @@ private:
     result.markers.push_back(zero);
     auto name = marker(1, Marker::TEXT_VIEW_FACING, stamp, 1.f, .85f, 0.f);
     name.pose.position.x = -.6; name.pose.position.y = .6; name.pose.position.z = .8;
-    name.scale.z = .3; name.text = "MAP = ODOM ORIGIN\n(0, 0, 0)";
+    name.scale.z = .3;
+    name.text = use_navigation_tf_ ? "MAP ORIGIN\n(0, 0, 0)" : "MAP = ODOM ORIGIN\n(0, 0, 0)";
     result.markers.push_back(name);
     return result;
   }
@@ -281,7 +306,9 @@ private:
     status.pose.position.x = -2.4; status.pose.position.y = .6; status.pose.position.z = .8;
     status.scale.z = .25;
     std::ostringstream text;
-    text << std::fixed << std::setprecision(3) << "One-time aligned comparison\nXY error: " <<
+    text << std::fixed << std::setprecision(3) <<
+      (use_navigation_tf_ ? "Main navigation TF comparison\nXY error: " :
+      "One-time aligned comparison\nXY error: ") <<
       std::hypot(delta.x(), delta.y()) << " m  Angle: " << std::setprecision(2) << angle << " deg";
     status.text = text.str(); status.lifetime = rclcpp::Duration::from_seconds(.75);
     markers.markers.push_back(status);
@@ -301,6 +328,10 @@ private:
 
   double max_gap_;
   bool aligned_{false}, failed_{false};
+  bool use_navigation_tf_{false};
+  std::string odom_frame_;
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
   int64_t alignment_stamp_{0}, last_estimate_{0}, last_path_{0};
   tf2::Transform chassis_to_imu_, map_to_lio_;
   std::map<int64_t, tf2::Transform> truth_;

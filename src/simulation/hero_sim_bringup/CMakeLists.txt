@@ -11,6 +11,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(livox_ros_driver2 REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
@@ -51,7 +52,7 @@ ament_target_dependencies(sim_point_lio_evaluation
 
 add_executable(sim_point_lio_cloud_bridge src/sim_point_lio_cloud_bridge.cpp)
 ament_target_dependencies(sim_point_lio_cloud_bridge
-  geometry_msgs rclcpp sensor_msgs std_msgs tf2 tf2_geometry_msgs
+  geometry_msgs rclcpp sensor_msgs std_msgs tf2 tf2_geometry_msgs tf2_ros
 )
 
 install(TARGETS sim_ground_truth_bridge sim_point_lio_input_bridge sim_point_lio_evaluation
@@ -61,7 +62,7 @@ install(TARGETS sim_ground_truth_bridge sim_point_lio_input_bridge sim_point_lio
 
 add_executable(sim_point_lio_navigation_bridge src/sim_point_lio_navigation_bridge.cpp)
 ament_target_dependencies(sim_point_lio_navigation_bridge
-  geometry_msgs nav_msgs rclcpp sensor_msgs std_msgs tf2 tf2_geometry_msgs tf2_ros
+  geometry_msgs nav_msgs rclcpp rcl_interfaces sensor_msgs std_msgs tf2 tf2_geometry_msgs tf2_ros
 )
 install(TARGETS sim_point_lio_navigation_bridge DESTINATION lib/${PROJECT_NAME})
 
@@ -129,6 +130,13 @@ if(BUILD_TESTING)
     ENV "POINT_LIO_NAV_EXECUTABLE=$<TARGET_FILE:sim_point_lio_navigation_bridge>"
         "POINT_LIO_CLOUD_EXECUTABLE=$<TARGET_FILE:sim_point_lio_cloud_bridge>"
         "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=183"
+  )
+  ament_add_pytest_test(point_lio_tf_chain test/test_point_lio_tf_chain.py
+    TIMEOUT 150
+    ENV "POINT_LIO_NAV_EXECUTABLE=$<TARGET_FILE:sim_point_lio_navigation_bridge>"
+        "POINT_LIO_CLOUD_EXECUTABLE=$<TARGET_FILE:sim_point_lio_cloud_bridge>"
+        "EVALUATION_EXECUTABLE=$<TARGET_FILE:sim_point_lio_evaluation>"
+        "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=184"
   )
 endif()
 

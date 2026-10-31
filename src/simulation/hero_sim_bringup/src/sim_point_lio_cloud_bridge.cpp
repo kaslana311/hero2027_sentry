@@ -16,10 +16,13 @@
 #include "sensor_msgs/msg/point_field.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "tf2/LinearMath/Transform.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
 
-// Cloud-only deployment: Point-LIO already registered these points in its fixed
-// local world. Apply ONE initial rigid alignment, not a moving base-link TF.
-// No truth/odom subscriptions, motor output, global TF or truth-cloud fallback.
+// C2 uses the same acquisition-time map->odom TF as navigation. The legacy C1
+// cloud-only experiment retains its explicit frozen-alignment mode by default.
+// Neither mode publishes TF/motors or falls back to a truth cloud.
 class SimPointLioCloudBridge : public rclcpp::Node
 {
   using Cloud = sensor_msgs::msg::PointCloud2;
@@ -36,6 +39,9 @@ class SimPointLioCloudBridge : public rclcpp::Node
 public:
   SimPointLioCloudBridge() : Node("sim_point_lio_cloud_bridge")
   {
+    use_navigation_tf_ = declare_parameter<bool>("use_navigation_tf", false);
+    source_frame_ = declare_parameter<std::string>(
+      "source_frame", use_navigation_tf_ ? "odom" : "pointlio_odom");
     const auto depth = declare_parameter<int>("cloud_queue_size", 5);
     wait_sec_ = declare_parameter<double>("alignment_wait_sec", 1.);
     if (depth < 1 || depth > 20 || !std::isfinite(wait_sec_) || wait_sec_ <= 0. ||
@@ -49,9 +55,14 @@ public:
       "cloud_registered_map", rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
     status_pub_ = create_publisher<std_msgs::msg::String>(
       "cloud_deployment/status", rclcpp::QoS(1).transient_local());
-    alignment_sub_ = create_subscription<Alignment>(
-      "evaluation/cloud_alignment", rclcpp::QoS(1).transient_local(),
-      [this](Alignment::ConstSharedPtr msg) {align(*msg);});
+    if (use_navigation_tf_) {
+      tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
+      tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_, this, true);
+    } else {
+      alignment_sub_ = create_subscription<Alignment>(
+        "evaluation/cloud_alignment", rclcpp::QoS(1).transient_local(),
+        [this](Alignment::ConstSharedPtr msg) {align(*msg);});
+    }
     // Point-LIO publishes this stream RELIABLE. Request retransmission on this
     // navigation-critical link instead of silently accepting fragment loss.
     // Keep the original bounded depth and acquisition stamps; no stale fallback.
@@ -65,8 +76,9 @@ public:
         drain();
         publishStatus();
       });
-    RCLCPP_INFO(get_logger(), "Point-LIO cloud deployment waiting for ONE initial alignment; "
-      "output=cloud_registered_map. No truth fallback; this node publishes no navigation pose/TF.");
+    RCLCPP_INFO(get_logger(), "Point-LIO cloud deployment: %s; output=cloud_registered_map. "
+      "No latest-time/truth fallback, navigation pose or TF output.",
+      use_navigation_tf_ ? "acquisition-time main navigation TF" : "C1 frozen initial alignment");
     publishStatus();
   }
 
@@ -157,7 +169,7 @@ private:
     if (failed_) {return;}
     Layout fields;
     const auto stamp = timestamp(msg->header.stamp);
-    if (msg->header.frame_id != "pointlio_odom" || stamp <= 0 || !layout(*msg, fields)) {
+    if (msg->header.frame_id != source_frame_ || stamp <= 0 || !layout(*msg, fields)) {
       ++dropped_;
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
         "Rejecting invalid Point-LIO cloud stamp/frame/layout (FLOAT32 little-endian required)");
@@ -199,10 +211,25 @@ private:
       if (std::chrono::duration<double>(WallClock::now() - pending_.front().received).count()
         > wait_sec_)
       {pending_.pop_front(); ++dropped_; continue;}
-      if (!aligned_) {return;}
       const auto input = pending_.front().cloud;
+      tf2::Transform map_to_cloud;
+      if (use_navigation_tf_) {
+        try {
+          const auto transform = tf_buffer_->lookupTransform(
+            "map", input->header.frame_id,
+            rclcpp::Time(input->header.stamp, get_clock()->get_clock_type()),
+            rclcpp::Duration::from_seconds(0.));
+          tf2::fromMsg(transform.transform, map_to_cloud);
+        } catch (const tf2::TransformException &) {
+          return;  // Bounded queue/timer retry; never substitute the latest TF.
+        }
+      } else {
+        if (!aligned_) {return;}
+        map_to_cloud = map_to_lio_;
+      }
       pending_.pop_front();
-      if (timestamp(input->header.stamp) < alignment_stamp_) {++dropped_; continue;}
+      if (!use_navigation_tf_ && timestamp(input->header.stamp) < alignment_stamp_)
+      {++dropped_; continue;}
       Layout fields;
       if (!layout(*input, fields)) {++dropped_; continue;}
       Cloud output = *input;
@@ -211,9 +238,9 @@ private:
         for (uint32_t col = 0; col < output.width && valid; ++col) {
           auto * bytes = output.data.data() + static_cast<size_t>(row) * output.row_step +
             static_cast<size_t>(col) * output.point_step;
-          valid = transformVector(bytes, fields.xyz, map_to_lio_, false, output.is_dense);
+          valid = transformVector(bytes, fields.xyz, map_to_cloud, false, output.is_dense);
           if (valid && fields.has_normal) {
-            valid = transformVector(bytes, fields.normal, map_to_lio_, true, output.is_dense);
+            valid = transformVector(bytes, fields.normal, map_to_cloud, true, output.is_dense);
           }
         }
       }
@@ -242,7 +269,8 @@ private:
   {
     const double age = published_ == 0 ? -1. :
       std::chrono::duration<double>(WallClock::now() - last_publish_wall_).count();
-    const std::string state = failed_ ? "restart_required" : !aligned_ ?
+    const std::string state = failed_ ? "restart_required" :
+      use_navigation_tf_ && published_ == 0 ? "waiting_for_tf" : !use_navigation_tf_ && !aligned_ ?
       "waiting_for_alignment" : published_ == 0 ? "waiting_for_cloud" :
       age > 1. ? "stale" : "publishing";
     std::ostringstream stream;
@@ -259,6 +287,10 @@ private:
   size_t queue_size_{5}, published_{0}, dropped_{0};
   double wait_sec_{1.};
   bool aligned_{false}, failed_{false};
+  bool use_navigation_tf_{false};
+  std::string source_frame_;
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
   int64_t alignment_stamp_{0}, last_input_{0}, last_output_{0}, last_clock_{0};
   tf2::Transform map_to_lio_;
   std::string reason_;

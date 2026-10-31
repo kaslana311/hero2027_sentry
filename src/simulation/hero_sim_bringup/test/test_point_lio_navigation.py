@@ -31,7 +31,7 @@ def ros_context():
 
 
 class NavigationHarness:
-    def __init__(self, relay=True):
+    def __init__(self, relay=True, publish_map_to_odom=True):
         self.namespace = "/nav_lio_test_" + uuid.uuid4().hex[:10]
         self.node = rclpy.create_node("nav_probe", namespace=self.namespace)
         self.odoms, self.tfs, self.static_tfs, self.commands, self.statuses = [], [], [], [], []
@@ -54,9 +54,10 @@ class NavigationHarness:
             os.environ["POINT_LIO_NAV_EXECUTABLE"], "--ros-args", "-r", f"__ns:={self.namespace}",
             "-r", "/tf:=tf", "-r", "/tf_static:=tf_static", "-p", "use_sim_time:=true",
             "-p", f"relay_cmd_vel:={str(relay).lower()}",
+            "-p", f"publish_map_to_odom:={str(publish_map_to_odom).lower()}",
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.until(lambda: self.odom_pub.get_subscription_count() and
-            self.align_pub.get_subscription_count() and self.cmd_pub.get_subscription_count()
+            (not publish_map_to_odom or self.align_pub.get_subscription_count()) and self.cmd_pub.get_subscription_count()
             and self.cloud_pub.get_subscription_count() and self.statuses)
         self.clock(10.2)
 
@@ -80,7 +81,7 @@ class NavigationHarness:
 
     def align(self, yaw=math.pi/2, translation=(5., 2., .3)):
         m = TransformStamped()
-        m.header.stamp, m.header.frame_id, m.child_frame_id = stamp(10.), "map", "pointlio_odom"
+        m.header.stamp, m.header.frame_id, m.child_frame_id = stamp(10.), "map", "odom"
         m.transform.translation.x, m.transform.translation.y, m.transform.translation.z = translation
         m.transform.rotation.z, m.transform.rotation.w = math.sin(yaw/2), math.cos(yaw/2)
         self.align_pub.publish(m)
@@ -89,7 +90,7 @@ class NavigationHarness:
 
     def pose(self, seconds=10.1, chassis=(0., 0., 0., 0., 0., 0.), negative=False):
         m = Odometry()
-        m.header.stamp, m.header.frame_id, m.child_frame_id = stamp(seconds), "pointlio_odom", "pointlio_imu"
+        m.header.stamp, m.header.frame_id, m.child_frame_id = stamp(seconds), "odom", "pointlio_imu"
         rot = rotation(chassis[3:])
         offset = (0., -.167, .121)
         imu = tuple(chassis[i] + sum(rot[i][j]*offset[j] for j in range(3)) for i in range(3))
@@ -158,7 +159,8 @@ def test_alignment_required_no_truth_fallback_and_single_navigation_source(harne
     topics = harness.node.get_subscriber_names_and_types_by_node(
         "sim_point_lio_navigation_bridge", harness.namespace)
     assert not any("truth" in name or "chassis_odometry" in name for name, _ in topics)
-    assert {t.child_frame_id for t in harness.static_tfs} == {"odom"}
+    assert {t.child_frame_id for t in harness.static_tfs} == {"pointlio_imu"}
+    harness.until(lambda: any(t.child_frame_id == "odom" for t in harness.tfs))
 
 
 def test_chassis_extrinsic_timestamp_body_velocity_and_tilt_tf(harness):
@@ -169,12 +171,13 @@ def test_chassis_extrinsic_timestamp_body_velocity_and_tilt_tf(harness):
     assert out.header.stamp == source.header.stamp
     assert out.header.frame_id == "odom" and out.child_frame_id == "base_link"
     p = out.pose.pose.position
-    assert (p.x, p.y, p.z) == pytest.approx((3., 3., .5), abs=1e-8)
-    harness.until(lambda: len(harness.tfs) >= 2)
+    assert (p.x, p.y, p.z) == pytest.approx((1., 2., .2), abs=1e-8)
+    harness.until(lambda: all(any(t.child_frame_id == name for t in harness.tfs)
+                             for name in ("base_footprint", "base_link")))
     planar = next(t for t in harness.tfs if t.child_frame_id == "base_footprint")
     body = next(t for t in harness.tfs if t.child_frame_id == "base_link")
     assert planar.header.stamp == body.header.stamp == source.header.stamp
-    assert planar.transform.translation.z == 0.
+    assert planar.transform.translation.z == pytest.approx(-.3)
     assert body.transform.translation.z == pytest.approx(.5)
     assert abs(body.transform.rotation.y) > .08  # preserved slope pitch, not yaw-only
     source = harness.pose(10.15, (1.01, 2., .2, .1, .2, 0.))
@@ -332,24 +335,26 @@ def test_c2_does_not_change_nav_parameters_and_isolates_truth_tf(monkeypatch):
             Path(name).unlink()
 
 
-def test_actual_cloud_bridge_and_navigation_share_alignment_and_acquisition_stamp(harness):
+def test_actual_cloud_bridge_and_navigation_share_main_tf_and_acquisition_stamp(harness):
     import struct
     from test_point_lio_cloud import CloudHarness, cloud
     c = CloudHarness.__new__(CloudHarness)
     try:
-        c.__init__(namespace=harness.namespace + "/pointlio")
+        c.__init__(namespace=harness.namespace + "/pointlio", navigation_tf=True,
+                   tf_namespace=harness.namespace)
         harness.align()
         harness.pose(10.1)
         harness.until(lambda: len(harness.odoms) == 1)
         harness.pose(10.15, (.01, 0., 0., 0., 0., 0.))
-        c.pub.publish(cloud(10.15, ((.01, 0., 0., 42.),)))
+        c.pub.publish(cloud(10.15, ((.01, 0., 0., 42.),), frame="odom"))
         c.until(lambda: c.clouds)
         harness.until(lambda: harness.statuses[-1]["state"] == "ready")
         nav = harness.odoms[-1]
         registered = c.clouds[-1]
         xyz = struct.unpack_from("<fff", registered.data, 0)
         position = nav.pose.pose.position
-        assert xyz == pytest.approx((position.x, position.y, position.z), abs=1e-6)
+        assert xyz == pytest.approx((5., 2.01, .3), abs=1e-6)
+        assert (position.x, position.y, position.z) == pytest.approx((.01, 0., 0.), abs=1e-8)
         assert nav.header.stamp == registered.header.stamp == stamp(10.15)
         assert registered.header.frame_id == "map" and nav.header.frame_id == "odom"
         # No independent GT-driven correction or pose restamping is involved.

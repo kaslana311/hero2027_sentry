@@ -29,7 +29,8 @@ def ros_context():
 
 
 class EvaluationHarness:
-    def __init__(self, cloud_alignment=False):
+    def __init__(self, cloud_alignment=False, navigation_tf=False):
+        self.navigation_tf = navigation_tf
         self.namespace = "/eval_test_" + uuid.uuid4().hex[:10]
         self.node = rclpy.create_node("probe", namespace=self.namespace)
         self.process = subprocess.Popen([
@@ -37,6 +38,7 @@ class EvaluationHarness:
             "-r", f"__ns:={self.namespace}", "-r", "/tf_static:=tf_static",
             "-r", "/tf:=tf",
             "-p", f"publish_cloud_alignment:={str(cloud_alignment).lower()}",
+            "-p", f"use_navigation_tf:={str(navigation_tf).lower()}",
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.truths, self.estimates, self.errors, self.transforms, self.markers = [], [], [], [], []
         self.node.create_subscription(PoseStamped, "evaluation/truth_pose", self.truths.append, 10)
@@ -68,7 +70,8 @@ class EvaluationHarness:
     def send(self, seconds, pose, truth=False, frame=None):
         msg = Odometry()
         msg.header.stamp = stamp(seconds)
-        msg.header.frame_id = frame or ("map" if truth else "pointlio_odom")
+        msg.header.frame_id = frame or ("map" if truth else
+                                       "odom" if self.navigation_tf else "pointlio_odom")
         msg.child_frame_id = "sim_cloud_chassis_truth" if truth else "pointlio_imu"
         set_pose(msg.pose.pose, pose)
         (self.truth_pub if truth else self.estimate_pub).publish(msg)

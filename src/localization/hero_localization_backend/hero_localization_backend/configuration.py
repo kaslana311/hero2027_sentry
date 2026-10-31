@@ -27,7 +27,7 @@ def parameters(base, overrides, namespace, prior_map):
         raise ValueError(f'No local keyframe clouds in {directory}')
     config = merge(base, overrides)
     inputs = config['common']
-    inputs.update(frontend='legacy', odom_frame='pointlio_odom', sensor_frame='pointlio_imu',
+    inputs.update(frontend='legacy', odom_frame='odom', sensor_frame='pointlio_imu',
                   map_frame='map', input_cloud_in_local_frame=False,
                   odom_topic=f'/{robot}/pointlio/odometry',
                   sync_odom_topic=f'/{robot}/pointlio/odometry',

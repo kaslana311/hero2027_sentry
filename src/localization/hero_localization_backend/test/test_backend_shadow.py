@@ -41,6 +41,8 @@ def test_raw_inputs_private_outputs_no_truth_feedback(bundle):
     assert source == original
     assert config['common']['cloud_topic'] == '/red_standard_robot1/pointlio/cloud_registered'
     assert config['common']['sync_odom_topic'] == config['common']['odom_topic']
+    assert config['common']['odom_frame'] == 'odom'
+    assert config['common']['sensor_frame'] == 'pointlio_imu'
     assert config['common']['input_cloud_in_local_frame'] is False
     assert config['common']['odom_cloud_sync']['max_interval'] < .05
     assert config['common']['body']['offset'] == {'x': 0., 'y': .167, 'z': -.121}
