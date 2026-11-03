@@ -103,6 +103,7 @@ void StaticPriorPlanner::configure(
   parent_ = parent;
   name_ = name;
   dynamic_costmap_ = costmap_ros;
+  configureRefinement(node);
   nav2_util::declare_parameter_if_not_declared(
     node, name+".start_recovery_enabled", rclcpp::ParameterValue(true));
   nav2_util::declare_parameter_if_not_declared(
@@ -165,6 +166,9 @@ void StaticPriorPlanner::activate()
     throw std::runtime_error("Unable to activate independent static prior costmap");
   }
   planner_->activate();
+  prior_plan_pub_->on_activate();
+  refined_plan_pub_->on_activate();
+  refinement_status_pub_->on_activate();
   active_ = true;
 }
 
@@ -174,6 +178,9 @@ void StaticPriorPlanner::deactivate()
     planner_->deactivate();
   }
   active_ = false;
+  if (prior_plan_pub_) {prior_plan_pub_->on_deactivate();}
+  if (refined_plan_pub_) {refined_plan_pub_->on_deactivate();}
+  if (refinement_status_pub_) {refinement_status_pub_->on_deactivate();}
   if (prior_costmap_ && prior_costmap_->get_current_state().id() == State::PRIMARY_STATE_ACTIVE) {
     prior_costmap_->deactivate();
   }
@@ -193,10 +200,28 @@ void StaticPriorPlanner::cleanup()
   costmap_thread_.reset();
   prior_costmap_.reset();
   dynamic_costmap_.reset();
+  prior_plan_pub_.reset();
+  refined_plan_pub_.reset();
+  refinement_status_pub_.reset();
+  tunnel_regions_.clear();
   parent_.reset();
 }
 
 nav_msgs::msg::Path StaticPriorPlanner::createPlan(
+  const geometry_msgs::msg::PoseStamped & start,
+  const geometry_msgs::msg::PoseStamped & goal)
+{
+  auto prior = createStaticPlan(start, goal);
+  const auto node = parent_.lock();
+  if (node && node->get_parameter(name_+".local_refinement_enabled").as_bool() &&
+    !prior.poses.empty())
+  {
+    return refinePlan(prior);
+  }
+  return prior;
+}
+
+nav_msgs::msg::Path StaticPriorPlanner::createStaticPlan(
   const geometry_msgs::msg::PoseStamped & start,
   const geometry_msgs::msg::PoseStamped & goal)
 {

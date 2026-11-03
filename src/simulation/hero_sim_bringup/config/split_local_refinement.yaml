@@ -1,0 +1,28 @@
+# Experimental path refinement only; no costmap, TF, MINCO or MPC overrides.
+local_refinement_enabled: true
+local_refinement_lookahead: 12.0
+local_refinement_activation_distance: 1.5
+local_refinement_max_deviation: 1.25
+local_refinement_max_alignment_shift: 1.0
+local_refinement_resolution: 0.05
+local_refinement_robot_radius: 0.17
+local_refinement_safe_distance: 0.30
+local_refinement_dynamic_weight: 1.0
+local_refinement_guide_weight: 100.0
+local_refinement_timeout: 0.12
+local_refinement_max_expansions: 50000
+
+# Map-frame activation templates only, NOT hard obstacles or a CAD-certified
+# tunnel model. XY = normalized Gazebo world XY - (4.6, 6.4).
+# Each tuple: centre_x, centre_y, axis_yaw, approximate_length, nominal_width.
+# Long regions come from the reviewed offline ROI extents. Short centres and
+# 0.35-m portal lengths use the actual downward roof faces. Runtime long-wall
+# position/yaw/width must be supported by current observations on BOTH sides.
+local_refinement_regions: [
+  11.4, -5.335, 0.0, 8.4, 1.10,
+  9.4, -4.29, 0.0, 4.6, 0.78,
+  7.4, 8.54, 0.0, 8.4, 1.10,
+  9.4, 7.51, 0.0, 4.6, 0.78,
+  4.71355, -3.64037, 1.5707963267948966, 0.35, 0.80,
+  14.08644, 6.84350, 1.5707963267948966, 0.35, 0.80
+]

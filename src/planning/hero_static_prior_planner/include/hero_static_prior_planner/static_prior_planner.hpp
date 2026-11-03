@@ -6,6 +6,8 @@
 #include "nav2_core/global_planner.hpp"
 #include "nav2_smac_planner/smac_planner_hybrid.hpp"
 #include "nav2_util/node_thread.hpp"
+#include "std_msgs/msg/string.hpp"
+#include "hero_static_prior_planner/local_refiner.hpp"
 
 namespace hero_static_prior_planner
 {
@@ -29,6 +31,16 @@ public:
     const geometry_msgs::msg::PoseStamped & goal) override;
 
 private:
+  nav_msgs::msg::Path createStaticPlan(
+    const geometry_msgs::msg::PoseStamped & start,
+    const geometry_msgs::msg::PoseStamped & goal);
+  void configureRefinement(const rclcpp_lifecycle::LifecycleNode::SharedPtr & node);
+  nav_msgs::msg::Path refinePlan(const nav_msgs::msg::Path & prior);
+  refinement::Options refinement_options_;
+  std::vector<refinement::Region> tunnel_regions_;
+  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr prior_plan_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr refined_plan_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::String>::SharedPtr refinement_status_pub_;
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
   std::string name_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> dynamic_costmap_;

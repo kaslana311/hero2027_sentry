@@ -117,7 +117,12 @@ def _make_sim_params(
     perception_cloud_topic="cloud_registered",
     filter_high_columns=False, high_column_min_z=0.30,
     dog_resolution_xy=0.05,
+    split_local_refinement=False,
 ):
+    if not isinstance(split_local_refinement, bool):
+        raise ValueError("split_local_refinement must be a boolean")
+    if split_local_refinement and (mode != "split" or os.path.basename(map_yaml) != "rmuc_2027.yaml"):
+        raise ValueError("split_local_refinement currently requires split mode and rmuc_2027")
     dog_resolution_xy = float(dog_resolution_xy)
     if not math.isfinite(dog_resolution_xy) or dog_resolution_xy < 0:
         raise ValueError("dog_resolution_xy must be finite and nonnegative; 0 follows PGM")
@@ -246,6 +251,14 @@ def _make_sim_params(
         params["smoother_server"]["ros__parameters"]["costmap_topic"] = (
             "global_costmap/costmap_raw"
         )
+        if split_local_refinement:
+            # Opt-in only. The prior and normal Nav2 maps are unchanged; the
+            # split plugin refines its returned path on private snapshots.
+            config_file = os.path.join(os.path.dirname(__file__), "..", "config",
+                                       "split_local_refinement.yaml")
+            with open(config_file, "r", encoding="utf-8") as stream:
+                experimental = yaml.safe_load(stream)
+            params["planner_server"]["ros__parameters"]["GridBased"].update(experimental)
 
     def force_sim_time(value):
         if isinstance(value, dict):
@@ -281,6 +294,10 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
     filter_high_columns = high_column_switch == "true"
     high_column_min_z = float(LaunchConfiguration("high_column_min_z", default="0.30").perform(context))
     dog_resolution_xy = float(LaunchConfiguration("dog_resolution_xy", default="0.05").perform(context))
+    refinement_switch = LaunchConfiguration("split_local_refinement", default="false").perform(context).lower()
+    if refinement_switch not in ("true", "false"):
+        raise ValueError("split_local_refinement must be true or false")
+    split_local_refinement = refinement_switch == "true"
     publish_debug_visualizations = (
         LaunchConfiguration("publish_debug_visualizations")
         .perform(context)
@@ -321,6 +338,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         filter_high_columns,
         high_column_min_z,
         dog_resolution_xy,
+        split_local_refinement,
     )
     navigation_map_yaml = (
         _make_dynamic_boundary_map(map_yaml)
@@ -484,6 +502,8 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
                     "(0 follows PGM); PGM, Nav2 resolution and DOG Z are unchanged"),
         LogInfo(msg=f"DOG high-column filter enabled={filter_high_columns}, "
                     f"minimum absolute map Z={high_column_min_z:.3f} m (not robot-relative)"),
+        LogInfo(msg=f"SPLIT experimental local soft refinement={split_local_refinement}; "
+                    "static Smac / original MINCO / localization interfaces unchanged"),
         bridge,
         map_server,
         map_lifecycle,
@@ -510,6 +530,10 @@ def generate_launch_description():
                 "lidar_mode",
                 default_value="single",
                 description="single (official simulator image) or dual (custom dual-lidar image)",
+            ),
+            DeclareLaunchArgument(
+                "split_local_refinement", default_value="false",
+                description="Opt-in rmuc_2027 split-only tunnel-local soft A* with supported wall guidance",
             ),
             DeclareLaunchArgument(
                 "field",

@@ -55,6 +55,8 @@ def generate_launch_description():
         DeclareLaunchArgument("field", default_value="rmuc_2026"),
         DeclareLaunchArgument("lidar_mode", default_value="dual"),
         DeclareLaunchArgument("costmap_mode", default_value="combined"),
+        DeclareLaunchArgument("split_local_refinement", default_value="false",
+                              description="Opt-in rmuc_2027 split-only local soft route refinement"),
         DeclareLaunchArgument("use_rviz", default_value="true"),
         DeclareLaunchArgument("point_lio_rviz", default_value="false"),
         DeclareLaunchArgument("relay_cmd_vel", default_value="true"),

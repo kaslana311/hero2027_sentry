@@ -97,6 +97,10 @@ if(BUILD_TESTING)
   ament_add_pytest_test(lidar_mount_contract test/test_lidar_mount_contract.py TIMEOUT 30)
   ament_add_pytest_test(split_mode test/test_split_mode.py TIMEOUT 30)
   ament_add_pytest_test(start_connector test/test_start_connector.py TIMEOUT 30)
+  ament_add_pytest_test(split_local_refinement test/test_split_local_refinement.py TIMEOUT 60)
+  ament_add_pytest_test(split_local_refinement_runtime test/test_split_local_refinement_runtime.py
+    TIMEOUT 90 ENV "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=196"
+  )
   ament_add_pytest_test(split_planner_runtime test/test_split_planner_runtime.py
     TIMEOUT 120 ENV "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=196"
   )

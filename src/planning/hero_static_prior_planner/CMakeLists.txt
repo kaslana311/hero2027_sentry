@@ -15,21 +15,25 @@ find_package(rclcpp_lifecycle REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc)
 
-add_library(${PROJECT_NAME} SHARED src/static_prior_planner.cpp)
+add_library(${PROJECT_NAME} SHARED src/static_prior_planner.cpp
+  src/local_refiner.cpp src/local_refinement_ros.cpp)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
+  $<INSTALL_INTERFACE:include> ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS})
 ament_target_dependencies(${PROJECT_NAME}
   geometry_msgs lifecycle_msgs nav2_core nav2_costmap_2d nav2_smac_planner
-  nav2_util nav_msgs pluginlib rclcpp rclcpp_lifecycle tf2_ros tf2 tf2_geometry_msgs)
+  nav2_util nav_msgs pluginlib rclcpp rclcpp_lifecycle tf2_ros tf2 tf2_geometry_msgs std_msgs)
 pluginlib_export_plugin_description_file(nav2_core plugins.xml)
 
 install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 install(DIRECTORY include/ DESTINATION include)
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
-ament_export_dependencies(nav2_core nav2_costmap_2d nav2_smac_planner nav2_util)
+ament_export_dependencies(nav2_core nav2_costmap_2d nav2_smac_planner nav2_util std_msgs)
 ament_package()
