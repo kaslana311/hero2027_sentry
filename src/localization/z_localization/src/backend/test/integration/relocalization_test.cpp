@@ -5,6 +5,7 @@
 
 #include "backend/scan_context.hpp"
 #include "backend/search.hpp"
+#include "backend/matching.hpp"
 #include "scene.hpp"
 
 namespace backend {
@@ -50,7 +51,42 @@ protected:
         EXPECT_TRUE(result.covariance.allFinite());
         EXPECT_GT(result.covariance.diagonal().minCoeff(), 0);
     }
+
+    RecoveryResult recoverNearby() {
+        RecoveryMatcherConfig options;
+        options.relocalization = config;
+        options.recovery.suspect_search_radius = 30;
+        RecoveryMatcher matcher(options, prior, descriptor, cache);
+        RecoveryWork work;
+        work.identity.status = LocalizationStatus::Suspect;
+        work.runtime = runtime;
+        work.frame.timestamp = runtime.timestamp;
+        work.frame.odom_pose = runtime.odom_pose;
+        work.frame.cloud_local = Cloud::Ptr(new Cloud(*runtime.cloud.load()));
+        work.source_history.push_back(work.frame);
+        work.predicted_map_pose = truth;
+        work.predicted_map_pose(0, 3) += .2;
+        matcher.prepare(work);
+        return matcher.compute(work);
+    }
 };
+
+/// 小幅前端偏差应从当前位姿附近恢复，而不是禁止所有恢复。
+TEST_F(RelocalizationSearch, SuspectRecoversSmallOdometryBiasNearCurrentPose) {
+    const auto result = recoverNearby();
+    ASSERT_EQ(result.outcome, RecoveryOutcome::Matched);
+    EXPECT_LT((result.pose - truth).norm(), 2e-4);
+}
+
+/// 仅有另一半场的完全相同几何时，不能用它覆盖仍有连续性的本半场位置。
+TEST_F(RelocalizationSearch, SuspectRejectsOppositeHalfEvenWithPerfectLocalGeometry) {
+    prior.clear();
+    const auto opposite = testing::scenePose(15, 0, 0, M_PI);
+    prior.add(testing::sceneFrame(*world, 1, Eigen::Matrix4d::Identity(), opposite));
+    rebuildMapDescriptors(descriptor, prior.snapshot());
+    positions = prior.positions();
+    EXPECT_EQ(recoverNearby().outcome, RecoveryOutcome::Failed);
+}
 
 /// 通过描述子检索和几何验证恢复已知的 odom 到 map 变换。
 TEST_F(RelocalizationSearch, DescriptorRetrievalProducesVerifiedMapToOdometryTransform) {
@@ -92,6 +128,23 @@ TEST_F(RelocalizationSearch, HorizontalPositionPriorIgnoresHeightAndAccountsForL
     position.map_point.x() += .3;
     position.search_radius = .05;
     EXPECT_FALSE(runRelocalization(prior, descriptor, cache, request).success);
+}
+
+/// 即使点云配准残差很低，也必须在候选归约前拒绝越过可信朝向范围的结果。
+TEST_F(RelocalizationSearch, PositionPriorChecksRotationAfterRegistration) {
+    RelocalizationPositionPrior position;
+    position.source = "continuity_test";
+    position.map_point = truth.block<3, 1>(0, 3);
+    position.yaw_seed_rad = 0.0;
+    position.allow_yaw_sweep_fallback = false;
+    position.search_radius = .5;
+    position.max_candidates = 1;
+    position.max_rotation_deviation_rad = .05;
+    RelocalizationRequest request{runtime, config, positions};
+    request.position_prior = &position;
+    EXPECT_FALSE(runRelocalization(prior, descriptor, cache, request).success);
+    position.max_rotation_deviation_rad = .3;
+    expectCorrectPose(runRelocalization(prior, descriptor, cache, request));
 }
 
 /// 退化的单平面几何应使完整重定位位姿锚验收失败。

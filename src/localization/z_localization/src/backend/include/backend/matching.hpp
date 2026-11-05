@@ -24,6 +24,8 @@ struct RecoveryMatcherConfig {
     RecoveryConfig recovery;
     RelocalizationConfig relocalization;
     bool debug_enabled = false;
+    /// SUSPECT 就近恢复复用跟踪允许的校正幅度，不放开为全场地点搜索。
+    TrackingConfig tracking;
 };
 
 /// 计算端只有配置、地图和几何缓存；没有图/状态机/会话锁访问权。

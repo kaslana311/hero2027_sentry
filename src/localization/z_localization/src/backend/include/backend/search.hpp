@@ -35,6 +35,8 @@ struct RelocalizationPositionPrior {
     std::optional<double> yaw_seed_rad;
     /// 航向初值验证失败后，是否继续尝试其余采样航向。
     bool allow_yaw_sweep_fallback = true;
+    /// 配准朝向相对给定航向/倾斜初值的最大旋转偏差，rad；0 保留原无限制行为。
+    double max_rotation_deviation_rad = 0.0;
     /// 配准后先验点的位置误差上限，m。
     double search_radius = 0.0;
     /// 位置检索保留的先验关键帧数量上限。

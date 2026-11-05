@@ -59,6 +59,32 @@ TEST(PoseGraph, FixedLagRetiresOldStatesWithoutLosingCurrentMotion) {
     EXPECT_TRUE(graph.marginalCovariance(8));
 }
 
+/// 恢复会创建独立绝对锚；旧分量全部过期时没有父团，不能按普通叶团边缘化。
+TEST(PoseGraph, FixedLagRetiresWholeDisconnectedRecoveryComponent) {
+    PoseGraphConfig config;
+    config.fixed_lag_seconds = 2;
+    PoseGraph graph(config);
+    graph.addPrior(0, testing::translation(0), 0);
+    graph.update(false);
+    graph.addOdometryMeasurement(0, 1, testing::translation(1), testing::translation(1),
+                                 PoseCovariance6d::Identity() * .01, 1);
+    graph.update(false);
+    // 与旧分量无里程计边的新恢复锚，随后继续输入超过一个窗口的运动。
+    graph.addPrior(2, testing::translation(10), 2);
+    graph.update(true);
+    for (int index = 3; index <= 12; ++index) {
+        graph.addOdometryMeasurement(index - 1, index, testing::translation(1),
+                                     testing::translation(index + 8),
+                                     PoseCovariance6d::Identity() * .01, index);
+        graph.update(false);
+        ASSERT_TRUE(graph.estimate(index));
+        EXPECT_LT((*graph.estimate(index) - testing::translation(index + 8)).norm(), 1e-7);
+        EXPECT_TRUE(graph.marginalCovariance(index));
+    }
+    EXPECT_FALSE(graph.hasEstimate(0));
+    EXPECT_FALSE(graph.hasEstimate(1));
+}
+
 /// 构造具有精确二进制坐标的窗口轨迹，避免观测残差引发额外重线性化。
 Eigen::Matrix4d windowPose(int index) {
     return testing::translation(.25 * index, .125 * (index % 3), .0625 * (index % 5));

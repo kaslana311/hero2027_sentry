@@ -21,6 +21,10 @@ registration:
   voxel_resolution: 0.1
 recovery:
   parallel_candidates: 4
+  # Only SUSPECT gets automatic nearby recovery. With no UWB on this symmetric
+  # field, genuine LOST must not silently accept a global opposite-half match.
+  suspect_search_radius: 3.0
+  automatic_when_lost: false
 startup_hint:
   # Surveyed nominal SPAWN, not a live truth subscription. Start before driving.
   # Only the initial epoch uses this hint; prior registration must still accept it.

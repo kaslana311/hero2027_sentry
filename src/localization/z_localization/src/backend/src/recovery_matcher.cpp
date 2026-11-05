@@ -4,11 +4,13 @@
  */
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 #include "backend/frame_history.hpp"
 #include "backend/geometry.hpp"
 #include "backend/logger.hpp"
+#include "backend/math.hpp"
 #include "backend/matching.hpp"
 #include "backend/sampling.hpp"
 
@@ -130,6 +132,32 @@ RecoveryResult RecoveryMatcher::compute(const RecoveryWork& work) {
     if (work.uwb_prior && match(work, &*work.uwb_prior, result)) {
         result.outcome = RecoveryOutcome::Matched;
         result.source = "UWB + scan-to-map";
+        return result;
+    }
+    if (work.identity.status == LocalizationStatus::Suspect) {
+        // 仅怀疑跟踪时仍有最后可信姿态：用它作几何初值并验收校正幅度。
+        // 不用旋转不变描述子从对称半场里挑最低残差；真正 LOST 的人工全局
+        // 恢复仍走下方原有描述子路径，是否自动执行由已有配置控制。
+        RelocalizationPositionPrior nearby;
+        nearby.source = "tracking_continuity";
+        nearby.map_point = work.predicted_map_pose.block<3, 1>(0, 3);
+        nearby.yaw_seed_rad = yawFromMatrix(work.predicted_map_pose);
+        nearby.R_yawless_sensor =
+            yawGuess(-*nearby.yaw_seed_rad, Eigen::Vector3d::Zero()).block<3, 3>(0, 0) *
+            work.predicted_map_pose.block<3, 3>(0, 0);
+        nearby.allow_yaw_sweep_fallback = false;
+        nearby.max_rotation_deviation_rad = config_.tracking.max_rotation_correction_rad;
+        nearby.search_radius = config_.tracking.max_translation_correction > 0.0
+                                   ? config_.tracking.max_translation_correction
+                                   : std::numeric_limits<double>::max();
+        nearby.max_candidates = config_.relocalization.relocalization_max_candidates;
+        if (match(work, &nearby, result)) {
+            result.outcome = RecoveryOutcome::Matched;
+            result.source = "local continuity + scan-to-map";
+        } else {
+            result.outcome = RecoveryOutcome::Failed;
+            result.source = "local continuity scan-to-map failed";
+        }
         return result;
     }
     if (match(work, nullptr, result)) {

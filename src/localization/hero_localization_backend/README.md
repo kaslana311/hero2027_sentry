@@ -143,6 +143,17 @@ INITIALIZING/SUSPECT/LOST 不累计为可信轨迹；错误状态会在 RViz 橙
   包含 contracts.xml、runtime_metrics.json、runtime_backend.log。
 - 没有启动实际 Gazebo 测试，没有合并 main，没有创建“过洞通过”里程碑标签。
 
+## 2026-11-05 窗口与对称恢复修复
+
+已用真实录包和最小用例分别复现窗口 SIGSEGV 与对称半场误恢复，修复与能力边界见
+[本次修复记录](BACKEND_RECOVERY_FIX_20261105.md)。
+SUSPECT 保留有位姿连续性约束的就近自动恢复；当前无 UWB 的 Point-LIO 适配在真正
+LOST 后不再自动全场猜位置。后端仍未接管导航，恢复期间冻结输出仍明确不可信。
+`backend_debug:=true` 现使用 `output=both`，不再依赖用户从滚动终端手动寻找调用栈。
+
+以下 2026-10-25 内容保留为历史记录：当时仅修复显示和增加调试入口，未根治崩溃；
+其中“screen 输出会自动进入 launch.log”的判断已被本次实际验证纠正。
+
 ## 2026-10-25 现场退出排查与显示修复
 
 ### 已确认的故障链路

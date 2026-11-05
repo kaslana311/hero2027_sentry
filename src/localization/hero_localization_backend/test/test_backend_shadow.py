@@ -47,6 +47,8 @@ def test_raw_inputs_private_outputs_no_truth_feedback(bundle):
     assert config['common']['odom_cloud_sync']['max_interval'] < .05
     assert config['common']['body']['offset'] == {'x': 0., 'y': .167, 'z': -.121}
     assert config['uwb']['enabled'] is config['loop']['enabled'] is False
+    assert config['recovery']['suspect_search_radius'] == 3.0
+    assert config['recovery']['automatic_when_lost'] is False
     assert not config['output']['legacy']['enabled']
     assert not config['output']['world_cloud']['publish_untrusted']
     assert config['reset']['service'].startswith('/red_standard_robot1/z_backend/')
@@ -80,6 +82,12 @@ def test_debugger_is_opt_in_and_cannot_hide_fatal_exit(monkeypatch):
     monkeypatch.setattr('hero_localization_backend.configuration.shutil.which', lambda _: None)
     with pytest.raises(ValueError, match='requires gdb'):
         debugger_prefix('true')
+
+
+def test_debug_mode_records_gdb_stdout_as_well_as_screen():
+    source = (ROOT/'launch/point_lio_backend_shadow.launch.py').read_text()
+    assert "output='both' if debug == 'true' else 'screen'" in source
+    assert 'prefix=debugger_prefix(debug)' in source
 
 
 def test_monitor_time_interpolation_not_latest_and_bounded():

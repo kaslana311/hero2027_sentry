@@ -19,13 +19,15 @@ def setup(context):
         overrides = yaml.safe_load(f)
     config = parameters(base, overrides, robot, LaunchConfiguration('prior_map').perform(context))
     namespace = f'{robot}/z_backend'
+    debug = LaunchConfiguration('backend_debug').perform(context)
     return [
         LogInfo(msg='BACKEND SHADOW ONLY: Point-LIO raw odometry/cloud -> prior-map factor graph. '
                     'NO cmd_vel, NO navigation pose replacement, private TF. UWB disabled. '
                     'Start at the normal 2027 spawn before driving; full frontend-reset integration is NOT implemented.'),
         Node(package='backend', executable='backend_node', name='backend', namespace=namespace,
-             prefix=debugger_prefix(LaunchConfiguration('backend_debug').perform(context)),
-             output='screen', parameters=[config, {'use_sim_time': LaunchConfiguration('use_sim_time')}],
+             prefix=debugger_prefix(debug),
+             output='both' if debug == 'true' else 'screen',
+             parameters=[config, {'use_sim_time': LaunchConfiguration('use_sim_time')}],
              remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static')]),
         Node(package='hero_localization_backend', executable='backend_shadow_monitor.py',
              name='comparison', namespace=namespace, output='screen',

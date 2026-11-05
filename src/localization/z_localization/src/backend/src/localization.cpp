@@ -76,7 +76,8 @@ Localization::Localization(KeyframeMap& trajectory, KeyframeMap& prior_map,
       tracking_({config_.tracking, config_.relocalization.point_to_plane_config,
                  config_.registration_debug_enabled},
                 prior_map_, target_cache_),
-      recovery_({config_.recovery, config_.relocalization, config_.registration_debug_enabled},
+      recovery_({config_.recovery, config_.relocalization, config_.registration_debug_enabled,
+                 config_.tracking},
                 prior_map_, descriptor_, target_cache_),
       loop_cycle_({config_.loop, config_.relocalization.point_to_plane_config}) {
     for (const ConfigOverride& override : effective_config.overrides) {

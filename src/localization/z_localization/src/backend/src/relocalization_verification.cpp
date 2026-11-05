@@ -146,6 +146,16 @@ VerificationRunResult Search::evaluatePreparedEntry(const VerificationEntry& ent
         if (distance > prior.search_radius) {
             return out;
         }
+        if (prior.max_rotation_deviation_rad > 0.0 && prior.yaw_seed_rad.has_value()) {
+            const Eigen::Matrix3d seed_rotation =
+                yawGuess(*prior.yaw_seed_rad, Eigen::Vector3d::Zero()).block<3, 3>(0, 0) *
+                prior.R_yawless_sensor;
+            Eigen::Matrix4d delta_rotation = Eigen::Matrix4d::Identity();
+            delta_rotation.block<3, 3>(0, 0) =
+                seed_rotation.transpose() * T_map_runtime.block<3, 3>(0, 0);
+            if (rotationAngleFromMatrix(delta_rotation) > prior.max_rotation_deviation_rad)
+                return out;
+        }
     }
 
     out.success = true;

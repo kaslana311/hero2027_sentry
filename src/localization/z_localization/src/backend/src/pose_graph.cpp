@@ -156,7 +156,51 @@ void PoseGraph::updateWindow() {
         cliques.insert(cliques.end(), clique->children.begin(), clique->children.end());
     }
     isam_->update(pending_graph_, pending_values_, {}, groups, boost::none, affected);
-    isam_->marginalizeLeaves(expired);
+
+    // 恢复锚可能与旧轨迹不连通。整个旧分量过期时，其根团没有 parent；
+    // GTSAM 4.2 marginalizeLeaves 假设仍有存活父团，直接传入会解引用空指针。
+    // 独立且完全过期的分量对存活变量没有信息，按因子删除；有任何存活变量
+    // （包括共享 UWB 标定量）的分量仍走正常边缘化，保留交叉信息。
+    std::set<gtsam::Key> retired_components;
+    for (const auto& root : isam_->roots()) {
+        std::vector<gtsam::ISAM2::sharedClique> pending{root};
+        std::vector<gtsam::Key> component;
+        bool all_expired = true;
+        while (!pending.empty() && all_expired) {
+            const auto clique = pending.back();
+            pending.pop_back();
+            for (const auto key : clique->conditional()->frontals()) {
+                if (!expired_set.count(key)) {
+                    all_expired = false;
+                    break;
+                }
+                component.push_back(key);
+            }
+            pending.insert(pending.end(), clique->children.begin(), clique->children.end());
+        }
+        if (all_expired)
+            retired_components.insert(component.begin(), component.end());
+    }
+    if (!retired_components.empty()) {
+        gtsam::FactorIndices remove;
+        const auto& factors = isam_->getFactorsUnsafe();
+        for (std::size_t index = 0; index < factors.size(); ++index) {
+            const auto& factor = factors[index];
+            if (factor && !factor->keys().empty() &&
+                std::all_of(factor->keys().begin(), factor->keys().end(),
+                            [&](auto key) { return retired_components.count(key); }))
+                remove.push_back(index);
+        }
+        for (const auto key : retired_components)
+            groups.erase(key);
+        isam_->update({}, {}, remove, groups);
+    }
+    gtsam::KeyList remaining;
+    for (const auto key : expired)
+        if (isam_->valueExists(key))
+            remaining.push_back(key);
+    if (!remaining.empty())
+        isam_->marginalizeLeaves(remaining);
     pose_timestamps_.erase(pose_timestamps_.begin(), pose_timestamps_.begin() + expired.size());
 }
 
