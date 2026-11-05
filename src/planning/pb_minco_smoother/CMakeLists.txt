@@ -106,6 +106,19 @@ install(FILES minco_smoother_plugin.xml
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_esdf_gradient_switch test/test_esdf_gradient_switch.cpp)
+  target_include_directories(test_esdf_gradient_switch PRIVATE include ${EIGEN3_INCLUDE_DIRS})
+  ament_add_gtest(test_esdf_gradient_parameter test/test_esdf_gradient_parameter.cpp
+    ENV ROS_DOMAIN_ID=195 ROS_LOCALHOST_ONLY=1)
+  target_link_libraries(test_esdf_gradient_parameter ${library_name})
+  ament_add_gtest(test_stalled_warm_start_gate test/test_stalled_warm_start_gate.cpp)
+  target_include_directories(test_stalled_warm_start_gate PRIVATE include)
+  find_package(behaviortree_cpp_v3 REQUIRED)
+  ament_add_gtest(test_stall_cold_start test/test_stall_cold_start.cpp
+    TIMEOUT 45 ENV ROS_DOMAIN_ID=193 ROS_LOCALHOST_ONLY=1)
+  target_link_libraries(test_stall_cold_start ${library_name})
+  ament_target_dependencies(test_stall_cold_start behaviortree_cpp_v3 pb_nav2_plugins)
 endif()
 
 # 导出

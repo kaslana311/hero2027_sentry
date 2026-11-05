@@ -88,6 +88,11 @@ struct MincoOptimizerConfig {
     double max_acc = 2.0;        ///< 最大加速度 (m/s²)
     double safe_distance = 0.5;  ///< 安全距离 (m)
 
+    // true preserves the historical lateral-only projection (including its
+    // existing near-zero fallback). false skips only the tangent projection;
+    // distance penalties, gradient enhancement and weights are unchanged.
+    bool project_esdf_gradient = true;
+
     // ========== 平均时间约束参数 ==========
     double mean_time_lower_bound = 0.9;  ///< 平均时间下界比例
     double mean_time_upper_bound = 1.1;  ///< 平均时间上界比例
@@ -544,7 +549,7 @@ class MincoOptimizer {
                     Eigen::Vector2d gradOrthogonal =
                         gradDist;  // 默认使用原始梯度
 
-                    if (velNorm > kMinGradNorm) {
+                    if (config_.project_esdf_gradient && velNorm > kMinGradNorm) {
                         // 计算切线方向（速度方向）
                         Eigen::Vector2d tangent = vel / velNorm;
 

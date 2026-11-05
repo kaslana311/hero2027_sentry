@@ -25,6 +25,7 @@
 #include "nav2_msgs/msg/costmap.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 namespace pb_nav2_plugins
 {
@@ -78,6 +79,8 @@ public:
         "data_timeout", 0.5, "Maximum age of command and odometry samples in seconds"),
       BT::InputPort<double>(
         "latch_timeout", 30.0, "Maximum age of a latched motion stall in seconds"),
+      BT::InputPort<std::string>(
+        "motion_stall_topic", "", "Optional live physical-stall signal; empty preserves legacy behavior"),
     };
   }
 
@@ -87,6 +90,7 @@ private:
   void odometryCallback(nav_msgs::msg::Odometry::SharedPtr msg);
   void updateMotionStallLocked(const rclcpp::Time & now);
   void resetMotionWindowLocked();
+  void publishMotionStateLocked(const rclcpp::Time & now, bool force = false);
 
   rclcpp::Node::SharedPtr node_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
@@ -96,6 +100,7 @@ private:
   rclcpp::Subscription<nav2_msgs::msg::Costmap>::SharedPtr costmap_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr motion_stall_pub_;
 
   // Latest costmap (guarded by mutex_)
   std::mutex mutex_;
@@ -127,6 +132,11 @@ private:
   double latched_stall_duration_{0.0};
   double latched_stall_displacement_{0.0};
   double latched_command_speed_{0.0};
+  // Independent of the BT-consumed latch. Zero commands during cancellation
+  // must not release the inhibition; actual displacement does.
+  bool warm_start_inhibited_{false};
+  double inhibited_at_x_{0.0}, inhibited_at_y_{0.0};
+  double last_signal_time_{-1.0};
 
   // Filtering state
   int hit_count_{0};

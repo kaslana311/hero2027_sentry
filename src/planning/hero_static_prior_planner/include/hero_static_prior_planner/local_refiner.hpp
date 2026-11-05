@@ -34,7 +34,7 @@ struct Raster
   std::size_t width{}, height{};
   double resolution{}, origin_x{}, origin_y{};
   std::vector<float> signed_distance, reference_distance;
-  std::vector<unsigned char> occupied, hard;
+  std::vector<unsigned char> occupied, hard, prior_blocked;
   Point position(std::size_t index) const;
   std::optional<std::size_t> index(Point p) const;
 };
@@ -67,4 +67,6 @@ std::optional<Window> selectWindow(
   const Options & options);
 Result refine(const Raster & raster, const Window & window, const Options & options,
   Deadline deadline);
+// Use a short arc-length chord instead of alternating 8-connected edge yaw.
+std::vector<double> pathHeadings(const std::vector<Point> & path, double span = 0.15);
 }  // namespace hero_static_prior_planner::refinement

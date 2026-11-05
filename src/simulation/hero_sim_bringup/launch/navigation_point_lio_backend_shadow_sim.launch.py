@@ -9,6 +9,7 @@ from launch.substitutions import LaunchConfiguration
 DEFAULTS = {
     'namespace': 'red_standard_robot1', 'field': 'rmuc_2027', 'lidar_mode': 'dual',
     'costmap_mode': 'split', 'use_rviz': 'true', 'point_lio_rviz': 'false',
+    'split_local_refinement': 'false', 'stuck_cold_start': 'false',
     'relay_cmd_vel': 'true', 'publish_debug_visualizations': 'false',
     'filter_high_columns': 'false', 'dog_resolution_xy': '0.05', 'high_column_min_z': '0.20',
     'publish_map_to_odom': 'true', 'map_odom_offset_x': '0.0',

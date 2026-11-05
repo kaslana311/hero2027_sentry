@@ -50,6 +50,21 @@ void MincoSmoother::configure(
 
     // 加载参数
     loadParameters();
+    {
+        std::lock_guard<std::mutex> lock(stuck_state_mutex_);
+        stuck_gate_ = StalledWarmStartGate{};
+    }
+    consumed_stall_epoch_ = 0;
+    has_valid_trajectory_ = false;
+    if (!params_.stuck_state_topic.empty()) {
+        stuck_state_sub_ = node->create_subscription<std_msgs::msg::Bool>(
+            params_.stuck_state_topic, rclcpp::QoS(10).reliable(),
+            [this](std_msgs::msg::Bool::ConstSharedPtr msg) {
+                std::lock_guard<std::mutex> lock(stuck_state_mutex_);
+                stuck_gate_.update(msg->data, clock_->now().seconds(),
+                                   params_.stuck_state_timeout);
+            });
+    }
 
     // 创建 MINCO 优化器（第二阶段，Kinematic & Feasibility）
     optimizer_ = std::make_unique<MincoOptimizer>();
@@ -134,6 +149,23 @@ void MincoSmoother::loadParameters() {
                                       rclcpp::ParameterValue(2.0));
     declare_parameter_if_not_declared(node, plugin_name_ + ".safe_distance",
                                       rclcpp::ParameterValue(0.5));
+    declare_parameter_if_not_declared(
+        node, plugin_name_ + ".project_esdf_gradient",
+        rclcpp::ParameterValue(true));
+    rcl_interfaces::msg::ParameterDescriptor stuck_descriptor;
+    stuck_descriptor.read_only = true;
+    declare_parameter_if_not_declared(
+        node, plugin_name_ + ".stuck_state_topic", rclcpp::ParameterValue(""),
+        stuck_descriptor);
+    declare_parameter_if_not_declared(
+        node, plugin_name_ + ".stuck_state_timeout", rclcpp::ParameterValue(1.0),
+        stuck_descriptor);
+    node->get_parameter(plugin_name_ + ".stuck_state_topic", params_.stuck_state_topic);
+    node->get_parameter(plugin_name_ + ".stuck_state_timeout", params_.stuck_state_timeout);
+    if (!std::isfinite(params_.stuck_state_timeout) ||
+        params_.stuck_state_timeout <= 0.0 || params_.stuck_state_timeout > 10.0) {
+        throw std::runtime_error("stuck_state_timeout must be in (0, 10] seconds");
+    }
 
     // 优化器参数
     declare_parameter_if_not_declared(node, plugin_name_ + ".max_iterations",
@@ -276,6 +308,13 @@ void MincoSmoother::cleanup() {
 
     // 清理订阅器
     odom_sub_.reset();
+    stuck_state_sub_.reset();
+    {
+        std::lock_guard<std::mutex> lock(stuck_state_mutex_);
+        stuck_gate_ = StalledWarmStartGate{};
+    }
+    consumed_stall_epoch_ = 0;
+    has_valid_trajectory_ = false;
     tracker_sub_.reset();
     esdf_adapter_.reset();
     optimizer_.reset();
@@ -346,6 +385,33 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
     RCLCPP_DEBUG(logger_, "Smoothing path with %zu poses", path.poses.size());
 
     try {
+        // Read the committed ROS parameter once per smooth() call. Both stages
+        // use this snapshot, even if a parameter request arrives between them.
+        // The parameter callback must not mutate an optimizer while it runs.
+        auto node = node_.lock();
+        if (!node) {
+            throw std::runtime_error("Unable to lock node!");
+        }
+        const bool project_esdf_gradient =
+            node->get_parameter(plugin_name_ + ".project_esdf_gradient").as_bool();
+        RCLCPP_DEBUG(logger_, "MINCO ESDF tangent projection: %s (both stages)",
+                     project_esdf_gradient ? "enabled" : "disabled");
+        StalledWarmStartGate::State stall;
+        {
+            std::lock_guard<std::mutex> lock(stuck_state_mutex_);
+            stall = stuck_gate_.state(clock_->now().seconds(), params_.stuck_state_timeout);
+        }
+        // A true->false event between smooth calls still invalidates the old
+        // trajectory once; it must not silently revive a pre-stall PVA cache.
+        if (stall.epoch != consumed_stall_epoch_) {
+            has_valid_trajectory_ = false;
+            consumed_stall_epoch_ = stall.epoch;
+        }
+        if (stall.inhibited) {
+            RCLCPP_WARN_THROTTLE(logger_, *clock_, 1000,
+                "MINCO: confirmed motion stall; use original path start and zero V/A");
+        }
+
         // 1. 确定初始状态 (Head State)
         Eigen::Vector2d head_pos;
         Eigen::Vector2d head_vel;
@@ -367,7 +433,7 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
             (current_time_sec - pos_timestamp) < kPositionTimeout;
 
         // 1.2 尝试从历史轨迹获取投影点
-        if (has_valid_trajectory_ && position_valid) {
+        if (has_valid_trajectory_ && position_valid && !stall.inhibited) {
             rclcpp::Time now = clock_->now();
             double traj_age = (now - last_trajectory_time_).seconds();
 
@@ -533,6 +599,7 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
             stage1_config.max_vel = params_.max_vel;
             stage1_config.max_acc = params_.max_acc;
             stage1_config.safe_distance = params_.safe_distance;
+            stage1_config.project_esdf_gradient = project_esdf_gradient;
             stage1_config.max_iterations = params_.stage1_max_iterations;
             stage1_config.g_epsilon = params_.g_epsilon;
             stage1_config.integral_resolution = params_.integral_resolution;
@@ -598,6 +665,7 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
             stage2_config.max_vel = params_.max_vel;
             stage2_config.max_acc = params_.max_acc;
             stage2_config.safe_distance = params_.safe_distance;
+            stage2_config.project_esdf_gradient = project_esdf_gradient;
             stage2_config.max_iterations = params_.max_iterations;
             stage2_config.g_epsilon = params_.g_epsilon;
             stage2_config.integral_resolution = params_.integral_resolution;
@@ -641,6 +709,18 @@ bool MincoSmoother::smooth(nav_msgs::msg::Path &path,
             return false;
         }
 
+        {
+            std::lock_guard<std::mutex> lock(stuck_state_mutex_);
+            if (use_projection &&
+                stuck_gate_.state(clock_->now().seconds(), params_.stuck_state_timeout).epoch !=
+                stall.epoch) {
+                // A stall arrived during an optimization seeded from the old
+                // trajectory. Let the ordinary retry generate a cold candidate.
+                has_valid_trajectory_ = false;
+                RCLCPP_WARN(logger_, "MINCO: discard warm candidate after a new motion stall");
+                return false;
+            }
+        }
         // 11. 缓存优化后的轨迹（供下次重规划时查找投影点）
         last_trajectory_ = optimizedTraj;
         last_trajectory_time_ = clock_->now();

@@ -32,6 +32,7 @@
 #include <nav_msgs/msg/path.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <string>
 #include <vector>
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -43,6 +44,7 @@
 #include "gcopter/trajectory.hpp"  // 使用 gcopter 的轨迹类
 #include "pb_minco_smoother/costmap_esdf_adapter.hpp"
 #include "pb_minco_smoother/minco_optimizer.hpp"
+#include "pb_minco_smoother/stalled_warm_start_gate.hpp"
 
 namespace pb_minco {
 
@@ -97,6 +99,8 @@ struct MincoSmootherParams {
     double output_dt = 0.1;            ///< 输出轨迹采样间隔 (s)
     bool publish_trajectory = true;    ///< 是否发布轨迹可视化
     std::string odom_topic = "/odom";  ///< 里程计话题
+    std::string stuck_state_topic;  ///< Optional discrete physical-stall signal
+    double stuck_state_timeout = 1.0;  ///< Missing publisher fails open, seconds
 
     // ========== 两阶段优化参数 ==========
     // --- 第一阶段（Shape Optimization）权重 ---
@@ -457,6 +461,10 @@ class MincoSmoother : public nav2_core::Smoother {
     Trajectory<5, 2> last_trajectory_;  ///< 上一条优化后的轨迹 (S=3, Quintic)
     rclcpp::Time last_trajectory_time_;  ///< 上一条轨迹的发布时间戳
     bool has_valid_trajectory_ = false;  ///< 是否有有效的历史轨迹
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stuck_state_sub_;
+    std::mutex stuck_state_mutex_;
+    StalledWarmStartGate stuck_gate_;
+    std::uint64_t consumed_stall_epoch_{0};
 
     // 动态参数回调
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr

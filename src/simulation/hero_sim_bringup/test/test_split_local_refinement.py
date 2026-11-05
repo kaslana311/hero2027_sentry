@@ -22,7 +22,8 @@ def native_refiner(tmp_path_factory):
 
 
 @pytest.mark.parametrize("case", ("drift_sweep", "wall_gap", "yaw_mismatch", "one_side_rejected",
-    "lintel_is_soft", "no_observations", "budget", "hard_rim", "invalid", "window"))
+    "lintel_is_soft", "short_fallback", "prior_outside_corridor", "headings",
+    "no_observations", "budget", "hard_rim", "invalid", "window"))
 def test_native_refiner(native_refiner, case):
     run = subprocess.run([str(native_refiner), case], capture_output=True, text=True, timeout=15)
     assert run.returncode == 0, run.stdout + run.stderr

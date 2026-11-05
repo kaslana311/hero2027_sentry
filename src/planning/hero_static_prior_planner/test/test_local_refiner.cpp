@@ -51,7 +51,7 @@ Scene scene(double drift, double yaw, bool reverse=false, bool gap=false,
   r.width=180; r.height=180; r.resolution=.05; r.origin_x=-2.; r.origin_y=-2.;
   const auto n=r.width*r.height;
   r.signed_distance.resize(n); r.reference_distance.resize(n);
-  r.occupied.assign(n, 0); r.hard.assign(n, 0);
+  r.occupied.assign(n, 0); r.hard.assign(n, 0); r.prior_blocked.assign(n, 0);
   for (std::size_t i=0; i<n; ++i) {
     const auto world=r.position(i), p=rotate(world, -yaw);
     double d=3.;
@@ -66,6 +66,12 @@ Scene scene(double drift, double yaw, bool reverse=false, bool gap=false,
       if (std::abs(p.x)<.03 && std::abs(p.y)<s.width/2) {r.occupied[i]=1;}
     }
     r.signed_distance[i]=d;
+    for (int side : {-1, 1}) {
+      // Include the prior's footprint-inflated side walls and end caps. A
+      // drifted prior wall can lie across the actual traversable corridor.
+      if (box(p, {s.length/2, drift+side*s.width/2},
+        s.length/2+.17, .03+.17)<=0) {r.prior_blocked[i]=1;}
+    }
     double dr=100.;
     for (std::size_t k=1; k<s.window.reference.size(); ++k) {
       dr=std::min(dr, segmentDistance(world, s.window.reference[k-1], s.window.reference[k]));
@@ -127,15 +133,47 @@ int main(int argc, char ** argv)
     const auto result=run(s);
     assert(!result.applied && result.reason=="no_supported_wall_pair");
   } else if (test=="lintel_is_soft") {
-    const auto s=scene(0., 0., false, false, false, true);
+    const auto s=scene(0., 0.);
     const auto result=run(s);
-    assert(result.applied && !result.guide.accepted);
+    assert(result.applied && result.guide.accepted);
     bool soft=false;
     for (const auto p : result.path) {
       const auto i=s.raster.index(p); assert(i && !s.raster.hard[*i]);
       if (std::abs(p.x)<.06 && s.raster.signed_distance[*i]<0) {soft=true;}
     }
     assert(soft);
+  } else if (test=="short_fallback") {
+    auto s=scene(0., 0., false, false, false, true);
+    const auto result=run(s);
+    assert(!result.applied && result.reason=="short_tunnel_static_fallback");
+    // Even an unrelated visible point must not enable a blind short-cut.
+    std::fill(s.raster.occupied.begin(), s.raster.occupied.end(), 0);
+    s.raster.occupied[500]=1;
+    assert(run(s).reason=="short_tunnel_static_fallback");
+  } else if (test=="prior_outside_corridor") {
+    auto s=scene(0., 0.);
+    s.window.reference={{-1., 0.}, {4.3, 0.}, {4.4, .8}, {4.9, .8}, {5., .8}};
+    for (std::size_t i=0; i<s.raster.hard.size(); ++i) {
+      const auto p=s.raster.position(i);
+      if (std::abs(p.x-4.6)<.1 && std::abs(p.y)<.55) {s.raster.prior_blocked[i]=1;}
+      double dr=100.;
+      for (std::size_t k=1; k<s.window.reference.size(); ++k) {
+        dr=std::min(dr, segmentDistance(p, s.window.reference[k-1], s.window.reference[k]));
+      }
+      s.raster.reference_distance[i]=dr;
+    }
+    const auto result=run(s);
+    checkPass(s, result);
+    for (const auto p : result.path) {
+      if (std::abs(p.x-4.6)<.1) {assert(std::abs(p.y)>=.55);}
+    }
+  } else if (test=="headings") {
+    const std::vector<Point> stairs{{0., 0.}, {.05, .0}, {.10, .05}, {.15, .05},
+      {.20, .10}, {.25, .10}, {.30, .15}, {.35, .15}, {.40, .20}};
+    const auto angles=pathHeadings(stairs);
+    assert(angles.size()==stairs.size());
+    for (const auto angle : angles) {assert(angle>.2 && angle<.7);}
+    assert(pathHeadings({{0., 0.}}).size()==1);
   } else if (test=="no_observations") {
     const auto result=run(scene(.6, 0., false, false, false, false, true));
     assert(!result.applied && result.reason=="no_dynamic_observations");
@@ -155,6 +193,8 @@ int main(int argc, char ** argv)
     s.raster.signed_distance[0]=std::numeric_limits<float>::quiet_NaN();
     assert(run(s).reason=="invalid_input");
     s=scene(.6, 0.); s.raster.hard.pop_back();
+    assert(run(s).reason=="invalid_input");
+    s=scene(.6, 0.); s.raster.prior_blocked.pop_back();
     assert(run(s).reason=="invalid_input");
     s.options.timeout=0.; assert(!valid(s.options));
     assert(!valid(Region{{0., 0.}, 0., -1., .8, 0}));

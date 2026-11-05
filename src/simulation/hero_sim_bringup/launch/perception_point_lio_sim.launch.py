@@ -49,6 +49,7 @@ def generate_launch_description():
                               description="This snapshot Point-LIO input requires dual lidar"),
         DeclareLaunchArgument("costmap_mode", default_value="combined"),
         DeclareLaunchArgument("split_local_refinement", default_value="false"),
+        DeclareLaunchArgument("stuck_cold_start", default_value="false"),
         DeclareLaunchArgument("use_rviz", default_value="true",
                               description="Navigation RViz; dynamic obstacles now use LIO cloud"),
         DeclareLaunchArgument("point_lio_rviz", default_value="false",

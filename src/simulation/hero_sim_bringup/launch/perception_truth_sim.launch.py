@@ -2,6 +2,7 @@ import copy
 import math
 import os
 import tempfile
+import xml.etree.ElementTree as ET
 
 import yaml
 from ament_index_python.packages import get_package_share_directory
@@ -112,13 +113,29 @@ def _make_dynamic_boundary_map(map_yaml, boundary_width=0.35, output_directory=N
     return yaml_path
 
 
+def _make_stuck_cold_start_tree(source_xml):
+    """Add one optional output port, never duplicate or rearrange the BT."""
+    tree = ET.parse(source_xml)
+    nodes = tree.getroot().findall(".//IsStuckCondition")
+    if len(nodes) != 1:
+        raise ValueError("stuck_cold_start requires exactly one IsStuckCondition")
+    nodes[0].set("motion_stall_topic", "navigation/motion_stalled")
+    with tempfile.NamedTemporaryFile(prefix="hero_stuck_cold_start_", suffix=".xml",
+                                     delete=False) as output:
+        tree.write(output, encoding="utf-8", xml_declaration=True)
+        return output.name
+
+
 def _make_sim_params(
     source_file, map_yaml, behavior_tree_xml, mode, namespace, publish_debug_visualizations,
     perception_cloud_topic="cloud_registered",
     filter_high_columns=False, high_column_min_z=0.30,
     dog_resolution_xy=0.05,
     split_local_refinement=False,
+    stuck_cold_start=False,
 ):
+    if not isinstance(stuck_cold_start, bool):
+        raise ValueError("stuck_cold_start must be a boolean")
     if not isinstance(split_local_refinement, bool):
         raise ValueError("split_local_refinement must be a boolean")
     if split_local_refinement and (mode != "split" or os.path.basename(map_yaml) != "rmuc_2027.yaml"):
@@ -180,6 +197,12 @@ def _make_sim_params(
     if "odom_topic" in smoother:
         smoother["odom_topic"] = "odometry/filtered"
     smoother["publish_trajectory"] = publish_debug_visualizations
+    if stuck_cold_start:
+        # Only wire the existing physical-stall detector to MINCO. The default
+        # XML, its retry policy, maps and all other optimizer parameters stay put.
+        smoother["stuck_state_topic"] = "navigation/motion_stalled"
+        smoother["stuck_state_timeout"] = 1.0
+        bt_navigator["default_nav_to_pose_bt_xml"] = _make_stuck_cold_start_tree(behavior_tree_xml)
 
     mode_plugins = {
         "combined": ["static_layer", "fast_layer", "inflation_layer"],
@@ -298,6 +321,10 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
     if refinement_switch not in ("true", "false"):
         raise ValueError("split_local_refinement must be true or false")
     split_local_refinement = refinement_switch == "true"
+    cold_start_switch = LaunchConfiguration("stuck_cold_start", default="false").perform(context).lower()
+    if cold_start_switch not in ("true", "false"):
+        raise ValueError("stuck_cold_start must be true or false")
+    stuck_cold_start = cold_start_switch == "true"
     publish_debug_visualizations = (
         LaunchConfiguration("publish_debug_visualizations")
         .perform(context)
@@ -339,6 +366,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         high_column_min_z,
         dog_resolution_xy,
         split_local_refinement,
+        stuck_cold_start,
     )
     navigation_map_yaml = (
         _make_dynamic_boundary_map(map_yaml)
@@ -503,7 +531,9 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         LogInfo(msg=f"DOG high-column filter enabled={filter_high_columns}, "
                     f"minimum absolute map Z={high_column_min_z:.3f} m (not robot-relative)"),
         LogInfo(msg=f"SPLIT experimental local soft refinement={split_local_refinement}; "
-                    "static Smac / original MINCO / localization interfaces unchanged"),
+                    "static Smac / MINCO cost weights / localization interfaces unchanged"),
+        LogInfo(msg=f"Confirmed motion-stall cold start={stuck_cold_start}; "
+                    "no measured-velocity PVA reconstruction"),
         bridge,
         map_server,
         map_lifecycle,
@@ -534,6 +564,10 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "split_local_refinement", default_value="false",
                 description="Opt-in rmuc_2027 split-only tunnel-local soft A* with supported wall guidance",
+            ),
+            DeclareLaunchArgument(
+                "stuck_cold_start", default_value="false",
+                description="Opt-in zero-V/A MINCO restart only after a confirmed commanded-motion stall",
             ),
             DeclareLaunchArgument(
                 "field",

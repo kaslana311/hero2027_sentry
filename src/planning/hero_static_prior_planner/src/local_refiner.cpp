@@ -29,7 +29,8 @@ double median(std::vector<double> values)
 
 // Fit paired longitudinal surfaces, not a complete/global localization pose.
 // Both sides must bracket the robot and overlap in longitudinal support. A
-// transverse lintel alone cannot pass that test. All geometry remains soft.
+// transverse lintel alone cannot pass that test. Dynamic occupancy (including
+// a transverse lintel) stays soft; only the fitted side-wall corridor is bounded.
 Guide fitGuide(const Raster & raster, const Window & window, const Options & options,
   Deadline deadline)
 {
@@ -188,24 +189,49 @@ Result refine(const Raster & raster, const Window & window, const Options & opti
     !raster.width || !raster.height || raster.width>4000 || raster.height>4000 ||
     size>200000 || raster.signed_distance.size()!=size ||
     raster.reference_distance.size()!=size || raster.occupied.size()!=size ||
-    raster.hard.size()!=size) {return out;}
+    raster.hard.size()!=size || raster.prior_blocked.size()!=size) {return out;}
   for (std::size_t i=0; i<size; ++i) {
     if (!std::isfinite(raster.signed_distance[i]) ||
       !std::isfinite(raster.reference_distance[i])) {return out;}
   }
   if (expired(deadline)) {out.reason="budget_exhausted"; return out;}
+  // A short portal does not provide enough longitudinal structure to validate
+  // its unseen walls. Do not turn missing lidar returns into a shortcut through
+  // the prior; retain the original static route and let MINCO smooth it.
+  if (window.region.length<1.5) {
+    out.reason="short_tunnel_static_fallback";
+    return out;
+  }
   if (std::none_of(raster.occupied.begin(), raster.occupied.end(),
     [](unsigned char v) {return v!=0;})) {out.reason="no_dynamic_observations"; return out;}
-  if (window.region.length>=1.5) {
-    out.guide=fitGuide(raster, window, options, deadline);
-    if (!out.guide.accepted) {
-      out.reason=expired(deadline) ? "budget_exhausted" : "no_supported_wall_pair";
-      return out;
-    }
+  out.guide=fitGuide(raster, window, options, deadline);
+  if (!out.guide.accepted) {
+    out.reason=expired(deadline) ? "budget_exhausted" : "no_supported_wall_pair";
+    return out;
   }
+  const auto & guide=out.guide;
+  const double clearance=guide.width/2-options.robot_radius-.5*raster.resolution;
+  if (clearance<=0) {out.reason="supported_corridor_too_narrow"; return out;}
+  // Include the prior's inflated end caps when entering/exiting a shifted
+  // corridor; never reconnect inside the wall solely because of raster error.
+  const double end_margin=options.robot_radius+2*raster.resolution+
+    options.max_alignment_shift*std::abs(std::sin(guide.yaw-window.region.yaw));
+  const auto in_slab=[&](Point p) {
+      return std::abs(longitudinal(p, guide.center, guide.yaw))<=guide.length/2+end_margin;
+    };
   const auto start=raster.index(window.reference.front()), goal=raster.index(window.reference.back());
   const auto blocked=[&](std::size_t i) {
-      return raster.hard[i] || raster.reference_distance[i]>options.max_deviation;
+      if (raster.hard[i] || raster.reference_distance[i]>options.max_deviation) {return true;}
+      const auto p=raster.position(i);
+      if (in_slab(p)) {
+        // Reliable paired walls close perception gaps at the sides, but do not
+        // turn the dynamic points across the portal into hard obstacles.
+        return std::abs(lateral(p, guide.center, guide.yaw))>clearance;
+      }
+      // Outside the matched corridor keep the prior walls. A sub-cell band of
+      // the already accepted static path preserves its explicit start-recovery
+      // connector; it is not permission to search freely through static walls.
+      return raster.prior_blocked[i] && raster.reference_distance[i]>.75*raster.resolution;
     };
   if (!start || !goal || blocked(*start) || blocked(*goal)) {
     out.reason="endpoint_outside_trust_or_boundary"; return out;
@@ -214,14 +240,10 @@ Result refine(const Raster & raster, const Window & window, const Options & opti
   std::vector<long> parent(size, -1);
   for (std::size_t i=0; i<size; ++i) {
     costs[i]=1+options.dynamic_weight*softPenalty(options.safe_distance-raster.signed_distance[i]);
-    if (out.guide.accepted) {
-      const auto p=raster.position(i);
-      const auto & g=out.guide;
-      if (std::abs(longitudinal(p, g.center, g.yaw))<=g.length/2+.15) {
-        const double excess=std::max(0., std::abs(lateral(p, g.center, g.yaw))-
-          std::max(.05, g.width/2-options.robot_radius));
-        costs[i]+=options.guide_weight*excess*excess;
-      }
+    const auto p=raster.position(i);
+    if (in_slab(p)) {
+      const double offset=lateral(p, guide.center, guide.yaw);
+      costs[i]+=options.guide_weight*offset*offset;
     }
   }
   struct Entry {double f, g; std::size_t index;};
@@ -273,5 +295,21 @@ Result refine(const Raster & raster, const Window & window, const Options & opti
   if (expired(deadline)) {out.reason="budget_exhausted"; out.path.clear(); return out;}
   out.applied=true; out.reason="applied";
   return out;
+}
+
+std::vector<double> pathHeadings(const std::vector<Point> & path, double span)
+{
+  std::vector<double> headings(path.size(), 0.0);
+  if (path.size()<2 || !std::isfinite(span) || span<=0) {return headings;}
+  for (std::size_t i=0; i<path.size(); ++i) {
+    std::size_t a=i, b=i;
+    double backward=0, forward=0;
+    while (a>0 && backward<span) {backward+=distance(path[a], path[a-1]); --a;}
+    while (b+1<path.size() && forward<span) {forward+=distance(path[b], path[b+1]); ++b;}
+    if (distance(path[a], path[b])>1e-10) {
+      headings[i]=std::atan2(path[b].y-path[a].y, path[b].x-path[a].x);
+    } else if (i) {headings[i]=headings[i-1];}
+  }
+  return headings;
 }
 }  // namespace hero_static_prior_planner::refinement

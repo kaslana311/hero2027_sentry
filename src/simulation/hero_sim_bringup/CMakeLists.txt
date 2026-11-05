@@ -93,6 +93,7 @@ if(BUILD_TESTING)
         "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=173"
   )
   ament_add_pytest_test(recovery_contract test/test_recovery_contract.py TIMEOUT 30)
+  ament_add_pytest_test(stuck_cold_start test/test_stuck_cold_start.py TIMEOUT 30)
   ament_add_pytest_test(costmap_modes test/test_costmap_modes.py TIMEOUT 30)
   ament_add_pytest_test(lidar_mount_contract test/test_lidar_mount_contract.py TIMEOUT 30)
   ament_add_pytest_test(split_mode test/test_split_mode.py TIMEOUT 30)

@@ -45,6 +45,7 @@ Snapshot snapshot(nav2_costmap_2d::Costmap2D & map)
 }
 
 refinement::Raster makeRaster(const Snapshot & dynamic, const Snapshot & boundary,
+  const Snapshot & prior,
   const refinement::Window & window, const refinement::Options & options)
 {
   using refinement::Point;
@@ -70,11 +71,13 @@ refinement::Raster makeRaster(const Snapshot & dynamic, const Snapshot & boundar
     throw std::runtime_error("local ROI exceeds cell budget");
   }
   raster.occupied.assign(size, 0); raster.hard.assign(size, 0);
+  raster.prior_blocked.assign(size, 0);
   cv::Mat obstacles(raster.height, raster.width, CV_8UC1, cv::Scalar(255));
   cv::Mat boundary_free=obstacles.clone(), reference=obstacles.clone();
   // Max-pool original cells, rather than point-sampling: no thin wall or rim
   // may disappear when the search grid is coarser than the 2.5-cm Nav2 map.
-  const auto subsamples=std::max(1, static_cast<int>(std::ceil(resolution/dynamic.resolution)));
+  const auto subsamples=std::max(1, static_cast<int>(std::ceil(
+    resolution/std::min({dynamic.resolution, boundary.resolution, prior.resolution}))));
   for (std::size_t i=0; i<size; ++i) {
     const auto p=raster.position(i);
     const int xx=i%raster.width, yy=i/raster.width;
@@ -83,6 +86,7 @@ refinement::Raster makeRaster(const Snapshot & dynamic, const Snapshot & boundar
         const double wx=p.x-resolution/2+(sx+.5)*resolution/subsamples;
         const double wy=p.y-resolution/2+(sy+.5)*resolution/subsamples;
         const auto cost=dynamic.at(wx, wy), rim=boundary.at(wx, wy);
+        if (prior.at(wx, wy)>=253) {raster.prior_blocked[i]=1;}
         if (cost==255) {raster.hard[i]=1;}
         if (rim>=253) {boundary_free.at<unsigned char>(yy, xx)=0;}
         if (cost>=253 && cost<255) {obstacles.at<unsigned char>(yy, xx)=0;}
@@ -181,7 +185,9 @@ nav_msgs::msg::Path StaticPriorPlanner::refinePlan(const nav_msgs::msg::Path & p
     if (window) {
       reason="dynamic_map_not_current";
       if (dynamic_costmap_ && dynamic_costmap_->isCurrent() &&
-        prior.header.frame_id==dynamic_costmap_->getGlobalFrameID())
+        prior_costmap_ && prior_costmap_->isCurrent() &&
+        prior.header.frame_id==dynamic_costmap_->getGlobalFrameID() &&
+        prior.header.frame_id==prior_costmap_->getGlobalFrameID())
       {
         std::shared_ptr<nav2_costmap_2d::CostmapLayer> boundary;
         for (const auto & layer : *dynamic_costmap_->getLayeredCostmap()->getPlugins()) {
@@ -197,18 +203,19 @@ nav_msgs::msg::Path StaticPriorPlanner::refinePlan(const nav_msgs::msg::Path & p
             dynamic_costmap_->getLayeredCostmap()->getInscribedRadius());
           const auto live=snapshot(*dynamic_costmap_->getCostmap());
           const auto rim=snapshot(*boundary);
-          const auto raster=makeRaster(live, rim, *window, options);
+          const auto static_prior=snapshot(*prior_costmap_->getCostmap());
+          const auto raster=makeRaster(live, rim, static_prior, *window, options);
           result=refinement::refine(raster, *window, options, deadline);
           reason=result.reason;
           if (result.applied) {
             std::vector<geometry_msgs::msg::PoseStamped> poses;
+            const auto headings=refinement::pathHeadings(result.path);
             poses.reserve(result.path.size()+prior.poses.size()-window->join_index-1);
             for (std::size_t i=0; i<result.path.size(); ++i) {
               auto pose=prior.poses.front(); pose.header=prior.header;
               pose.pose.position.x=result.path[i].x; pose.pose.position.y=result.path[i].y;
               if (i+1<result.path.size()) {
-                const double yaw=std::atan2(result.path[i+1].y-result.path[i].y,
-                  result.path[i+1].x-result.path[i].x);
+                const double yaw=headings[i];
                 pose.pose.orientation.x=0; pose.pose.orientation.y=0;
                 pose.pose.orientation.z=std::sin(yaw/2); pose.pose.orientation.w=std::cos(yaw/2);
               } else {pose=prior.poses[window->join_index];}

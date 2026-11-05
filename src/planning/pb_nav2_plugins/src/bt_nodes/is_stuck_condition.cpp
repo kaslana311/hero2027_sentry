@@ -49,6 +49,12 @@ IsStuckCondition::IsStuckCondition(
   getInput("stall_duration", stall_duration_);
   getInput("data_timeout", data_timeout_);
   getInput("latch_timeout", latch_timeout_);
+  std::string motion_stall_topic;
+  getInput("motion_stall_topic", motion_stall_topic);
+  if (!motion_stall_topic.empty()) {
+    motion_stall_pub_ = node_->create_publisher<std_msgs::msg::Bool>(
+      motion_stall_topic, rclcpp::QoS(10).reliable());
+  }
 
   // Set up a dedicated callback group so the subscription callback runs on
   // its own executor thread – identical pattern to Nav2's IsBatteryLow and
@@ -118,16 +124,49 @@ void IsStuckCondition::odometryCallback(nav_msgs::msg::Odometry::SharedPtr msg)
 
 void IsStuckCondition::resetMotionWindowLocked() { motion_window_active_ = false; }
 
+void IsStuckCondition::publishMotionStateLocked(const rclcpp::Time & now, bool force)
+{
+  if (!motion_stall_pub_) {return;}
+  const double time = now.seconds();
+  if (force || last_signal_time_ < 0.0 || time < last_signal_time_ ||
+    time - last_signal_time_ >= check_interval_)
+  {
+    std_msgs::msg::Bool signal;
+    signal.data = warm_start_inhibited_;
+    motion_stall_pub_->publish(signal);
+    last_signal_time_ = time;
+  }
+}
+
 void IsStuckCondition::updateMotionStallLocked(const rclcpp::Time & now)
 {
-  if (!have_cmd_vel_ || !have_odom_ || motion_stall_latched_) {
+  if (!have_cmd_vel_ || !have_odom_) {
     return;
   }
 
   const double cmd_age = (now - latest_cmd_vel_time_).seconds();
   const double odom_age = (now - latest_odom_time_).seconds();
+  const bool fresh = cmd_age >= 0.0 && odom_age >= 0.0 && cmd_age <= data_timeout_ &&
+    odom_age <= data_timeout_ && std::isfinite(latest_command_speed_) &&
+    std::isfinite(latest_odom_x_) && std::isfinite(latest_odom_y_);
+  if (motion_stall_pub_ && fresh) {
+    bool released = false;
+    if (warm_start_inhibited_ &&
+      std::hypot(latest_odom_x_ - inhibited_at_x_, latest_odom_y_ - inhibited_at_y_) >=
+      stall_displacement_threshold_)
+    {
+      warm_start_inhibited_ = false;
+      resetMotionWindowLocked();
+      released = true;
+    }
+    publishMotionStateLocked(now, released);
+  }
+  // With no optional publisher the original consumed-latch behavior is intact.
+  // With it enabled, continue monitoring after real progress even if the BT has
+  // not yet ticked its recovery subtree to consume an earlier event.
+  if ((motion_stall_latched_ && !motion_stall_pub_) || warm_start_inhibited_) {return;}
   if (
-    cmd_age < 0.0 || odom_age < 0.0 || cmd_age > data_timeout_ || odom_age > data_timeout_ ||
+    !fresh ||
     latest_command_speed_ < command_speed_threshold_) {
     resetMotionWindowLocked();
     return;
@@ -152,11 +191,19 @@ void IsStuckCondition::updateMotionStallLocked(const rclcpp::Time & now)
 
   const double elapsed = (now - motion_window_start_).seconds();
   if (elapsed >= stall_duration_) {
-    motion_stall_latched_ = true;
-    motion_stall_latched_time_ = now;
-    latched_stall_duration_ = elapsed;
-    latched_stall_displacement_ = displacement;
-    latched_command_speed_ = latest_command_speed_;
+    if (!motion_stall_latched_) {
+      motion_stall_latched_ = true;
+      motion_stall_latched_time_ = now;
+      latched_stall_duration_ = elapsed;
+      latched_stall_displacement_ = displacement;
+      latched_command_speed_ = latest_command_speed_;
+    }
+    if (motion_stall_pub_) {
+      warm_start_inhibited_ = true;
+      inhibited_at_x_ = latest_odom_x_;
+      inhibited_at_y_ = latest_odom_y_;
+      publishMotionStateLocked(now, true);
+    }
     resetMotionWindowLocked();
   }
 }
