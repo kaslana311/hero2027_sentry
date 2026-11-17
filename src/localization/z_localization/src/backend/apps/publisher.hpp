@@ -18,7 +18,8 @@
 #include <std_msgs/msg/int16.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <string>
-#include <tf2_ros/transform_broadcaster.hpp>
+// Humble 0.25.x provides the .h name; newer releases retain it as a wrapper.
+#include <tf2_ros/transform_broadcaster.h>
 #include <utility>
 #include <visualization_msgs/msg/marker.hpp>
 
