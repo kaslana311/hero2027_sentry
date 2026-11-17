@@ -1,0 +1,53 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: map
+    Background Color: 48; 48; 48
+    Frame Rate: 15
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Metric grid
+      Enabled: true
+      Cell Size: 1
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Real Point-LIO registered scan (main TF)
+      Enabled: true
+      Topic:
+        Value: pointlio/cloud_registered_map
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 2
+      Color Transformer: AxisColor
+      Axis: Z
+      Style: Points
+      Size (Pixels): 2
+      Alpha: 0.8
+    - Class: rviz_default_plugins/TF
+      Name: Main TF only
+      Enabled: true
+      Show Names: true
+    - Class: rviz_default_plugins/Odometry
+      Name: Frontend chassis pose (NOT truth)
+      Enabled: true
+      Topic:
+        Value: base_link_in_map_odom
+        Reliability Policy: Reliable
+        Depth: 5
+      Keep: 50
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 15
+      Pitch: 0.8
+      Yaw: 0
+      Target Frame: map
+Window Geometry:
+  Width: 1280
+  Height: 800

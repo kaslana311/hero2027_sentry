@@ -133,7 +133,10 @@ def _make_sim_params(
     dog_resolution_xy=0.05,
     split_local_refinement=False,
     stuck_cold_start=False,
+    use_sim_time=True,
 ):
+    if not isinstance(use_sim_time, bool):
+        raise ValueError("use_sim_time must be a boolean")
     if not isinstance(stuck_cold_start, bool):
         raise ValueError("stuck_cold_start must be a boolean")
     if not isinstance(split_local_refinement, bool):
@@ -152,7 +155,7 @@ def _make_sim_params(
         params = yaml.safe_load(stream)
 
     dog_map = params["dog_map_node"]["ros__parameters"]
-    dog_map["use_sim_time"] = True
+    dog_map["use_sim_time"] = use_sim_time
     dog_map["odom_topic"] = "odometry/filtered"
     dog_map["cloud_topic"] = perception_cloud_topic
     dog_map["map_yaml_path"] = map_yaml
@@ -218,7 +221,7 @@ def _make_sim_params(
 
     for costmap_name in ("local_costmap", "global_costmap"):
         costmap = params[costmap_name][costmap_name]["ros__parameters"]
-        costmap["use_sim_time"] = True
+        costmap["use_sim_time"] = use_sim_time
         # Keep the lists independent. Otherwise PyYAML emits anchors/aliases,
         # which the ROS 2 parameter-file parser does not support.
         costmap["plugins"] = list(mode_plugins[mode])
@@ -287,7 +290,7 @@ def _make_sim_params(
         if isinstance(value, dict):
             for key, child in value.items():
                 if key == "use_sim_time":
-                    value[key] = True
+                    value[key] = use_sim_time
                 else:
                     force_sim_time(child)
         elif isinstance(value, list):
@@ -304,7 +307,11 @@ def _make_sim_params(
     return output.name
 
 
-def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_navigation=False):
+def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_navigation=False,
+                  real_sensor_input=False):
+    # The real entry shares exactly the same mode/BT/optimizer generator. Only
+    # its clock, optional map file and data-source adapters differ.
+    use_sim_time = not real_sensor_input
     namespace = LaunchConfiguration("namespace").perform(context)
     costmap_mode = LaunchConfiguration("costmap_mode").perform(context).lower()
     lidar_mode = LaunchConfiguration("lidar_mode").perform(context).lower()
@@ -348,6 +355,10 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
     sim_share = get_package_share_directory("hero_sim_bringup")
     nav_share = get_package_share_directory("hero2025_nav_bringup")
     map_yaml = os.path.join(sim_share, "maps", f"{field}.yaml")
+    if real_sensor_input:
+        map_override = LaunchConfiguration("map", default="").perform(context)
+        if map_override:
+            map_yaml = os.path.abspath(os.path.expanduser(map_override))
     if not os.path.isfile(map_yaml):
         raise RuntimeError(f"Static map metadata not found: {map_yaml}")
     behavior_tree_xml = os.path.join(
@@ -367,6 +378,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         dog_resolution_xy,
         split_local_refinement,
         stuck_cold_start,
+        **({"use_sim_time": False} if real_sensor_input else {}),
     )
     navigation_map_yaml = (
         _make_dynamic_boundary_map(map_yaml)
@@ -404,7 +416,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         namespace=namespace,
         name="map_server",
         output="screen",
-        parameters=[{"use_sim_time": True, "yaml_filename": navigation_map_yaml}],
+        parameters=[{"use_sim_time": use_sim_time, "yaml_filename": navigation_map_yaml}],
     )
 
     map_lifecycle = Node(
@@ -415,7 +427,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         output="screen",
         parameters=[
             {
-                "use_sim_time": True,
+                "use_sim_time": use_sim_time,
                 "autostart": True,
                 "node_names": ["map_server"],
             }
@@ -434,7 +446,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
                 package="nav2_map_server", executable="map_server",
                 namespace=reference_namespace, name="reference_map_server",
                 output="screen",
-                parameters=[{"use_sim_time": True, "yaml_filename": map_yaml,
+                parameters=[{"use_sim_time": use_sim_time, "yaml_filename": map_yaml,
                              "frame_id": "map"}],
                 remappings=[("map", "static_map")],
             ),
@@ -443,7 +455,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
                 package="nav2_lifecycle_manager", executable="lifecycle_manager",
                 namespace=reference_namespace, name="lifecycle_manager_reference_map",
                 output="screen",
-                parameters=[{"use_sim_time": True, "autostart": True,
+                parameters=[{"use_sim_time": use_sim_time, "autostart": True,
                              "node_names": ["reference_map_server"]}],
             ),
         ]
@@ -459,13 +471,13 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
             Node(
                 package="nav2_map_server", executable="map_server",
                 namespace=prior_namespace, name="static_prior_map_server", output="screen",
-                parameters=[{"use_sim_time": True, "yaml_filename": map_yaml,
+                parameters=[{"use_sim_time": use_sim_time, "yaml_filename": map_yaml,
                              "frame_id": "map"}],
             ),
             Node(
                 package="nav2_lifecycle_manager", executable="lifecycle_manager",
                 namespace=prior_namespace, name="lifecycle_manager_static_prior", output="screen",
-                parameters=[{"use_sim_time": True, "autostart": True,
+                parameters=[{"use_sim_time": use_sim_time, "autostart": True,
                              "node_names": ["static_prior_map_server"]}],
             ),
         ]
@@ -481,7 +493,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
             # the multi-robot simulator without modifying the controller.
             SetRemap(
                 "/smoother_server/minco_polynomial_trajectory",
-                f"/{namespace}/smoother_server/minco_polynomial_trajectory",
+                f"/{namespace.strip('/') + '/' if namespace.strip('/') else ''}smoother_server/minco_polynomial_trajectory",
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -489,7 +501,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
                 ),
                 launch_arguments={
                     "namespace": namespace,
-                    "use_sim_time": "true",
+                    "use_sim_time": str(use_sim_time).lower(),
                     "autostart": "true",
                     "params_file": generated_params,
                     # The team launch evaluates use_composition through PythonExpression,
@@ -509,7 +521,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
         name="rviz2",
         output="screen",
         arguments=["-d", os.path.join(sim_share, "rviz", "hero_sim.rviz")],
-        parameters=[{"use_sim_time": True}],
+        parameters=[{"use_sim_time": use_sim_time}],
         remappings=[
             ("/tf", "tf"), ("/tf_static", "tf_static"),
             # The shared display follows the actual DOG input: Point-LIO in
@@ -521,7 +533,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
     return [
         LogInfo(
             msg=(
-                f"Starting HERO perception simulation in '{costmap_mode}' costmap mode "
+                f"Starting HERO {'real-sensor navigation' if real_sensor_input else 'perception simulation'} in '{costmap_mode}' costmap mode "
                 f"with '{lidar_mode}' lidar input on '{field}'"
             )
         ),
@@ -534,7 +546,7 @@ def _launch_setup(context, perception_cloud_topic="cloud_registered", point_lio_
                     "static Smac / MINCO cost weights / localization interfaces unchanged"),
         LogInfo(msg=f"Confirmed motion-stall cold start={stuck_cold_start}; "
                     "no measured-velocity PVA reconstruction"),
-        bridge,
+        *([] if real_sensor_input else [bridge]),
         map_server,
         map_lifecycle,
         *reference_map_nodes,

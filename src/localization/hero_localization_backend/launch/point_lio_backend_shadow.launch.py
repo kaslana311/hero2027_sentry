@@ -15,15 +15,20 @@ def setup(context):
     share = get_package_share_directory('hero_localization_backend')
     with open(os.path.join(get_package_share_directory('backend'), 'config', 'backend.yaml')) as f:
         base = yaml.safe_load(f)
-    with open(os.path.join(share, 'config', 'backend_point_lio.yaml')) as f:
+    override_file = LaunchConfiguration('backend_config').perform(context)
+    with open(override_file or os.path.join(share, 'config', 'backend_point_lio.yaml')) as f:
         overrides = yaml.safe_load(f)
-    config = parameters(base, overrides, robot, LaunchConfiguration('prior_map').perform(context))
+    allow_no_prior = LaunchConfiguration('allow_no_prior').perform(context) == 'true'
+    config = parameters(base, overrides, robot, LaunchConfiguration('prior_map').perform(context),
+                        allow_no_prior=allow_no_prior)
     namespace = f'{robot}/z_backend'
     debug = LaunchConfiguration('backend_debug').perform(context)
     return [
         LogInfo(msg='BACKEND SHADOW ONLY: Point-LIO raw odometry/cloud -> prior-map factor graph. '
                     'NO cmd_vel, NO navigation pose replacement, private TF. UWB disabled. '
-                    'Start at the normal 2027 spawn before driving; full frontend-reset integration is NOT implemented.'),
+                    'Initial placement and body calibration come from the selected config; '
+                    'full frontend-reset integration is NOT implemented. '
+                    'No prior bundle means odometry-factor comparison only, NOT global drift correction.'),
         Node(package='backend', executable='backend_node', name='backend', namespace=namespace,
              prefix=debugger_prefix(debug),
              output='both' if debug == 'true' else 'screen',
@@ -32,11 +37,14 @@ def setup(context):
         Node(package='hero_localization_backend', executable='backend_shadow_monitor.py',
              name='comparison', namespace=namespace, output='screen',
              parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time'),
-                          'truth_topic': f'/{robot}/odometry/truth_3d'}]),
+                          'truth_topic': LaunchConfiguration('comparison_reference_topic').perform(context)
+                              or f'/{robot}/odometry/truth_3d',
+                          'reference_label': LaunchConfiguration('comparison_reference_label')}]),
         Node(package='rviz2', executable='rviz2', name='backend_shadow_rviz', namespace=namespace,
              condition=IfCondition(LaunchConfiguration('backend_rviz')), output='screen',
              parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-             arguments=['-d', os.path.join(share, 'rviz', 'backend_shadow.rviz')],
+            arguments=['-d', LaunchConfiguration('backend_rviz_config').perform(context)
+                       or os.path.join(share, 'rviz', 'backend_shadow.rviz')],
              remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static'),
                          ('comparison/truth_path', f'/{robot}/pointlio/evaluation/truth_path'),
                          ('comparison/frontend_path', f'/{robot}/pointlio/evaluation/pointlio_path')]),
@@ -51,5 +59,10 @@ def generate_launch_description():
         DeclareLaunchArgument('backend_rviz', default_value='true'),
         DeclareLaunchArgument('backend_debug', default_value='false',
                              description='Run only the shadow backend under gdb; fatal stacks enter launch.log'),
+        DeclareLaunchArgument('backend_config', default_value=''),
+        DeclareLaunchArgument('allow_no_prior', default_value='false'),
+        DeclareLaunchArgument('comparison_reference_topic', default_value=''),
+        DeclareLaunchArgument('comparison_reference_label', default_value='truth'),
+        DeclareLaunchArgument('backend_rviz_config', default_value=''),
         OpaqueFunction(function=setup),
     ])

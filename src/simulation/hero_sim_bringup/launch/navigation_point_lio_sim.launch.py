@@ -22,6 +22,12 @@ def _sibling(filename):
 
 
 def _setup(context):
+    source = LaunchConfiguration("data_source", default="sim").perform(context)
+    if source == "real":
+        return [IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(
+            get_package_share_directory("hero_real_bringup"), "launch", "navigation_point_lio_real.launch.py")))]
+    if source != "sim":
+        raise ValueError("data_source must be sim or real")
     robot = LaunchConfiguration("namespace").perform(context).strip("/")
     if not robot or LaunchConfiguration("lidar_mode").perform(context).lower() != "dual":
         raise RuntimeError("Point-LIO navigation requires namespace and lidar_mode:=dual")
@@ -52,6 +58,8 @@ def _setup(context):
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("namespace", default_value="red_standard_robot1"),
+        DeclareLaunchArgument("data_source", default_value="sim",
+                              description="sim preserves the parent branch; real selects calibrated hardware input"),
         DeclareLaunchArgument("field", default_value="rmuc_2026"),
         DeclareLaunchArgument("lidar_mode", default_value="dual"),
         DeclareLaunchArgument("costmap_mode", default_value="combined"),

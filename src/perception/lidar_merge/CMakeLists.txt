@@ -25,6 +25,14 @@ include_directories(
 
 add_executable(${PROJECT_NAME}_node src/lidars.cpp)
 
+# Keep the old executable's behavior unchanged. The real dual-MID360 entry
+# explicitly selects this target, matching the deployed sentry's TWO_LIDARS.
+add_executable(lidar_merge_dual_node src/lidars.cpp)
+target_compile_definitions(lidar_merge_dual_node PRIVATE TWO_LIDARS)
+ament_target_dependencies(lidar_merge_dual_node
+  rclcpp message_filters livox_ros_driver2 pcl_conversions PCL visualization_msgs)
+target_link_libraries(lidar_merge_dual_node TBB::tbb)
+
 ament_target_dependencies(${PROJECT_NAME}_node
   rclcpp
   message_filters
@@ -36,7 +44,7 @@ ament_target_dependencies(${PROJECT_NAME}_node
 target_link_libraries(${PROJECT_NAME}_node
   TBB::tbb
 )
-install(TARGETS ${PROJECT_NAME}_node
+install(TARGETS ${PROJECT_NAME}_node lidar_merge_dual_node
   DESTINATION lib/${PROJECT_NAME}
 )
 install(DIRECTORY launch config

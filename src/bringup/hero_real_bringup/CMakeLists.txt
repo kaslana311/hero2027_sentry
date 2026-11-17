@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 3.16)
+project(hero_real_bringup)
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+foreach(dep geometry_msgs nav_msgs rclcpp rcl_interfaces sensor_msgs std_msgs tf2 tf2_geometry_msgs tf2_ros)
+  find_package(${dep} REQUIRED)
+endforeach()
+ament_python_install_package(${PROJECT_NAME})
+add_executable(real_point_lio_navigation_bridge src/real_point_lio_navigation_bridge.cpp)
+target_compile_features(real_point_lio_navigation_bridge PRIVATE cxx_std_17)
+ament_target_dependencies(real_point_lio_navigation_bridge
+  geometry_msgs nav_msgs rclcpp rcl_interfaces sensor_msgs std_msgs tf2 tf2_geometry_msgs tf2_ros)
+install(TARGETS real_point_lio_navigation_bridge DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY config launch rviz DESTINATION share/${PROJECT_NAME})
+install(FILES README.md DESTINATION share/${PROJECT_NAME})
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(real_contract test/test_real_contract.py TIMEOUT 60)
+  ament_add_pytest_test(real_bridge_runtime test/test_real_bridge_runtime.py TIMEOUT 90
+    ENV "REAL_BRIDGE_EXECUTABLE=$<TARGET_FILE:real_point_lio_navigation_bridge>"
+        "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=212")
+  ament_add_pytest_test(real_launch_runtime test/test_real_launch_runtime.py TIMEOUT 120
+    ENV "ROS_LOCALHOST_ONLY=1" "ROS_DOMAIN_ID=213")
+endif()
+ament_package()

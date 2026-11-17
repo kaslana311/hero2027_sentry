@@ -18,6 +18,13 @@ DEFAULTS = {
 
 
 def setup(context):
+    source = LaunchConfiguration('data_source', default='sim').perform(context)
+    if source == 'real':
+        return [IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(
+            get_package_share_directory('hero_real_bringup'), 'launch',
+            'navigation_point_lio_backend_shadow_real.launch.py')))]
+    if source != 'sim':
+        raise ValueError('data_source must be sim or real')
     if LaunchConfiguration('field').perform(context) != 'rmuc_2027':
         raise ValueError('This first backend prior is calibrated for rmuc_2027 only; old entries remain available')
     return [
@@ -36,7 +43,8 @@ def setup(context):
 def generate_launch_description():
     return LaunchDescription([
         *(DeclareLaunchArgument(name, default_value=value) for name, value in DEFAULTS.items()),
-        DeclareLaunchArgument('prior_map', description='Absolute 3-D prior bundle path, not the PGM'),
+        DeclareLaunchArgument('data_source', default_value='sim'),
+        DeclareLaunchArgument('prior_map', default_value='', description='Absolute 3-D prior bundle path, not the PGM'),
         DeclareLaunchArgument('backend_rviz', default_value='true'),
         DeclareLaunchArgument('backend_debug', default_value='false'),
         OpaqueFunction(function=setup),

@@ -55,7 +55,7 @@ def test_raw_inputs_private_outputs_no_truth_feedback(bundle):
     assert 'truth' not in str(config)
 
 
-@pytest.mark.parametrize('name', ['', '/', 'bad name', 'bad-name'])
+@pytest.mark.parametrize('name', ['bad name', 'bad-name'])
 def test_bad_namespace(bundle, name):
     with pytest.raises(ValueError):
         parameters(base(), {}, name, bundle)

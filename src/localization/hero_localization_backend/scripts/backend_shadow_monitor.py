@@ -52,9 +52,11 @@ def display_health(state, stamp, received, ros_now, steady_now):
 class Monitor(Node):
     def __init__(self):
         super().__init__('backend_shadow_monitor')
+        self.reference_label = self.declare_parameter('reference_label', 'truth').value
         self.truth = deque(maxlen=4000)  # Simulator truth may run at 1 kHz; retain four seconds.
         self.pending = deque(maxlen=100)
         self.path = deque(maxlen=2000)
+        self.reference_path = deque(maxlen=2000)
         self.state = {}
         self.last_stamp = 0
         self.last_log_ns = 0
@@ -65,6 +67,7 @@ class Monitor(Node):
         self.last_health = None
         durable = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.path_pub = self.create_publisher(Path, 'comparison/backend_path', 1)
+        self.reference_path_pub = self.create_publisher(Path, 'comparison/reference_path', 1)
         self.marker_pub = self.create_publisher(MarkerArray, 'comparison/markers', durable)
         self.error_pub = self.create_publisher(String, 'comparison/error', 10)
         self.create_subscription(String, 'backend/localization_state', self.on_state, durable)
@@ -87,6 +90,8 @@ class Monitor(Node):
         p = msg.pose.pose.position
         if all(math.isfinite(v) for v in (p.x, p.y, p.z)):
             self.truth.append((stamp, (p.x, p.y, p.z)))
+            if self.reference_label == 'frontend':
+                self.reference_path.append(PoseStamped(header=msg.header, pose=msg.pose.pose))
 
     def on_pose(self, msg):
         stamp = ns(msg.header.stamp)
@@ -110,6 +115,7 @@ class Monitor(Node):
             self.truth.clear()
             self.pending.clear()
             self.path.clear()
+            self.reference_path.clear()
             self.last_stamp = 0
             self.last_error = None
             self.last_pose = None
@@ -129,10 +135,15 @@ class Monitor(Node):
             delta = tuple(a-b for a, b in zip(pose, reference))
             self.last_error = {'stamp_ns': stamp, 'dx': delta[0], 'dy': delta[1], 'dz': delta[2],
                                'xy_m': math.hypot(*delta[:2]), 'xyz_m': math.sqrt(sum(v*v for v in delta)),
-                               'status': self.state.get('status', 'UNKNOWN'), 'shadow_only': True}
+                               'status': self.state.get('status', 'UNKNOWN'), 'shadow_only': True,
+                               'reference': self.reference_label,
+                               'absolute_accuracy_measured': self.reference_label == 'truth'}
             self.error_pub.publish(String(data=json.dumps(self.last_error)))
         if self.path:
             self.path_pub.publish(Path(header=self.path[-1].header, poses=list(self.path)))
+        if self.reference_path:
+            self.reference_path_pub.publish(Path(header=self.reference_path[-1].header,
+                                                 poses=list(self.reference_path)))
         marker = Marker()
         marker.header.frame_id, marker.header.stamp = 'map', now.to_msg()
         marker.ns, marker.id, marker.type, marker.action = 'backend_shadow', 0, Marker.TEXT_VIEW_FACING, Marker.ADD
@@ -146,14 +157,16 @@ class Monitor(Node):
                                               self.last_pose_received_ns, now.nanoseconds, steady_now)
         marker.color.r, marker.color.g, marker.color.b = ((0.0, 1.0, 1.0) if trusted else (1.0, 0.3, 0.1))
         marker.text = 'BACKEND SHADOW (NOT NAVIGATION)\n' + health
+        clock_label = 'sim s' if self.reference_label == 'truth' else 'ROS s'
         if health.startswith('STALE'):
             marker.text += (f"\nlast received state: {self.state.get('status', 'UNKNOWN')} (HISTORICAL)"
-                            f"\npose acquisition age: {age:.1f} sim s; receipt age: "
+                            f"\npose acquisition age: {age:.1f} {clock_label}; receipt age: "
                             f"{(steady_now-self.last_pose_received_ns)/1e9:.1f} wall s"
-                            '\nbackend stalled/exited OR simulation paused; old path is HISTORY')
+                            '\nbackend stalled/exited OR input paused; old path is HISTORY')
         if self.last_error is not None:
-            marker.text += (f"\nHISTORICAL same-time XY error: {self.last_error['xy_m']:.3f} m"
-                            f" @ {self.last_error['stamp_ns']/1e9:.2f} sim s")
+            label = 'XY error' if self.reference_label == 'truth' else 'frontend/backend XY difference (NOT accuracy)'
+            marker.text += (f"\nHISTORICAL same-time {label}: {self.last_error['xy_m']:.3f} m"
+                            f" @ {self.last_error['stamp_ns']/1e9:.2f} {clock_label}")
         arrow = Marker()
         arrow.header, arrow.ns, arrow.id = marker.header, 'backend_shadow_pose', 1
         arrow.type = Marker.ARROW

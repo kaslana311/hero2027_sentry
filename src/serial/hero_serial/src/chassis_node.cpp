@@ -210,7 +210,9 @@ ChassisNode ::ChassisNode() : Node("chassis_node") {
     g_chassis_node_instance = this;
 
     // 初始化串口
-    if (!boost_asio_.Init("/dev/chassis", 460800)) {
+    const auto serial_port = this->declare_parameter<std::string>("serial_port", "/dev/chassis");
+    const auto serial_baud = this->declare_parameter<int>("serial_baud", 460800);
+    if (serial_baud <= 0 || !boost_asio_.Init(serial_port, serial_baud)) {
         RCLCPP_ERROR(this->get_logger(), "底盘串口初始化失败");
         rclcpp::shutdown();  // 结束程序
         return;

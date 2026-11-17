@@ -27,9 +27,11 @@ class ColorMapModel
 {
 public:
   ColorMapModel(
-    const std::string & color_map_file, const std::string & yaml_file){
+    const std::string & color_map_file, const std::string & yaml_file,
+    const std::string & debug_image_file = ""){
     color_map_file_ = color_map_file;
     yaml_file_ = yaml_file;
+    debug_image_file_ = debug_image_file;
     // 加载彩色区域地图图像
     ReadFileAndCreateMap();
 
@@ -111,7 +113,7 @@ public:
     }
   }
   
-  cv::imwrite("/home/dji/hero2026_-sentry/src/perception/nav_cv_bridge/debug_img/res.png", res_mat);
+  if (!debug_image_file_.empty()) cv::imwrite(debug_image_file_, res_mat);
 }
   /* 提取彩色区域地图指定位置信息*/
   inline int GetColorMapInfo(unsigned int mx, unsigned int my){
@@ -145,12 +147,13 @@ private:
   //c参数
   std::string color_map_file_;
   std::string yaml_file_;
-  size_t image_width_;
+  std::string debug_image_file_;
+  size_t image_width_{0};
   double resolution_;
   std::vector<double> origin_;
-  size_t image_height_;
+  size_t image_height_{0};
   size_t image_size_;
-    uint8_t* color_map_;
+    uint8_t* color_map_{nullptr};
 };
 
 }  // namespace colorMap

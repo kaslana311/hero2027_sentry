@@ -17,6 +17,7 @@ JOBS="${JOBS:-8}"
 INSTALL_DEPS=false
 CLEAN_STAGE=false
 VERIFY_ONLY=false
+BUILD_GENERATOR="Ninja"
 
 # Pinned upstream revisions used to repair the incomplete Acados dependency
 # snapshots shipped by this repository.
@@ -139,7 +140,11 @@ install_dependencies() {
 
 preflight() {
   local command_name
-  local required=(cmake ninja colcon git g++ find awk sed readelf ldd)
+  local required=(cmake colcon git g++ find awk sed readelf ldd)
+  if ! command -v ninja >/dev/null 2>&1; then
+    command -v make >/dev/null 2>&1 || die "Neither ninja nor make is installed"
+    BUILD_GENERATOR="Unix Makefiles"
+  fi
 
   [[ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]] || \
     die "ROS 2 ${ROS_DISTRO} is not installed under /opt/ros/${ROS_DISTRO}"
@@ -284,7 +289,7 @@ configure_build_install() {
   mkdir -p "$build_dir" "$install_dir"
 
   if ! CMAKE_PREFIX_PATH="$prefix_path" nice -n 10 cmake \
-      -S "$source_dir" -B "$build_dir" -G Ninja \
+      -S "$source_dir" -B "$build_dir" -G "$BUILD_GENERATOR" \
       "-DCMAKE_INSTALL_PREFIX=$install_dir" \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
@@ -495,7 +500,7 @@ bootstrap_top_level_setup() {
       --install-base "$INSTALL_ROOT" \
       --executor sequential \
       --packages-select sophus \
-      --cmake-args -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+      --cmake-args -G "$BUILD_GENERATOR" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
   ) >"$log_file" 2>&1; then
     show_log_tail "$log_file"
     die "Failed to generate top-level setup scripts"
@@ -521,6 +526,9 @@ verify_install() {
   )
   if [[ -f "$WS_ROOT/src/localization/z_localization/src/backend/package.xml" ]]; then
     key_packages+=(backend localization_interfaces hero_localization_backend)
+  fi
+  if [[ -f "$WS_ROOT/src/bringup/hero_real_bringup/package.xml" ]]; then
+    key_packages+=(hero_sim_bringup hero_real_bringup)
   fi
   for package_name in "${key_packages[@]}"; do
     prefix="$(ros2 pkg prefix "$package_name" 2>/dev/null || true)"

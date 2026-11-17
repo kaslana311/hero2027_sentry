@@ -15,10 +15,34 @@ def merge(base, overrides):
     return result
 
 
-def parameters(base, overrides, namespace, prior_map):
+def parameters(base, overrides, namespace, prior_map, *, allow_no_prior=False):
     robot = namespace.strip('/')
-    if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*(/[A-Za-z_][A-Za-z0-9_]*)*', robot):
-        raise ValueError('namespace must be a nonempty ROS namespace')
+    if robot and not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*(/[A-Za-z_][A-Za-z0-9_]*)*', robot):
+        raise ValueError('namespace must be a ROS namespace')
+    root = f'/{robot}' if robot else ''
+    if allow_no_prior and not str(prior_map).strip():
+        config = merge(base, overrides)
+        config['prior_map'].update(enabled=False, directory='')
+    else:
+        config = _validated_prior(base, overrides, prior_map)
+    inputs = config['common']
+    inputs.update(frontend='legacy', odom_frame='odom', sensor_frame='pointlio_imu',
+                  map_frame='map', input_cloud_in_local_frame=False,
+                  odom_topic=f'{root}/pointlio/odometry',
+                  sync_odom_topic=f'{root}/pointlio/odometry',
+                  cloud_topic=f'{root}/pointlio/cloud_registered')
+    config['uwb']['enabled'] = False
+    config['loop']['enabled'] = False
+    config['trajectory']['save_on_shutdown'] = False
+    config['output']['legacy']['enabled'] = False
+    config['output']['world_cloud'].update(
+        topic=f'{root}/z_backend/cloud_registered_map', publish_untrusted=False)
+    config['services'].update(save_map='~/save_map', relocalize='~/relocalize', reset='~/reset')
+    config['reset']['service'] = f'{root}/z_backend/unsupported_frontend_reset'
+    return config
+
+
+def _validated_prior(base, overrides, prior_map):
     directory = Path(prior_map).expanduser().resolve()
     for name in ('keyframes.txt', 'sc_descriptors.bin'):
         if not (directory / name).is_file():
@@ -26,22 +50,7 @@ def parameters(base, overrides, namespace, prior_map):
     if not any((directory / 'clouds').glob('*.pcd')):
         raise ValueError(f'No local keyframe clouds in {directory}')
     config = merge(base, overrides)
-    inputs = config['common']
-    inputs.update(frontend='legacy', odom_frame='odom', sensor_frame='pointlio_imu',
-                  map_frame='map', input_cloud_in_local_frame=False,
-                  odom_topic=f'/{robot}/pointlio/odometry',
-                  sync_odom_topic=f'/{robot}/pointlio/odometry',
-                  cloud_topic=f'/{robot}/pointlio/cloud_registered')
     config['prior_map'].update(enabled=True, directory=str(directory))
-    config['uwb']['enabled'] = False
-    config['loop']['enabled'] = False
-    config['trajectory']['save_on_shutdown'] = False
-    config['output']['legacy']['enabled'] = False
-    config['output']['world_cloud'].update(
-        topic=f'/{robot}/z_backend/cloud_registered_map', publish_untrusted=False)
-    config['services'].update(save_map='~/save_map', relocalize='~/relocalize', reset='~/reset')
-    # No implementation exists in Point-LIO: never target another stack's reset service.
-    config['reset']['service'] = f'/{robot}/z_backend/unsupported_frontend_reset'
     return config
 
 

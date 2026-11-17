@@ -23,10 +23,12 @@ AutoaimTracker::AutoaimTracker(const rclcpp::NodeOptions& options)
         "yaml_file",
         "/home/dji/hero2026_-sentry/src/planning/map_server/map/map.yaml");
     std::string color_map_file, yaml_file;
+    const auto debug_image = this->declare_parameter<std::string>(
+        "debug_image_file", "/home/dji/hero2026_-sentry/src/perception/nav_cv_bridge/debug_img/res.png");
     this->get_parameter("yaml_file", yaml_file);
     this->get_parameter("color_map_file", color_map_file);
     color_map_model_ =
-        std::make_shared<colorMap::ColorMapModel>(color_map_file, yaml_file);
+        std::make_shared<colorMap::ColorMapModel>(color_map_file, yaml_file, debug_image);
     autoaim_switch_dist_ =
         this->get_parameter("autoaim_switch_dist").as_double();
     radar_switch_dist_ = this->get_parameter("radar_switch_dist").as_double();
