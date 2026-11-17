@@ -135,7 +135,7 @@ Nav2 生命周期激活和后端输出，不代表传感器硬件已验证。
 哨兵部署目录为 `/home/dji/hero2026_sentry_real`，不要对旧目录执行 pull/reset。
 若哨兵没有公网路由，可通过临时 SSH SOCKS 转发获取 GitHub 源码/依赖，
 或用已推送提交的 Git bundle fetch 保留提交身份；不复制笔记本二进制。
-在哨兵本机执行 `./build_hero2026_safe.sh --jobs 8`，无 ninja 时自动使用 make。
+在哨兵本机执行 `./build_hero2026_safe.sh --jobs 2`，包间串行；无 ninja 时自动使用 make。
 后端 GTSAM、控制器 acados 等仍在新工作区隔离构建，不覆盖系统安装。
 
 首次上车前：确认两个雷达 IP 和主机接收地址（参考 JSON 为 192.168.1.50），
